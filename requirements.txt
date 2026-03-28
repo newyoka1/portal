@@ -1,4 +1,28 @@
-streamlit>=1.28.0
-pandas
-python-dotenv
-ollama>=0.3.0
+# ── Portal core (FastAPI) ──────────────────────────────────────────────────
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+jinja2>=3.1.4
+python-multipart>=0.0.9
+sqlalchemy>=2.0.0
+pymysql>=1.1.0
+cryptography>=42.0.0
+python-dotenv>=1.0.0
+bcrypt>=4.0.0
+itsdangerous>=2.1.2
+apscheduler>=3.10.4
+requests>=2.31.0
+
+# ── Google / Gmail ─────────────────────────────────────────────────────────
+google-auth>=2.29.0
+google-api-python-client>=2.125.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
+gspread>=5.12.0
+
+# ── FB Receipts ────────────────────────────────────────────────────────────
+facebook-business>=19.0.0
+reportlab>=4.0.0
+playwright>=1.40.0
+
+# ── Voter Pipeline / Integrations ──────────────────────────────────────────
+openpyxl>=3.1.0
