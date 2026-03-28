@@ -16,7 +16,7 @@ from pathlib import Path
 from src.meta_client import MetaClient
 from src.db_client import DbClient
 from src.email_service import EmailService
-from src.pdf_generator import generate_receipt_pdf, generate_transaction_pdf
+from src.pdf_generator import generate_receipt_pdf, generate_transaction_pdf, generate_email_receipt_pdf
 from src.gmail_receipt_fetcher import fetch_meta_receipts
 from src.config import get_run_dir, NOTIFY_EMAIL
 from src.activity_logger import ActivityRun
@@ -193,33 +193,51 @@ class Orchestrator:
 
             logger.info("Found %d receipt(s) for %s", len(receipts), client_name)
 
-            # 3. Get real Meta receipt PDFs from Gmail inbox
+            # 3. Get receipt data from Gmail + generate PDFs with campaign detail + ad images
             pdf_paths: list = []
             safe_acct = ad_account_id.replace("act_", "")
 
+            # Fetch campaign + adset breakdown for the period
+            campaigns = self.meta.get_campaign_spend(ad_account_id, start_date, end_date)
+            adsets = self.meta.get_adset_spend(ad_account_id, start_date, end_date)
+
+            # Fetch ad images (max 4)
+            ad_images = []
+            try:
+                ad_images = self.meta.get_ad_images(
+                    ad_account_id, start_date, end_date,
+                    max_images=4, base_dir=run_dir,
+                )
+                if ad_images:
+                    logger.info("Fetched %d ad image(s) for %s", len(ad_images), client_name)
+            except Exception as e:
+                logger.warning("Could not fetch ad images for %s: %s", client_name, e)
+
+            # Try Gmail — get real billing events from Meta receipt emails
             try:
                 gmail_receipts = fetch_meta_receipts(
                     start_date=start_date,
                     end_date=end_date,
                     account_id=safe_acct,
-                    base_dir=run_dir,
                 )
-                for gr in gmail_receipts:
-                    if gr.get("pdf_path"):
-                        pdf_paths.append(Path(gr["pdf_path"]))
-                if pdf_paths:
-                    logger.info(
-                        "Found %d real Meta receipt PDF(s) in Gmail for %s",
-                        len(pdf_paths), client_name,
-                    )
+                if gmail_receipts:
+                    logger.info("Found %d Meta receipt email(s) for %s", len(gmail_receipts), client_name)
+                    for gr in gmail_receipts:
+                        pdf = generate_email_receipt_pdf(
+                            receipt=gr,
+                            campaigns=campaigns,
+                            adsets=adsets,
+                            ad_images=ad_images,
+                            base_dir=run_dir,
+                        )
+                        if pdf:
+                            pdf_paths.append(pdf)
             except Exception as e:
                 logger.warning("Gmail receipt fetch failed for %s: %s", client_name, e)
 
-            # Fallback: generate PDFs if no real ones found in Gmail
+            # Fallback: generate summary PDF from API data if no Gmail receipts
             if not pdf_paths:
-                logger.info("No Gmail receipts found for %s — generating from API data", client_name)
-                campaigns = self.meta.get_campaign_spend(ad_account_id, start_date, end_date)
-                adsets = self.meta.get_adset_spend(ad_account_id, start_date, end_date)
+                logger.info("No Gmail receipts for %s — generating from API data", client_name)
                 pdf = generate_receipt_pdf(
                     client_name=client_name,
                     ad_account_id=ad_account_id,
@@ -249,22 +267,7 @@ class Orchestrator:
                 if i < len(receipts):
                     receipts[i]["pdf_path"] = str(pdf_path)
                 else:
-                    # Add a placeholder receipt entry for any extra PDFs
                     receipts.append({"pdf_path": str(pdf_path), "type": "fb_receipt"})
-
-            # 4. Fetch ad creative images (max 4 to keep it fast)
-            ad_images = []
-            try:
-                ad_images = self.meta.get_ad_images(
-                    ad_account_id, start_date, end_date,
-                    max_images=4, base_dir=run_dir,
-                )
-                if ad_images:
-                    logger.info(
-                        "Fetched %d ad image(s) for %s", len(ad_images), client_name
-                    )
-            except Exception as e:
-                logger.warning("Could not fetch ad images for %s: %s", client_name, e)
 
             # 5. Send email to all recipients
             if dry_run:
