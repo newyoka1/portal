@@ -4,6 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Ad Approval{% endblock %} — Politika NYC</title>
+    <script>
+    // Prefix all fetch/form URLs when Flask is mounted at a sub-path
+    (function(){
+        var P = '{{ APP_PREFIX }}';
+        if (!P || P === '/') return;
+        var _fetch = window.fetch;
+        window.fetch = function(url, opts) {
+            if (typeof url === 'string' && url.startsWith('/') && !url.startsWith(P + '/')) {
+                url = P + url;
+            }
+            return _fetch.call(this, url, opts);
+        };
+        // Patch form submissions with hardcoded action attributes
+        document.addEventListener('submit', function(e) {
+            var f = e.target;
+            if (f.action && f.getAttribute('action') && f.getAttribute('action').startsWith('/') && !f.getAttribute('action').startsWith(P + '/')) {
+                f.action = P + f.getAttribute('action');
+            }
+        }, true);
+    })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>

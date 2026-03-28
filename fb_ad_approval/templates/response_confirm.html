@@ -46,7 +46,7 @@
         <div class="ad-name">For: <strong>{{ approval.get('ad_id', '') }}</strong></div>
     </div>
     <div class="card-body">
-        <form method="POST" action="/respond/{{ token }}/{{ action }}">
+        <form method="POST" action="{{ url_for('respond_to_approval', token=token, action=action) }}">
             <input type="hidden" name="confirmed" value="1">
             <div>
                 <label for="comments">Comments <span style="font-weight:400; text-transform:none; letter-spacing:0;">(optional)</span></label>

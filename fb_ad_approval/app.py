@@ -39,6 +39,15 @@ load_dotenv()
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
 
+# When mounted inside FastAPI at /fb/ via WSGIMiddleware, inject SCRIPT_NAME
+# so Flask's url_for() generates correct prefixed URLs (e.g. /fb/login).
+_SCRIPT_NAME = os.getenv("FLASK_SCRIPT_NAME", "/fb")
+
+@app.before_request
+def _set_script_name():
+    from flask import request as _req
+    _req.environ["SCRIPT_NAME"] = _SCRIPT_NAME
+
 # Custom Jinja filter to parse JSON strings into Python objects
 @app.template_filter('tojson_parse')
 def tojson_parse(value):
@@ -55,10 +64,10 @@ def tojson_parse(value):
 from flask_wtf.csrf import CSRFProtect, generate_csrf
 csrf = CSRFProtect(app)
 
-# Make CSRF token available to templates
+# Make CSRF token and app prefix available to templates
 @app.context_processor
-def _inject_csrf():
-    return dict(csrf_token=generate_csrf)
+def _inject_globals():
+    return dict(csrf_token=generate_csrf, APP_PREFIX=_SCRIPT_NAME)
 
 
 # ── Authentication ────────────────────────────────────────────────────────
