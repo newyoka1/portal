@@ -32,10 +32,10 @@ def _ssl_ca() -> str | None:
 def _get_conn() -> pymysql.connections.Connection:
     ssl_ca = _ssl_ca()
     kwargs = dict(
-        host=os.environ.get("FB_AIVEN_HOST", ""),
-        user=os.environ.get("FB_AIVEN_USER", ""),
-        password=os.environ.get("FB_AIVEN_PASSWORD", ""),
-        port=int(os.environ.get("FB_AIVEN_PORT", 3306)),
+        host=os.environ.get("FB_AIVEN_HOST") or os.environ.get("MYSQL_HOST", ""),
+        user=os.environ.get("FB_AIVEN_USER") or os.environ.get("MYSQL_USER", ""),
+        password=os.environ.get("FB_AIVEN_PASSWORD") or os.environ.get("MYSQL_PASSWORD", ""),
+        port=int(os.environ.get("FB_AIVEN_PORT") or os.environ.get("MYSQL_PORT", 3306)),
         database=os.environ.get("FB_AIVEN_DB", "fb_receipts"),
         charset="utf8mb4",
         autocommit=False,

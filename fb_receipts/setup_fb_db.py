@@ -11,10 +11,10 @@ import os, pymysql
 
 load_dotenv(Path(__file__).parent / ".env")
 
-host     = os.environ["FB_AIVEN_HOST"]
-user     = os.environ["FB_AIVEN_USER"]
-password = os.environ["FB_AIVEN_PASSWORD"]
-port     = int(os.environ.get("FB_AIVEN_PORT", 3306))
+host     = os.environ.get("FB_AIVEN_HOST") or os.environ.get("MYSQL_HOST", "")
+user     = os.environ.get("FB_AIVEN_USER") or os.environ.get("MYSQL_USER", "")
+password = os.environ.get("FB_AIVEN_PASSWORD") or os.environ.get("MYSQL_PASSWORD", "")
+port     = int(os.environ.get("FB_AIVEN_PORT") or os.environ.get("MYSQL_PORT", 3306))
 ssl_ca   = os.environ.get("FB_AIVEN_SSL_CA", "")
 if ssl_ca and not Path(ssl_ca).is_absolute():
     ssl_ca = str(Path(__file__).parent / ssl_ca)

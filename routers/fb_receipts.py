@@ -24,28 +24,28 @@ ACTIVITY_FILE  = FB_DIR / "activity_log.json"
 LAST_RUN_FILE  = FB_DIR / "last_run.json"
 
 
-def _get_sheets_client():
-    """Build a SheetsClient using portal GCP credentials."""
+def _get_db_client():
+    """Build a DbClient for fb_receipts config (MySQL-backed)."""
     sys.path.insert(0, str(FB_DIR))
-    from src.sheets_client import SheetsClient
-    return SheetsClient()
+    from src.db_client import DbClient
+    return DbClient()
 
 
 def _load_clients():
-    """Load all clients (active + inactive) from Google Sheets."""
+    """Load all clients (active + inactive) from DB."""
     try:
-        return _get_sheets_client().get_all_clients_raw()
+        return _get_db_client().get_all_clients_raw()
     except Exception as e:
-        logger.warning("Could not load clients from Sheets: %s", e)
+        logger.warning("Could not load clients: %s", e)
         return []
 
 
 def _load_settings():
-    """Load global settings from Google Sheets."""
+    """Load global settings from DB."""
     try:
-        return _get_sheets_client().get_settings()
+        return _get_db_client().get_settings()
     except Exception as e:
-        logger.warning("Could not load settings from Sheets: %s", e)
+        logger.warning("Could not load settings: %s", e)
         return {}
 
 
@@ -122,6 +122,13 @@ async def fb_last_run_info(current_user: User = Depends(require_user)):
     return StreamingResponse(_stream(args, str(FB_DIR)), media_type="text/plain")
 
 
+@router.post("/setup-db")
+async def fb_setup_db(current_user: User = Depends(require_user)):
+    """Run setup_fb_db.py to create the fb_receipts database and tables."""
+    args = [sys.executable, str(FB_DIR / "setup_fb_db.py")]
+    return StreamingResponse(_stream(args, str(FB_DIR)), media_type="text/plain")
+
+
 @router.post("/import-meta")
 async def fb_import_meta(current_user: User = Depends(require_user)):
     """Import ad accounts from Meta API into Google Sheet."""
@@ -149,15 +156,13 @@ def api_save_settings(
     current_user: User = Depends(require_user),
 ):
     try:
-        sc = _get_sheets_client()
-        clients = sc.get_all_clients_raw()
-        new_settings = {
+        db = _get_db_client()
+        db.save_settings({
             "admin_email":      admin_email,
             "notify_email":     notify_email,
             "schedule_time":    schedule_time,
             "default_schedule": default_schedule,
-        }
-        sc.save_sheet_data(new_settings, clients)
+        })
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)

@@ -138,6 +138,9 @@
             <button class="btn btn-sm btn-outline-primary" onclick="importMeta()">
               <i class="bi bi-cloud-download me-1"></i>Import from Meta
             </button>
+            <button class="btn btn-sm btn-outline-warning" onclick="setupDb()">
+              <i class="bi bi-database-gear me-1"></i>Setup DB
+            </button>
             <a href="/fb-receipts" class="btn btn-sm btn-outline-secondary">
               <i class="bi bi-arrow-clockwise me-1"></i>Reload
             </a>
@@ -309,6 +312,26 @@ document.getElementById('customRunForm')?.addEventListener('submit', async funct
   e.preventDefault();
   await streamRun('/fb-receipts/run', new FormData(this), 'logCustom', 'customOutput', 'customStatus', null);
 });
+
+// ── Setup DB ──
+async function setupDb() {
+  const log = document.getElementById('logImport');
+  log.innerHTML = '<pre class="bg-dark text-light p-3 rounded small mt-3" style="max-height:300px;overflow-y:auto;white-space:pre-wrap;"></pre>';
+  const pre = log.querySelector('pre');
+  try {
+    const resp = await fetch('/fb-receipts/setup-db', { method: 'POST' });
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      pre.textContent += dec.decode(value);
+      pre.scrollTop = pre.scrollHeight;
+    }
+  } catch (err) {
+    pre.textContent += '\n[Error: ' + err.message + ']';
+  }
+}
 
 // ── Import from Meta ──
 async function importMeta() {
