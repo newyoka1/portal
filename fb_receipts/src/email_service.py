@@ -14,7 +14,7 @@ from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 from pathlib import Path
 
-from src.config import GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD
+from src.config import GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD, NOTIFY_EMAIL
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +35,13 @@ class EmailService:
         receipts: list[dict],
         subject: str | None = None,
         ad_images: list[Path] | None = None,
+        bcc: str | None = None,
     ) -> MIMEMultipart:
         msg = MIMEMultipart()
         msg["From"] = f"George - Politika - Invoice Delivery <{self.sender_email}>"
         msg["To"] = to_email
+        if bcc:
+            msg["Bcc"] = bcc
 
         # Collect PDF attachments first so we know what we're sending
         pdf_attachments: list[Path] = []
@@ -131,13 +134,14 @@ class EmailService:
         receipts: list[dict],
         subject: str | None = None,
         ad_images: list[Path] | None = None,
+        bcc: str | None = None,
     ) -> bool:
         """Send receipt email with optional PDF attachments and ad images."""
         if not receipts:
             logger.info("No receipts to send for %s (%s)", client_name, to_email)
             return False
 
-        msg = self._build_message(to_email, client_name, receipts, subject, ad_images)
+        msg = self._build_message(to_email, client_name, receipts, subject, ad_images, bcc)
 
         try:
             with smtplib.SMTP("smtp.gmail.com", 587) as server:
@@ -156,3 +160,25 @@ class EmailService:
         except Exception as e:
             logger.error("Failed to send email to %s: %s", to_email, e)
             return False
+
+    def send_failure_notification(self, client_name: str, ad_account_id: str, reason: str, notify_email: str | None = None) -> None:
+        """Notify the admin that a receipt could not be sent for a client."""
+        to = notify_email or NOTIFY_EMAIL
+        msg = MIMEMultipart()
+        msg["From"] = self.sender_email
+        msg["To"] = to
+        msg["Subject"] = f"[Receipt Automation] FAILED — {client_name}"
+        body = (
+            f"Receipt delivery failed for {client_name} (act_{ad_account_id}).\n\n"
+            f"Reason: {reason}\n\n"
+            "No email was sent to the client. Please download and send the receipt manually."
+        )
+        msg.attach(MIMEText(body, "plain"))
+        try:
+            with smtplib.SMTP("smtp.gmail.com", 587) as server:
+                server.starttls()
+                server.login(self.sender_email, self.app_password)
+                server.send_message(msg)
+            logger.info("Sent failure notification to %s for %s", to, client_name)
+        except Exception as e:
+            logger.error("Could not send failure notification: %s", e)

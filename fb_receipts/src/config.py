@@ -23,10 +23,11 @@ GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
 # Gmail
 GMAIL_SENDER_EMAIL = os.getenv("GMAIL_SENDER_EMAIL", "")
 GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
+NOTIFY_EMAIL = os.getenv("NOTIFY_EMAIL", "George@politikanyc.com")
 
 # Schedule
-SCHEDULE_FREQUENCY = os.getenv("SCHEDULE_FREQUENCY", "monthly")
-SCHEDULE_DAY = os.getenv("SCHEDULE_DAY", "1")
+SCHEDULE_FREQUENCY = os.getenv("SCHEDULE_FREQUENCY", "weekly")
+SCHEDULE_DAY = os.getenv("SCHEDULE_DAY", "friday")
 SCHEDULE_TIME = os.getenv("SCHEDULE_TIME", "09:00")
 
 # Storage — base folder is INVOICES; each run gets its own date-stamped subfolder

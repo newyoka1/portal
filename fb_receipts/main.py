@@ -16,6 +16,8 @@ Usage:
 import argparse
 import json
 import logging
+import subprocess
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -25,6 +27,7 @@ import schedule
 from src.config import SCHEDULE_FREQUENCY, SCHEDULE_DAY, SCHEDULE_TIME
 from src.orchestrator import Orchestrator
 from src.meta_client import MetaClient
+from src.activity_logger import ActivityRun, show_history
 
 logging.basicConfig(
     level=logging.INFO,
@@ -96,6 +99,8 @@ def run_once(
     end_date: datetime | None = None,
     since_last_send: bool = False,
     save_run_record: bool = True,
+    resend: bool = False,
+    account_id: str | None = None,
 ):
     """
     Fetch receipts and email them to clients.
@@ -126,9 +131,11 @@ def run_once(
                 logger.warning(
                     "No last-run record found — defaulting to last 35 days"
                 )
-                start_date = datetime.now() - timedelta(days=35)
+                start_date = datetime.now() - timedelta(days=7)
         else:
-            start_date = datetime.now() - timedelta(days=35)
+            start_date = datetime.now() - timedelta(days=7)
+
+    activity = ActivityRun(start_date, end_date, dry_run=dry_run)
 
     orch = Orchestrator()
     results = orch.run(
@@ -136,9 +143,15 @@ def run_once(
         end_date=end_date,
         dry_run=dry_run,
         use_fb_pdfs=use_fb_pdfs,
+        resend=resend,
+        account_id=account_id,
+        activity=activity,
     )
 
     print(f"\nResults: {results}")
+
+    activity.finish(results)
+    activity.save()
 
     # Persist run record after a real (non-dry) run that sent or found receipts
     if save_run_record and not dry_run:
@@ -178,6 +191,254 @@ def show_last_run():
         print(f"  Period end:    {record.get('period_end', 'N/A')}")
     else:
         print("No last-run record found (last_run.json does not exist yet).")
+
+
+# ── Windows Task Scheduler ────────────────────────────────────────────────────
+
+TASK_NAME = "FacebookReceiptAutomation"
+
+DAY_MAP = {
+    "monday": "MON", "tuesday": "TUE", "wednesday": "WED",
+    "thursday": "THU", "friday": "FRI", "saturday": "SAT", "sunday": "SUN",
+}
+
+
+def setup_windows_scheduler():
+    """Register a Windows Task Scheduler job to run daily."""
+    project_dir = Path(__file__).resolve().parent
+    python_exe = Path(sys.executable).resolve()
+    main_script = project_dir / "main.py"
+    log_file = project_dir / "receipt_automation.log"
+
+    # Read schedule_time from DB settings if available, fall back to .env
+    time_str = SCHEDULE_TIME
+    try:
+        from src.db_client import DbClient
+        db_settings = DbClient().get_settings()
+        if db_settings.get("schedule_time"):
+            time_str = db_settings["schedule_time"]
+            print(f"Using schedule_time from DB: {time_str}")
+    except Exception as e:
+        print(f"Could not read DB settings ({e}) — using .env value: {time_str}")
+
+    # cmd wrapper so we can set the working directory
+    command = (
+        f'cmd /c "cd /d {project_dir} && '
+        f'"{python_exe}" "{main_script}" --since-last-send '
+        f'>> "{log_file}" 2>&1"'
+    )
+
+    result = subprocess.run(
+        [
+            "schtasks", "/create",
+            "/tn", TASK_NAME,
+            "/tr", command,
+            "/sc", "daily",
+            "/st", time_str,
+            "/f",  # overwrite if exists
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode == 0:
+        print(f"Task '{TASK_NAME}' created — runs daily at {time_str}.")
+        print("Each client's schedule (weekly_friday, monthly_1, etc.) controls when they actually get sent.")
+        print(f"  Python:  {python_exe}")
+        print(f"  Script:  {main_script}")
+        print(f"  Log:     {log_file}")
+        print("\nTo verify: open Task Scheduler and look for 'FacebookReceiptAutomation'")
+    else:
+        print(f"Failed to create task:\n{result.stderr or result.stdout}")
+
+
+def remove_windows_scheduler():
+    """Remove the Windows Task Scheduler job."""
+    result = subprocess.run(
+        ["schtasks", "/delete", "/tn", TASK_NAME, "/f"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        print(f"Task '{TASK_NAME}' removed.")
+    else:
+        print(f"Could not remove task (may not exist):\n{result.stderr or result.stdout}")
+
+
+def setup_local_server():
+    """
+    Add a .vbs launcher to the Windows Startup folder so the local HTTP server
+    starts silently at every login — no admin required.
+    Also starts the server immediately in the background.
+    """
+    import os
+
+    project_dir   = Path(__file__).resolve().parent
+    # Use pythonw.exe (windowless) so no console appears at startup
+    pythonw_exe   = Path(sys.executable).parent / "pythonw.exe"
+    if not pythonw_exe.exists():
+        pythonw_exe = Path(sys.executable)   # fallback to python.exe
+    server_script = project_dir / "scheduler_server.py"
+
+    # Windows Startup folder — runs for current user, no admin needed
+    startup_folder = Path(os.environ["APPDATA"]) / \
+        "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
+    vbs_path = startup_folder / "FacebookReceiptServer.vbs"
+
+    vbs_content = (
+        'Set oShell = CreateObject("WScript.Shell")\n'
+        f'oShell.Run "{pythonw_exe} {server_script}", 0, False\n'
+    )
+    vbs_path.write_text(vbs_content, encoding="utf-8")
+    print(f"Startup launcher created: {vbs_path}")
+    print("The server will start automatically at every Windows login (no admin needed).")
+
+    # Start immediately — hidden, no console window
+    subprocess.Popen(
+        [str(pythonw_exe), str(server_script)],
+        cwd=str(project_dir),
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+    )
+    print("Server started now at http://localhost:5050")
+    print("The Sync Scheduler task is ready to use.")
+
+
+def register_protocol():
+    """
+    Register the fbreceipt:// custom URL protocol in Windows Registry.
+    After this, clicking fbreceipt://sync-scheduler in any browser will run
+    sync_scheduler.bat in the project folder.
+    """
+    import winreg
+
+    project_dir = Path(__file__).resolve().parent
+    bat_file = project_dir / "sync_scheduler.bat"
+
+    # Write the batch file
+    bat_file.write_text(
+        f'@echo off\n'
+        f'cd /d "{project_dir}"\n'
+        f'call ".venv\\Scripts\\activate.bat"\n'
+        f'python main.py --sync-scheduler\n'
+        f'pause\n'
+    )
+
+    cmd = f'"{bat_file}" "%1"'
+
+    key_path = r"Software\Classes\fbreceipt"
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "URL:FB Receipt Automation")
+        winreg.SetValueEx(key, "URL Protocol", 0, winreg.REG_SZ, "")
+
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path + r"\shell\open\command") as key:
+        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, cmd)
+
+    print(f"Registered fbreceipt:// protocol.")
+    print(f"Batch file: {bat_file}")
+    print(f"\nThe Sync Scheduler is configured and ready.")
+    print("If prompted by the browser, click 'Open' to allow it.")
+
+
+def _make_client_task_name(account_id: str) -> str:
+    return f"FacebookReceipt_{account_id}"
+
+
+def _schtasks_schedule_args(schedule_str: str) -> list[str]:
+    """Convert a schedule string to schtasks /sc and /d arguments."""
+    s = schedule_str.strip().lower()
+    day_map = {
+        "monday": "MON", "tuesday": "TUE", "wednesday": "WED",
+        "thursday": "THU", "friday": "FRI", "saturday": "SAT", "sunday": "SUN",
+    }
+    if s.startswith("weekly_"):
+        day = day_map.get(s[len("weekly_"):], "FRI")
+        return ["/sc", "WEEKLY", "/d", day]
+    if s.startswith("monthly_"):
+        day_num = s[len("monthly_"):]
+        return ["/sc", "MONTHLY", "/d", day_num]
+    return ["/sc", "WEEKLY", "/d", "FRI"]  # default
+
+
+def sync_windows_scheduler():
+    """
+    Create/update a Task Scheduler task for each active client based on their
+    schedule setting, and delete tasks for clients that are no longer active.
+    """
+    from src.db_client import DbClient
+
+    project_dir = Path(__file__).resolve().parent
+    python_exe  = Path(sys.executable).resolve()
+    main_script = project_dir / "main.py"
+    log_file    = project_dir / "receipt_automation.log"
+
+    db = DbClient()
+    settings = db.get_settings()
+    time_str = settings.get("schedule_time") or SCHEDULE_TIME
+
+    clients = db.get_client_mappings()
+    active_ids = {c["ad_account_id"] for c in clients}
+
+    # ── Find existing FacebookReceipt_* tasks ──────────────────────────────────
+    query = subprocess.run(
+        ["schtasks", "/query", "/fo", "csv", "/nh"],
+        capture_output=True, text=True,
+    )
+    existing_tasks = set()
+    for line in query.stdout.splitlines():
+        parts = line.strip('"').split('","')
+        if parts and parts[0].startswith("FacebookReceipt_"):
+            existing_tasks.add(parts[0])
+
+    # ── Write a small launcher .bat to stay under schtasks 261-char /tr limit ───
+    launcher = project_dir / "run_client.bat"
+    launcher.write_text(
+        f'@echo off\r\n'
+        f'cd /d "{project_dir}"\r\n'
+        f'call ".venv\\Scripts\\activate.bat"\r\n'
+        f'python main.py --account-id %1 --since-last-send >> "{log_file}" 2>&1\r\n',
+        encoding="utf-8",
+    )
+
+    created = updated = deleted = 0
+
+    # ── Create / update one task per active client ─────────────────────────────
+    for client in clients:
+        account_id    = client["ad_account_id"]
+        client_name   = client["client_name"]
+        client_sched  = client.get("schedule") or "weekly_friday"
+        task_name     = _make_client_task_name(account_id)
+
+        command = f'"{launcher}" {account_id}'
+
+        sched_args = _schtasks_schedule_args(client_sched)
+        result = subprocess.run(
+            ["schtasks", "/create", "/tn", task_name, "/tr", command,
+             *sched_args, "/st", time_str, "/f"],
+            capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            if task_name in existing_tasks:
+                updated += 1
+                print(f"  Updated: {task_name}  ({client_sched} @ {time_str})")
+            else:
+                created += 1
+                print(f"  Created: {task_name}  ({client_sched} @ {time_str})")
+        else:
+            print(f"  FAILED:  {task_name} — {result.stderr.strip()}")
+
+    # ── Delete tasks for accounts no longer active ─────────────────────────────
+    for task_name in existing_tasks:
+        account_id = task_name[len("FacebookReceipt_"):]
+        if account_id not in active_ids:
+            result = subprocess.run(
+                ["schtasks", "/delete", "/tn", task_name, "/f"],
+                capture_output=True, text=True,
+            )
+            if result.returncode == 0:
+                deleted += 1
+                print(f"  Deleted: {task_name}  (no longer active)")
+
+    print(f"\nSync complete — {created} created, {updated} updated, {deleted} deleted.")
 
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
@@ -275,6 +536,50 @@ Examples:
         action="store_true",
         help="Skip real Facebook PDF download; use generated PDFs instead",
     )
+    parser.add_argument(
+        "--resend",
+        action="store_true",
+        help="Ignore sent_log.json and resend receipts even if already sent",
+    )
+    parser.add_argument(
+        "--setup-scheduler",
+        action="store_true",
+        help="Register a single daily Windows Task Scheduler job",
+    )
+    parser.add_argument(
+        "--sync-scheduler",
+        action="store_true",
+        help="Sync per-client Task Scheduler tasks from DB (create/update/delete)",
+    )
+    parser.add_argument(
+        "--remove-scheduler",
+        action="store_true",
+        help="Remove the Windows Task Scheduler job",
+    )
+    parser.add_argument(
+        "--setup-server",
+        action="store_true",
+        help="Register a startup task that runs the local HTTP server",
+    )
+    parser.add_argument(
+        "--register-protocol",
+        action="store_true",
+        help="Register fbreceipt:// URL protocol for sync-scheduler",
+    )
+    parser.add_argument(
+        "--account-id",
+        type=str,
+        metavar="ACCOUNT_ID",
+        help="Only process this ad account ID (used by per-client scheduled tasks)",
+    )
+    parser.add_argument(
+        "--history",
+        nargs="?",
+        const=10,
+        type=int,
+        metavar="N",
+        help="Show activity history (last N runs, default 10). Combine with --account-id to filter.",
+    )
     args = parser.parse_args()
 
     # Parse explicit dates
@@ -299,12 +604,24 @@ Examples:
         parser.error("--start-date must be before --end-date")
 
     # Dispatch
-    if args.login:
+    if args.history is not None:
+        show_history(n=args.history, account_id=args.account_id)
+    elif args.setup_server:
+        setup_local_server()
+    elif args.register_protocol:
+        register_protocol()
+    elif args.login:
         fb_login()
     elif args.list_accounts:
         list_accounts()
     elif args.last_run:
         show_last_run()
+    elif args.setup_scheduler:
+        setup_windows_scheduler()
+    elif args.sync_scheduler:
+        sync_windows_scheduler()
+    elif args.remove_scheduler:
+        remove_windows_scheduler()
     elif args.schedule:
         start_scheduler()
     else:
@@ -314,6 +631,8 @@ Examples:
             start_date=start_date,
             end_date=end_date,
             since_last_send=args.since_last_send,
+            resend=args.resend,
+            account_id=args.account_id,
         )
 
 

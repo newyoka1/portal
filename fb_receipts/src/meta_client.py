@@ -49,11 +49,11 @@ class MetaClient:
         """Get all ad accounts owned by or shared with a business."""
         owned = self._get_paginated(
             f"{business_id}/owned_ad_accounts",
-            {"fields": "id,name,account_id,currency,business_name"},
+            {"fields": "id,name,account_id,currency,business_name,account_status"},
         )
         client = self._get_paginated(
             f"{business_id}/client_ad_accounts",
-            {"fields": "id,name,account_id,currency,business_name"},
+            {"fields": "id,name,account_id,currency,business_name,account_status"},
         )
         all_accounts = {a["id"]: a for a in owned + client}
         logger.info(
