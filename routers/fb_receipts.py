@@ -131,8 +131,8 @@ async def fb_setup_db(current_user: User = Depends(require_user)):
 
 @router.post("/import-meta")
 async def fb_import_meta(current_user: User = Depends(require_user)):
-    """Import ad accounts from Meta API into Google Sheet."""
-    args = [sys.executable, str(FB_DIR / "populate_sheet.py")]
+    """Import ad accounts from Meta API into fb_receipts.clients DB table."""
+    args = [sys.executable, str(FB_DIR / "populate_db.py")]
     return StreamingResponse(_stream(args, str(FB_DIR)), media_type="text/plain")
 
 
