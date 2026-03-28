@@ -462,10 +462,11 @@ def upload_image():
     if sftp_host and sftp_user and sftp_pass:
         try:
             url = _sftp_upload(file_bytes, filename)
-            # Also save locally for dev/preview
-            os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-            with open(os.path.join(UPLOAD_FOLDER, filename), "wb") as lf:
-                lf.write(file_bytes)
+            # Save locally only in dev (Railway has ephemeral disk)
+            if not os.getenv("PORT"):
+                os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+                with open(os.path.join(UPLOAD_FOLDER, filename), "wb") as lf:
+                    lf.write(file_bytes)
             return jsonify({"url": url, "type": file_type, "size": file_size, "ext": ext})
         except Exception as e:
             print(f"[WARN] SFTP upload failed: {e}, falling back to local")
