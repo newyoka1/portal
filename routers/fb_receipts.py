@@ -168,6 +168,83 @@ def api_save_settings(
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
+def _run_scheduled_receipts():
+    """Called by APScheduler — checks which clients are due and runs receipts."""
+    import subprocess
+    from datetime import date
+
+    now = datetime.now()
+    weekday_name = now.strftime("%A").lower()   # monday, tuesday, ...
+    day_of_month = now.day
+
+    try:
+        settings = _load_settings()
+        clients  = _load_clients()
+    except Exception as e:
+        logger.warning("Receipt scheduler: could not load config: %s", e)
+        return
+
+    schedule_time = settings.get("schedule_time", "09:00")
+    try:
+        target_hour = int(schedule_time.split(":")[0])
+    except (ValueError, IndexError):
+        target_hour = 9
+
+    # Only run at the configured hour
+    if now.hour != target_hour:
+        return
+
+    # Determine date range: last 7 days for weekly, last 30 for monthly
+    for client in clients:
+        if client.get("active") != "yes":
+            continue
+
+        sched = client.get("schedule", "weekly_friday")
+        should_run = False
+
+        if sched.startswith("weekly_"):
+            sched_day = sched.replace("weekly_", "")
+            if sched_day == weekday_name:
+                should_run = True
+        elif sched.startswith("monthly_"):
+            try:
+                sched_dom = int(sched.replace("monthly_", ""))
+                if sched_dom == day_of_month:
+                    should_run = True
+            except ValueError:
+                pass
+
+        if not should_run:
+            continue
+
+        # Determine period
+        if "weekly" in sched:
+            start = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+        else:
+            start = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+        end = now.strftime("%Y-%m-%d")
+
+        account_id = client.get("ad_account_id", "")
+        client_name = client.get("client_name", account_id)
+        logger.info("Receipt scheduler: running for %s (%s → %s)", client_name, start, end)
+
+        try:
+            result = subprocess.run(
+                [sys.executable, str(FB_DIR / "main.py"),
+                 "--start-date", start, "--end-date", end,
+                 "--account-id", account_id, "--no-fb-pdfs"],
+                cwd=str(FB_DIR),
+                capture_output=True, text=True, timeout=300,
+            )
+            if result.returncode == 0:
+                logger.info("Receipt scheduler: %s completed OK", client_name)
+            else:
+                logger.warning("Receipt scheduler: %s failed (exit %d): %s",
+                               client_name, result.returncode, result.stderr[:500])
+        except Exception as e:
+            logger.error("Receipt scheduler: %s error: %s", client_name, e)
+
+
 async def _stream(args: list[str], cwd: str):
     import asyncio
     try:

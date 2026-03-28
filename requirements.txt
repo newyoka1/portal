@@ -29,6 +29,7 @@ paramiko>=3.5.0
 # ── FB Receipts ────────────────────────────────────────────────────────────
 facebook-business>=19.0.0
 reportlab>=4.0.0
+schedule>=1.2.0
 # playwright — excluded on Railway (too heavy, not needed for server-side routes)
 
 # ── Voter Pipeline / Integrations ──────────────────────────────────────────
