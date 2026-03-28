@@ -211,21 +211,23 @@
             </div>
           </div>
           <div class="row g-3 mb-3">
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Default run time</label>
-              <select name="schedule_time" class="form-select">
-                {% for h in range(6, 21) %}
-                <option value="{{ '%02d:00'|format(h) }}" {{ 'selected' if settings.get('schedule_time', '09:00') == '%02d:00'|format(h) }}>{{ '%02d:00'|format(h) }}</option>
-                {% endfor %}
-              </select>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Gmail poll interval (minutes)</label>
+              <input type="number" name="poll_interval" class="form-control" min="1" max="60"
+                     value="{{ settings.get('poll_interval', '10') }}">
+              <div class="form-text">How often to check for new Meta receipt emails. Takes effect on next restart.</div>
             </div>
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Default client schedule</label>
-              <select name="default_schedule" class="form-select">
-                {% for s in ['weekly_monday','weekly_tuesday','weekly_wednesday','weekly_thursday','weekly_friday','weekly_saturday','weekly_sunday','monthly_1','monthly_7','monthly_14','monthly_15','monthly_28'] %}
-                <option value="{{ s }}" {{ 'selected' if settings.get('default_schedule', 'weekly_friday') == s }}>{{ s }}</option>
-                {% endfor %}
-              </select>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Receipt inbox</label>
+              <input type="email" name="receipt_inbox" class="form-control"
+                     value="{{ settings.get('receipt_inbox', 'support@politikanyc.com') }}">
+              <div class="form-text">Gmail address where Meta sends billing receipts.</div>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label fw-semibold">Lookback days</label>
+              <input type="number" name="lookback_days" class="form-control" min="1" max="90"
+                     value="{{ settings.get('lookback_days', '7') }}">
+              <div class="form-text">How far back to search for receipt emails.</div>
             </div>
           </div>
           <button type="submit" class="btn btn-primary">

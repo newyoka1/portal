@@ -54,10 +54,11 @@ def _run():
     client_map = {c["ad_account_id"]: c for c in clients}
     settings = db.get_settings()
     admin_email = settings.get("admin_email") or None
+    lookback_days = int(settings.get("lookback_days") or 7)
 
-    # Search Gmail for receipts from the last 7 days
+    # Search Gmail for receipts within the lookback window
     end = datetime.now()
-    start = end - timedelta(days=7)
+    start = end - timedelta(days=lookback_days)
 
     logger.info("Receipt poller: checking Gmail for new Meta receipts...")
     gmail_receipts = fetch_meta_receipts(start_date=start, end_date=end)

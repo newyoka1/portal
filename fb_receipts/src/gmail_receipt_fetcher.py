@@ -30,17 +30,32 @@ from googleapiclient.discovery import build
 logger = logging.getLogger(__name__)
 
 SCOPES = ["https://mail.google.com/"]
-RECEIPT_EMAIL = os.getenv("GMAIL_RECEIPT_ADDRESS", "support@politikanyc.com")
+_DEFAULT_RECEIPT_EMAIL = os.getenv("GMAIL_RECEIPT_ADDRESS", "support@politikanyc.com")
 
 
-def _get_gmail_service():
+def _get_receipt_email() -> str:
+    """Get receipt inbox address — from DB settings or env var."""
+    try:
+        from src.db_client import DbClient
+        settings = DbClient().get_settings()
+        inbox = settings.get("receipt_inbox", "").strip()
+        if inbox:
+            return inbox
+    except Exception:
+        pass
+    return _DEFAULT_RECEIPT_EMAIL
+
+
+def _get_gmail_service(email: str | None = None):
     """Build Gmail API service impersonating the receipt inbox."""
     from src.config import GOOGLE_SERVICE_ACCOUNT_FILE
     from google.oauth2 import service_account
 
+    target = email or _get_receipt_email()
+
     creds = service_account.Credentials.from_service_account_file(
         GOOGLE_SERVICE_ACCOUNT_FILE, scopes=SCOPES
-    ).with_subject(RECEIPT_EMAIL)
+    ).with_subject(target)
 
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
@@ -64,7 +79,8 @@ def fetch_meta_receipts(
         f"subject:(receipt) after:{after} before:{before}"
     )
 
-    logger.info("Searching Gmail (%s): %s", RECEIPT_EMAIL, query)
+    receipt_email = _get_receipt_email()
+    logger.info("Searching Gmail (%s): %s", receipt_email, query)
 
     all_receipts = []
     page_token = None

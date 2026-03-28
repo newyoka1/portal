@@ -244,8 +244,9 @@ def api_save_settings(
     request: Request,
     admin_email:      str = Form(""),
     notify_email:     str = Form(""),
-    schedule_time:    str = Form("09:00"),
-    default_schedule: str = Form("weekly_friday"),
+    poll_interval:    str = Form("10"),
+    receipt_inbox:    str = Form("support@politikanyc.com"),
+    lookback_days:    str = Form("7"),
     current_user: User = Depends(require_user),
 ):
     try:
@@ -253,8 +254,9 @@ def api_save_settings(
         db.save_settings({
             "admin_email":      admin_email,
             "notify_email":     notify_email,
-            "schedule_time":    schedule_time,
-            "default_schedule": default_schedule,
+            "poll_interval":    poll_interval,
+            "receipt_inbox":    receipt_inbox,
+            "lookback_days":    lookback_days,
         })
         return JSONResponse({"ok": True})
     except Exception as e:
