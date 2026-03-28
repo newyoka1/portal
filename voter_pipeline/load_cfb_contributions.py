@@ -141,6 +141,7 @@ def bootstrap(conn):
     # Raw staging table (all 52 CFB columns by name)
     cur.execute(f"""
         CREATE TABLE IF NOT EXISTS {DB}.cfb_raw_contributions (
+            id          BIGINT AUTO_INCREMENT PRIMARY KEY,
             ELECTION    VARCHAR(10),
             OFFICECD    VARCHAR(10),
             RECIPID     VARCHAR(20),

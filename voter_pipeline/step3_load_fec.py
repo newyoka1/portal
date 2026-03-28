@@ -170,6 +170,7 @@ CREATE TABLE IF NOT EXISTS fec_candidates (
 
     cur.execute("""
 CREATE TABLE IF NOT EXISTS committee_to_candidate (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
     committee_id VARCHAR(9),
     candidate_id VARCHAR(9),
     contribution_amount DECIMAL(12,2),
