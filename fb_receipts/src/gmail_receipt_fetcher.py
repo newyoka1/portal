@@ -64,7 +64,7 @@ def fetch_meta_receipts(
     # Build Gmail search query — broad match on Meta/Facebook billing emails with attachments
     after = start_date.strftime("%Y/%m/%d")
     before = (end_date + timedelta(days=1)).strftime("%Y/%m/%d")
-    query = f"from:(facebookmail.com OR meta.com OR facebook.com) has:attachment after:{after} before:{before}"
+    query = f"from:(facebookmail.com OR meta.com OR facebook.com OR business-updates.facebook.com) subject:(receipt) after:{after} before:{before}"
 
     logger.info("Searching Gmail (%s) with query: %s", RECEIPT_EMAIL, query)
 
@@ -117,75 +117,145 @@ def _process_message(
     date_str = headers.get("date", "")
     msg_date = _parse_email_date(date_str)
 
-    # Extract account ID from subject/body if possible
-    # Meta subjects: "Receipt for [Client Name]" or "Payment receipt for ad account XXXXXXXXX"
-    acct_match = re.search(r"(?:account|act[_\s]?)(\d{6,20})", subject, re.IGNORECASE)
+    # Extract account ID from subject
+    # Format: "Your Meta ads receipt (Account ID: 563674964651869)"
+    acct_match = re.search(r"Account\s*ID:\s*(\d{6,20})", subject, re.IGNORECASE)
+    if not acct_match:
+        acct_match = re.search(r"\((\d{9,20})\)", subject)
     email_account_id = acct_match.group(1) if acct_match else None
+
+    # Also extract from email body
+    body_text = _get_body_text(msg.get("payload", {}))
+    if not email_account_id and body_text:
+        acct_body = re.search(r"\((\d{9,20})\)", body_text)
+        if acct_body:
+            email_account_id = acct_body.group(1)
+
+    logger.info("    Account ID from email: %s", email_account_id or "not found")
 
     # Filter by account_id if specified
     if filter_account_id and email_account_id and email_account_id != filter_account_id:
+        logger.info("    Skipping — account %s doesn't match filter %s", email_account_id, filter_account_id)
         return None
+
+    # Extract transaction ID and amount from body
+    txn_id = ""
+    amount = 0.0
+    if body_text:
+        txn_match = re.search(r"(\d{10,25}-\d{10,25})", body_text)
+        if txn_match:
+            txn_id = txn_match.group(1)
+        amt_match = re.search(r"\$([0-9,]+\.\d{2})\s*(?:USD)?", body_text)
+        if amt_match:
+            amount = float(amt_match.group(1).replace(",", ""))
 
     # Find PDF attachments
     pdfs = _find_pdf_attachments(service, msg_id, msg.get("payload", {}))
-    if not pdfs:
-        return None
 
     receipts = []
-    for pdf_name, pdf_data in pdfs:
-        # Try to extract account ID and transaction ID from the PDF filename
-        # Meta format: "2026-03-13T15-52 Transaction #26376155962074409-26322177234138952.pdf"
-        file_acct_id = email_account_id
-        txn_id = ""
-        amount = 0.0
 
-        txn_match = re.search(r"Transaction\s*#?\s*(\d+-\d+)", pdf_name)
-        if txn_match:
-            txn_id = txn_match.group(1)
+    if pdfs:
+        # Has PDF attachments — save them
+        for pdf_name, pdf_data in pdfs:
+            file_acct_id = email_account_id
 
-        # Try to extract account ID from PDF content (first few bytes)
-        try:
-            text = pdf_data.decode("latin-1", errors="ignore")
-            acct_in_pdf = re.search(r"Account\s*ID:\s*(\d{6,20})", text)
-            if acct_in_pdf:
-                file_acct_id = acct_in_pdf.group(1)
-            # Extract amount
-            amt_match = re.search(r"\$([0-9,]+\.\d{2})\s*(?:USD)?", text)
-            if amt_match:
-                amount = float(amt_match.group(1).replace(",", ""))
-        except Exception:
-            pass
+            # Try to get more info from PDF content
+            try:
+                pdf_text = pdf_data.decode("latin-1", errors="ignore")
+                acct_in_pdf = re.search(r"Account\s*ID:\s*(\d{6,20})", pdf_text)
+                if acct_in_pdf:
+                    file_acct_id = acct_in_pdf.group(1)
+                if not txn_id:
+                    txn_m = re.search(r"(\d{10,25}-\d{10,25})", pdf_text)
+                    if txn_m:
+                        txn_id = txn_m.group(1)
+                if amount == 0:
+                    amt_m = re.search(r"\$([0-9,]+\.\d{2})", pdf_text)
+                    if amt_m:
+                        amount = float(amt_m.group(1).replace(",", ""))
+            except Exception:
+                pass
 
-        # Filter by account_id if specified and we now know it
-        if filter_account_id and file_acct_id and file_acct_id != filter_account_id:
-            continue
+            if filter_account_id and file_acct_id and file_acct_id != filter_account_id:
+                continue
 
-        # Save PDF
-        save_dir = base_dir or Path("INVOICES")
-        if file_acct_id:
-            save_dir = save_dir / file_acct_id
-        save_dir.mkdir(parents=True, exist_ok=True)
+            save_dir = base_dir or Path("INVOICES")
+            if file_acct_id:
+                save_dir = save_dir / file_acct_id
+            save_dir.mkdir(parents=True, exist_ok=True)
 
-        # Use original filename from Meta
-        safe_name = re.sub(r'[<>:"/\\|?*]', '_', pdf_name)
-        pdf_path = save_dir / safe_name
-        pdf_path.write_bytes(pdf_data)
+            safe_name = re.sub(r'[<>:"/\\|?*]', '_', pdf_name)
+            pdf_path = save_dir / safe_name
+            pdf_path.write_bytes(pdf_data)
 
-        logger.info("Saved Meta receipt: %s (account: %s, $%.2f)",
-                     pdf_path.name, file_acct_id or "unknown", amount)
+            logger.info("    Saved PDF: %s (account: %s, $%.2f)", safe_name, file_acct_id or "?", amount)
 
-        receipts.append({
-            "account_id": file_acct_id or "",
-            "transaction_id": txn_id,
-            "date": msg_date.strftime("%Y-%m-%d") if msg_date else "",
-            "time": msg_date.isoformat() if msg_date else "",
-            "amount": amount,
-            "subject": subject,
-            "pdf_path": str(pdf_path),
-            "pdf_name": pdf_name,
-        })
+            receipts.append({
+                "account_id": file_acct_id or email_account_id or "",
+                "transaction_id": txn_id,
+                "date": msg_date.strftime("%Y-%m-%d") if msg_date else "",
+                "time": msg_date.isoformat() if msg_date else "",
+                "amount": amount,
+                "subject": subject,
+                "pdf_path": str(pdf_path),
+                "pdf_name": pdf_name,
+            })
+    else:
+        # No PDF attachment — check for download link in email body
+        # Meta receipt emails often have a link to download the receipt
+        download_url = None
+        if body_text:
+            link_match = re.search(
+                r'https?://[^\s"<>]*(?:billing_hub|payment_activity|receipt)[^\s"<>]*',
+                body_text, re.IGNORECASE,
+            )
+            if link_match:
+                download_url = link_match.group(0)
 
-    return receipts
+        if email_account_id and (amount > 0 or txn_id):
+            # We have receipt info from the email body even without a PDF
+            logger.info("    No PDF attached — receipt data from email body (account: %s, $%.2f, txn: %s)",
+                        email_account_id, amount, txn_id[:30] if txn_id else "?")
+            receipts.append({
+                "account_id": email_account_id,
+                "transaction_id": txn_id,
+                "date": msg_date.strftime("%Y-%m-%d") if msg_date else "",
+                "time": msg_date.isoformat() if msg_date else "",
+                "amount": amount,
+                "subject": subject,
+                "pdf_path": "",  # no PDF file
+                "pdf_name": "",
+                "download_url": download_url or "",
+            })
+
+    return receipts if receipts else None
+
+
+def _get_body_text(payload: dict) -> str:
+    """Extract plain text or HTML body from a Gmail message payload."""
+    texts = []
+
+    def _walk(part):
+        mime = part.get("mimeType", "")
+        body = part.get("body", {})
+        data = body.get("data", "")
+
+        if mime in ("text/plain", "text/html") and data:
+            try:
+                decoded = base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+                # Strip HTML tags for plain text extraction
+                if mime == "text/html":
+                    decoded = re.sub(r"<[^>]+>", " ", decoded)
+                    decoded = re.sub(r"\s+", " ", decoded)
+                texts.append(decoded)
+            except Exception:
+                pass
+
+        for sub in part.get("parts", []):
+            _walk(sub)
+
+    _walk(payload)
+    return "\n".join(texts)
 
 
 def _find_pdf_attachments(service, msg_id: str, payload: dict) -> list[tuple[str, bytes]]:
