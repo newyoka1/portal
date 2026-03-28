@@ -45,10 +45,16 @@ app.include_router(voter_pipeline.router)
 # ---------------------------------------------------------------------------
 try:
     from fb_ad_approval.app import app as flask_app
-    app.mount("/fb", WSGIMiddleware(flask_app))
+    flask_wsgi = WSGIMiddleware(flask_app)
+    app.mount("/fb", flask_wsgi)
     logging.info("FB Ad Approval Flask app mounted at /fb/")
 except Exception as exc:
-    logging.warning("Could not mount FB Ad Approval: %s", exc)
+    logging.warning("Could not mount FB Ad Approval: %s — %s", type(exc).__name__, exc)
+
+# Redirect /fb (no trailing slash) to /fb/
+@app.get("/fb")
+def fb_redirect():
+    return RedirectResponse("/fb/", status_code=301)
 
 
 # ---------------------------------------------------------------------------
