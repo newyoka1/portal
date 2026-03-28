@@ -202,7 +202,7 @@ def generate_transaction_pdf(
 
                 # Dashed separator
                 story.append(Spacer(1, 0.05 * inch))
-                story.append(HRFlowable(width="100%", thickness=0.5, color=ORANGE_DASH, dashArray=[3, 3]))
+                story.append(HRFlowable(width="100%", thickness=0.5, color=ORANGE_DASH, dash=[3, 3]))
                 story.append(Spacer(1, 0.05 * inch))
 
                 # Ad sets under this campaign
