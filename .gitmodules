@@ -1,0 +1,12 @@
+[submodule "email_approval"]
+	path = email_approval
+	url = https://github.com/newyoka1/email-approval.git
+[submodule "fb_ad_approval"]
+	path = fb_ad_approval
+	url = https://github.com/newyoka1/fb-ad-approval.git
+[submodule "fb_receipts"]
+	path = fb_receipts
+	url = https://github.com/newyoka1/facebook-receipt-automation.git
+[submodule "voter_pipeline"]
+	path = voter_pipeline
+	url = https://github.com/newyoka1/nys-voter-pipeline.git
