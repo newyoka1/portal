@@ -1661,7 +1661,6 @@ def main():
             print("\n  python main.py donors")
             print("\nThis will add both BOE (state) and National donor data.")
             print("="*80 + "\n")
-            conn.close()
             sys.exit(1)
 
         # Pre-compute CRM email on voter_file (cached; instant after first run)
@@ -1691,7 +1690,6 @@ def main():
             print("\n  python main.py donors")
             print("\nThis will add both BOE (state) and National donor data.")
             print("="*80 + "\n")
-            conn.close()
             sys.exit(1)
         
         print('Creating National Donor tab...')
