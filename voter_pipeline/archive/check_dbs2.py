@@ -1,0 +1,33 @@
+import os, sys
+sys.path.insert(0, r"D:\git\nys-voter-pipeline")
+from dotenv import load_dotenv
+load_dotenv(r"D:\git\nys-voter-pipeline\.env")
+import mysql.connector
+
+conn = mysql.connector.connect(
+    host=os.getenv("MYSQL_HOST","127.0.0.1"),
+    port=int(os.getenv("MYSQL_PORT",3306)),
+    user=os.getenv("MYSQL_USER","root"),
+    password=os.getenv("MYSQL_PASSWORD","")
+)
+cur = conn.cursor()
+lines = []
+
+cur.execute("SHOW DATABASES")
+dbs = [r[0] for r in cur.fetchall() if r[0] not in ("information_schema","performance_schema","mysql","sys")]
+lines.append("=== DATABASES ===")
+for db in dbs:
+    lines.append(f"  {db}")
+
+for db in dbs:
+    lines.append(f"\n=== {db} ===")
+    cur.execute(f"SELECT table_name FROM information_schema.tables WHERE table_schema = '{db}' ORDER BY table_name")
+    for r in cur.fetchall():
+        lines.append(f"  {r[0]}")
+
+cur.close(); conn.close()
+
+log = r"D:\git\nys-voter-pipeline\logs\db_check.log"
+with open(log, "w") as f:
+    f.write("\n".join(lines))
+print("done")

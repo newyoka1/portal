@@ -1,0 +1,13 @@
+{% extends "queue.html" %}
+{% block title %}Approved Ads{% endblock %}
+
+{% block extra_head %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-switch to Approved tab
+    const approvedTab = document.querySelector('.queue-tab[data-tab="approved"]');
+    if (approvedTab) approvedTab.click();
+});
+</script>
+{% endblock %}

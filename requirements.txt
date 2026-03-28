@@ -19,6 +19,12 @@ google-auth-httplib2>=0.2.0
 google-auth-oauthlib>=1.2.0
 gspread>=5.12.0
 
+# ── FB Ad Approval (Flask app, mounted via WSGIMiddleware) ────────────────
+flask>=3.0.0
+flask-login>=0.6.3
+flask-wtf>=1.2.1
+mysql-connector-python>=8.3.0
+
 # ── FB Receipts ────────────────────────────────────────────────────────────
 facebook-business>=19.0.0
 reportlab>=4.0.0

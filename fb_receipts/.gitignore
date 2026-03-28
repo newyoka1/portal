@@ -1,0 +1,11 @@
+.env
+credentials/
+receipts/
+INVOICES/
+__pycache__/
+*.pyc
+.venv/
+venv/
+fb_session.json
+last_run.json
+*.log

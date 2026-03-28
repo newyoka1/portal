@@ -1,0 +1,2142 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit Ad' if ad else 'Create Ad' }}{% endblock %}
+
+{% block extra_head %}
+<style>
+/* ── Two-column layout ─────────────────────────────────────────── */
+.ads-manager-layout {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 24px;
+    align-items: start;
+}
+.form-col { min-width: 0; }
+.preview-col {
+    position: sticky;
+    top: calc(56px + 44px + 24px); /* nav + subnav + gap */
+}
+
+/* ── Section cards ─────────────────────────────────────────────── */
+.section-card {
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    margin-bottom: 16px;
+    overflow: hidden;
+}
+.section-card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: default;
+}
+.section-number {
+    width: 24px; height: 24px;
+    background: var(--accent); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; color: #fff;
+    flex-shrink: 0; margin-right: 12px;
+}
+.section-title { font-size: 15px; font-weight: 700; color: var(--text); letter-spacing: -0.2px; }
+.section-subtitle { font-size: 13px; color: var(--text-dim); margin-top: 2px; }
+.section-body { padding: 20px; }
+
+/* ── Format picker ─────────────────────────────────────────────── */
+.format-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+.format-card {
+    border: 2px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.12s;
+    background: #fff;
+    position: relative;
+}
+.format-card:hover { border-color: var(--accent); background: var(--accent-light); }
+.format-card.active {
+    border-color: var(--accent);
+    background: var(--accent-light);
+    box-shadow: 0 0 0 1px var(--accent);
+}
+.format-card .format-check {
+    position: absolute; top: 8px; right: 8px;
+    width: 18px; height: 18px; background: var(--accent);
+    border-radius: 50%; display: none;
+    align-items: center; justify-content: center;
+    color: #fff; font-size: 10px; font-weight: 700;
+}
+.format-card.active .format-check { display: flex; }
+.format-icon { font-size: 28px; margin-bottom: 8px; display: block; }
+.format-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.format-desc { font-size: 11px; color: var(--text-dim); margin-top: 3px; line-height: 1.4; }
+
+/* ── Placement image inputs ────────────────────────────────────── */
+.upload-zone {
+    position: relative; cursor: pointer; border-radius: var(--radius);
+    border: 2px dashed var(--border); overflow: hidden;
+    transition: border-color 0.15s, background 0.15s; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+}
+.upload-zone:hover, .upload-zone.drag-over { border-color: var(--accent); background: rgba(24,119,242,0.04); }
+.upload-zone img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: none; }
+.upload-zone img.has-image { display: block; }
+.upload-zone-ph {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    font-size: 11px; color: var(--text-muted); text-align: center; padding: 6px;
+}
+.upload-zone-ph .up-icon { font-size: 18px; }
+.upload-zone-ph .up-ratio { font-weight: 700; font-size: 10px; }
+.upload-zone.has-image .upload-zone-ph { display: none; }
+.upload-zone-overlay {
+    position: absolute; inset: 0; background: rgba(0,0,0,0.45);
+    display: flex; gap: 6px; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity 0.15s;
+}
+.upload-zone:hover .upload-zone-overlay { opacity: 1; }
+.upload-zone-overlay button {
+    background: rgba(255,255,255,0.9); border: none; border-radius: var(--radius-sm);
+    padding: 4px 9px; font-size: 11px; font-weight: 600; cursor: pointer; color: #1c1e21;
+}
+.upload-status {
+    font-size: 12px; padding: 4px 0; font-weight: 500;
+}
+.upload-status.ok   { color: var(--green); }
+.upload-status.err  { color: var(--red); }
+.upload-status.busy { color: var(--text-dim); }
+.url-toggle { font-size: 12px; color: var(--accent); cursor: pointer; text-decoration: underline; margin-top: 4px; display: inline-block; }
+.url-row { margin-top: 6px; display: none; }
+.url-row.open { display: block; }
+.placement-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border-light);
+}
+.placement-row:last-child { border-bottom: none; padding-bottom: 0; }
+.placement-row:first-child { padding-top: 0; }
+.placement-thumb-box {
+    width: 80px; flex-shrink: 0;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-raised);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden; cursor: pointer; position: relative;
+}
+.placement-thumb-box img {
+    width: 100%; height: 100%;
+    object-fit: cover; border-radius: var(--radius-sm);
+    display: none;
+}
+.placement-thumb-box .thumb-placeholder {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; color: var(--text-muted); gap: 4px;
+    padding: 8px; text-align: center;
+}
+.placement-thumb-box .thumb-placeholder span { font-size: 18px; }
+.placement-thumb-box .thumb-placeholder small { font-size: 10px; line-height: 1.3; }
+.placement-info { flex: 1; min-width: 0; }
+.placement-label-row {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap;
+}
+.placement-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.placement-spec {
+    font-family: var(--mono); font-size: 11px; color: var(--accent);
+    background: var(--accent-light); padding: 2px 7px; border-radius: 4px;
+}
+.placement-placements { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+
+/* ── Copy fields with char counter ────────────────────────────── */
+.copy-field-wrap { position: relative; }
+.copy-field-wrap textarea { padding-right: 12px; }
+.counter-badge {
+    position: absolute; bottom: 8px; right: 10px;
+    font-size: 11px; color: var(--text-muted); pointer-events: none;
+}
+.counter-badge.warn { color: var(--yellow); }
+.counter-badge.over { color: var(--red); }
+
+/* ── Text variations (multiple primary text) ───────────────────── */
+.variation-list { display: flex; flex-direction: column; gap: 10px; }
+.variation-item { position: relative; }
+.variation-remove {
+    position: absolute; top: 8px; right: 10px;
+    background: none; border: none; color: var(--text-muted);
+    cursor: pointer; font-size: 18px; line-height: 1; padding: 0;
+    z-index: 1;
+}
+.variation-remove:hover { color: var(--red); }
+
+/* ── URL / UTM section ─────────────────────────────────────────── */
+.utm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.collapsible-trigger {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; font-weight: 600; color: var(--accent);
+    cursor: pointer; background: none; border: none;
+    font-family: var(--font); padding: 0;
+}
+.collapsible-trigger .chevron { transition: transform 0.2s; font-size: 10px; }
+.collapsible-trigger.open .chevron { transform: rotate(180deg); }
+.collapsible-body { display: none; margin-top: 12px; }
+.collapsible-body.open { display: block; }
+
+/* ── Carousel card builder ─────────────────────────────────────── */
+.carousel-card-item {
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius);
+    padding: 16px;
+    background: var(--bg-raised);
+    position: relative;
+}
+.carousel-card-item .card-drag {
+    font-size: 16px; color: var(--text-muted);
+    cursor: grab; margin-right: 8px;
+}
+.carousel-card-num {
+    font-size: 11px; font-weight: 700; color: var(--text-muted);
+    text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.remove-carousel-card {
+    background: none; border: none; color: var(--text-muted);
+    cursor: pointer; font-size: 18px; line-height: 1; padding: 0;
+}
+.remove-carousel-card:hover { color: var(--red); }
+
+/* ── Right preview panel ───────────────────────────────────────── */
+.preview-panel {
+    background: #fff;
+    border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    overflow: hidden;
+}
+.preview-panel-header {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border-light);
+    display: flex; align-items: center; justify-content: space-between;
+}
+.preview-panel-title { font-size: 14px; font-weight: 600; color: var(--text); }
+.preview-tabs { display: flex; gap: 2px; background: var(--bg-raised); padding: 3px; border-radius: var(--radius-sm); }
+.preview-tab {
+    padding: 5px 10px; font-size: 12px; font-weight: 500;
+    color: var(--text-dim); border-radius: 4px; cursor: pointer;
+    border: none; background: none; font-family: var(--font);
+    transition: all 0.12s; white-space: nowrap;
+}
+.preview-tab:hover { color: var(--text); }
+.preview-tab.active { background: #fff; color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+.preview-body { padding: 16px; background: var(--bg); min-height: 200px; }
+
+/* ── Facebook Feed Mockup ──────────────────────────────────────── */
+.fb-card {
+    background: #fff;
+    border: 1px solid #ced0d4;
+    border-radius: 8px;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    max-width: 328px;
+    margin: 0 auto;
+}
+.fb-header { display: flex; align-items: flex-start; padding: 12px 12px 8px; gap: 8px; }
+.fb-avatar {
+    width: 40px; height: 40px; background: #1877F2;
+    border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 18px; font-weight: 800;
+    color: #fff; flex-shrink: 0;
+}
+.fb-meta { flex: 1; }
+.fb-pagename { font-size: 14px; font-weight: 700; color: #050505; line-height: 1.2; }
+.fb-sponsored { font-size: 12px; color: #65676B; margin-top: 1px; display: flex; align-items: center; gap: 3px; }
+.fb-more { font-size: 20px; color: #65676B; letter-spacing: 2px; line-height: 1; padding-top: 2px; }
+.fb-text { padding: 0 12px 10px; font-size: 14px; color: #050505; line-height: 1.5; word-break: break-word; }
+.fb-text-muted { color: #65676B; }
+.fb-image-box { line-height: 0; background: #F0F2F5; }
+.fb-image-box img { width: 100%; display: block; max-height: 280px; object-fit: cover; }
+.fb-image-placeholder {
+    width: 100%; height: 160px;
+    display: flex; align-items: center; justify-content: center;
+    background: #E4E6EB; color: #90949C; font-size: 13px;
+    flex-direction: column; gap: 6px;
+}
+.fb-image-placeholder .ph-icon { font-size: 28px; opacity: 0.5; }
+.fb-linkbar { background: #F0F2F5; padding: 10px 12px; display: flex; align-items: center; gap: 10px; }
+.fb-linkbar-info { flex: 1; min-width: 0; }
+.fb-domain { font-size: 11px; color: #65676B; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
+.fb-headline { font-size: 14px; font-weight: 700; color: #050505; line-height: 1.3; }
+.fb-desc { font-size: 13px; color: #65676B; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fb-cta-btn {
+    background: #E4E6EB; border-radius: 6px;
+    padding: 6px 12px; font-size: 13px; font-weight: 700;
+    color: #050505; white-space: nowrap; flex-shrink: 0;
+}
+.fb-reactions {
+    padding: 8px 12px;
+    border-top: 1px solid #E4E6EB;
+    font-size: 13px; color: #65676B;
+    display: flex; gap: 4px;
+}
+.fb-reaction-btn {
+    flex: 1; text-align: center; padding: 6px 4px;
+    border-radius: 4px; cursor: default; font-size: 13px; font-weight: 600;
+}
+.fb-reaction-btn:hover { background: #F0F2F5; }
+
+/* ── Stories mockup ────────────────────────────────────────────── */
+.fb-stories-card {
+    background: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    max-width: 180px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+.fb-stories-header { background: #111; padding: 8px 10px 6px; }
+.fb-stories-bars { display: flex; gap: 3px; margin-bottom: 6px; }
+.fb-stories-bar { height: 2px; flex: 1; border-radius: 1px; background: #444; }
+.fb-stories-bar.active { background: #fff; }
+.fb-stories-profile { display: flex; align-items: center; gap: 6px; }
+.fb-stories-avatar {
+    width: 24px; height: 24px; background: #1877F2;
+    border-radius: 50%; border: 1.5px solid #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: #fff; flex-shrink: 0;
+}
+.fb-stories-name { font-size: 11px; font-weight: 600; color: #fff; line-height: 1.1; }
+.fb-stories-name small { font-weight: 400; color: #aaa; }
+.fb-stories-image { line-height: 0; background: #1a1a1a; }
+.fb-stories-image img { width: 100%; display: block; max-height: 280px; object-fit: cover; }
+.fb-stories-image .ph { height: 220px; display: flex; align-items: center; justify-content: center; color: #555; font-size: 11px; flex-direction: column; gap: 6px; }
+.fb-stories-footer { background: #111; padding: 10px; text-align: center; }
+.fb-stories-cta {
+    display: inline-block; background: rgba(255,255,255,0.9);
+    border-radius: 16px; padding: 7px 20px;
+    font-size: 12px; font-weight: 700; color: #000;
+}
+
+/* ── No preview message ────────────────────────────────────────── */
+.preview-empty {
+    text-align: center; padding: 40px 20px; color: var(--text-muted);
+}
+.preview-empty .pe-icon { font-size: 36px; opacity: 0.4; margin-bottom: 8px; }
+.preview-empty p { font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 1024px) {
+    .ads-manager-layout { grid-template-columns: 1fr; }
+    .preview-col { position: static; }
+    .format-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+    .format-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* ── Detailed Targeting UI ──────────────────────────────────────── */
+.tgt-group { margin-bottom: 20px; }
+.tgt-group:last-of-type { margin-bottom: 0; }
+.tgt-group-label {
+    font-size: 12px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.4px; color: var(--text-dim); margin-bottom: 8px;
+    display: flex; align-items: center; gap: 8px;
+}
+.tgt-divider {
+    text-align: center; font-size: 12px; color: var(--text-muted);
+    border-top: 1px solid var(--border-light); margin: 18px 0;
+    padding-top: 14px;
+}
+.tgt-search-wrap { position: relative; }
+.tgt-search-input {
+    width: 100%; padding: 9px 12px 9px 34px; font-size: 13px;
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg-card); color: var(--text); box-sizing: border-box;
+    transition: border-color 0.12s;
+}
+.tgt-search-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(24,119,242,0.12); }
+.tgt-search-icon {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    font-size: 14px; pointer-events: none; color: var(--text-dim);
+}
+.tgt-dropdown {
+    display: none; position: absolute; left: 0; right: 0; top: calc(100% + 4px);
+    background: var(--bg-card); border: 1px solid var(--border-light);
+    border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+    z-index: 200; max-height: 260px; overflow-y: auto;
+}
+.tgt-dropdown.open { display: block; }
+.tgt-drop-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 14px; cursor: pointer; font-size: 13px; gap: 10px;
+    border-bottom: 1px solid var(--border-light); transition: background 0.1s;
+}
+.tgt-drop-item:last-child { border-bottom: none; }
+.tgt-drop-item:hover { background: var(--bg-raised); }
+.tgt-drop-item-name { font-weight: 500; flex: 1; }
+.tgt-drop-item-crumb { font-size: 11px; color: var(--text-muted); }
+.tgt-drop-item-size { font-size: 11px; color: var(--text-dim); white-space: nowrap; }
+.tgt-drop-loading { padding: 12px 14px; font-size: 13px; color: var(--text-muted); }
+.tgt-tags {
+    display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; min-height: 0;
+}
+.tgt-tag {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: #E7F0FD; color: #1877F2; border-radius: 20px;
+    padding: 4px 10px 4px 12px; font-size: 12px; font-weight: 600;
+    border: 1px solid rgba(24,119,242,0.25);
+}
+.tgt-tag.exclude { background: #FEE2E2; color: #DC2626; border-color: rgba(220,38,38,0.25); }
+.tgt-tag-remove {
+    cursor: pointer; font-size: 14px; line-height: 1; opacity: 0.6;
+    transition: opacity 0.1s; font-weight: 400;
+}
+.tgt-tag-remove:hover { opacity: 1; }
+.tgt-gender-row {
+    display: flex; gap: 10px; flex-wrap: wrap;
+}
+.tgt-gender-opt {
+    display: flex; align-items: center; gap: 7px; padding: 8px 14px;
+    border: 1px solid var(--border-light); border-radius: var(--radius);
+    cursor: pointer; font-size: 13px; transition: all 0.12s; flex: 1;
+    min-width: 80px; justify-content: center; font-weight: 500;
+}
+.tgt-gender-opt:hover { border-color: var(--accent); color: var(--accent); }
+.tgt-gender-opt input { accent-color: var(--accent); }
+.tgt-age-row { display: flex; align-items: center; gap: 10px; }
+.tgt-age-select {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--bg-card); color: var(--text); font-size: 13px;
+    font-family: var(--font); cursor: pointer; min-width: 90px;
+}
+.tgt-age-select:focus { outline: none; border-color: var(--accent); }
+/* Reach meter */
+.reach-wrap { margin-top: 4px; }
+.reach-bar-track {
+    height: 6px; border-radius: 3px; background: var(--border-light);
+    position: relative; overflow: visible; margin-bottom: 4px;
+}
+.reach-bar-fill {
+    height: 100%; border-radius: 3px;
+    background: linear-gradient(90deg, #1877F2, #42b72a);
+    transition: width 0.4s ease;
+}
+.reach-spectrum-labels {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: var(--text-muted); margin-bottom: 8px;
+}
+.reach-number { font-size: 13px; font-weight: 600; color: var(--text); }
+.reach-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.tgt-mode-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; padding: 2px 7px; border-radius: 10px;
+    background: #E7F0FD; color: #1877F2;
+}
+.tgt-mode-badge.exclude { background: #FEE2E2; color: #DC2626; }
+.tgt-audience-row {
+    display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+    border: 1px solid var(--border-light); border-radius: var(--radius);
+    margin-bottom: 6px; cursor: pointer; font-size: 13px; transition: border-color 0.12s;
+}
+.tgt-audience-row:hover { border-color: var(--accent); }
+.tgt-audience-row input[type="radio"],
+.tgt-audience-row input[type="checkbox"] { accent-color: var(--accent); }
+
+/* ── Location type filter chips ─────────────────────── */
+.loc-type-filters { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.loc-type-chip {
+    padding:4px 10px; border-radius:20px; font-size:12px; font-weight:500;
+    border:1px solid var(--border); background:var(--bg-card); color:var(--text-dim);
+    cursor:pointer; transition:all 0.12s;
+}
+.loc-type-chip:hover { border-color:var(--accent); color:var(--accent); }
+.loc-type-chip.active { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+/* Location presence selector */
+.loc-presence-select {
+    margin-top:10px; padding:7px 12px; border:1px solid var(--border);
+    border-radius:var(--radius); background:var(--bg-card); color:var(--text);
+    font-size:13px; font-family:var(--font); width:100%; cursor:pointer;
+}
+.loc-presence-select:focus { outline:none; border-color:var(--accent); }
+/* Location type badge in tags */
+.loc-type-badge {
+    font-size:10px; font-weight:600; opacity:0.75; text-transform:uppercase;
+    letter-spacing:0.3px;
+}
+/* ── Saved location sets ─────────────────────────────── */
+.saved-loc-list {
+    max-height:180px; overflow-y:auto;
+    border:1px solid var(--border-light); border-radius:var(--radius);
+    background:var(--bg-card);
+}
+.saved-loc-row {
+    display:flex; align-items:center; gap:8px; padding:9px 12px;
+    border-bottom:1px solid var(--border-light); cursor:pointer;
+    transition:background 0.1s;
+}
+.saved-loc-row:last-child { border-bottom:none; }
+.saved-loc-row:hover { background:var(--bg-raised); }
+.saved-loc-row-name { flex:1; font-size:13px; font-weight:600; color:var(--text); }
+.saved-loc-row-meta { font-size:11px; color:var(--text-muted); white-space:nowrap; }
+.saved-loc-apply {
+    padding:3px 10px; font-size:12px; font-weight:600; border-radius:20px;
+    background:var(--accent-light); color:var(--accent); border:1px solid rgba(24,119,242,0.25);
+    cursor:pointer; white-space:nowrap; transition:background 0.1s;
+}
+.saved-loc-apply:hover { background:var(--accent); color:#fff; }
+.saved-loc-del {
+    width:22px; height:22px; border-radius:50%; border:none; background:transparent;
+    color:var(--text-muted); font-size:15px; cursor:pointer; display:flex;
+    align-items:center; justify-content:center; flex-shrink:0;
+}
+.saved-loc-del:hover { background:#FEE2E2; color:#DC2626; }
+/* Save-as inline bar */
+.save-loc-bar {
+    display:flex; gap:8px; align-items:center; margin-top:10px;
+}
+.save-loc-bar input {
+    flex:1; padding:7px 11px; border:1px solid var(--border); border-radius:var(--radius);
+    font-size:13px; font-family:var(--font); background:var(--bg-card); color:var(--text);
+}
+.save-loc-bar input:focus { outline:none; border-color:var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom:20px;">
+    <div>
+        <h1>{{ 'Edit Ad' if ad else 'Create Ad' }}</h1>
+        <p style="color:var(--text-dim); font-size:14px; margin-top:4px;">
+            {{ 'Update your ad draft below.' if ad else 'Build your Facebook ad and send it for client approval.' }}
+        </p>
+    </div>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">← All Ads</a>
+</div>
+
+<form method="POST" action="/ad/save" id="adForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if ad %}<input type="hidden" name="ad_id" value="{{ ad.id }}">{% endif %}
+    <input type="hidden" name="ad_type" id="adTypeInput" value="{{ ad.ad_type if ad else 'image' }}">
+    <input type="hidden" name="carousel_cards" id="carouselCardsInput" value="{{ ad.carousel_cards if ad else '[]' }}">
+
+<div class="ads-manager-layout">
+<!-- ════════════════════════════════════════
+     LEFT COLUMN — form sections
+════════════════════════════════════════ -->
+<div class="form-col">
+
+    <!-- ── 1. Campaign Name ── -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <div style="display:flex; align-items:center;">
+                <div class="section-number">1</div>
+                <div>
+                    <div class="section-title">Ad Name</div>
+                    <div class="section-subtitle">Internal reference — not shown to the public</div>
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="form-group" style="margin-bottom:0;">
+                <input type="text" name="title" class="form-input"
+                       placeholder="e.g. Spring Fundraiser — Square Image — Apr 2025"
+                       value="{{ ad.title if ad else '' }}" required>
+                <div class="form-hint">Use a naming convention: Campaign — Format — Date. This is only seen by your team.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 2. Identity ── -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <div style="display:flex; align-items:center;">
+                <div class="section-number">2</div>
+                <div>
+                    <div class="section-title">Identity</div>
+                    <div class="section-subtitle">The Facebook Page that will run this ad</div>
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+
+            <!-- Dropdown of managed pages -->
+            <div style="position:relative;">
+                <select id="pageSelect" class="form-input" onchange="selectPageFromDropdown(this)"
+                        style="padding-left:44px; appearance:none; -webkit-appearance:none; cursor:pointer;">
+                    <option value="" disabled selected>
+                        {% if active_client and active_client.meta_ad_account_id %}Loading pages…{% else %}— link an ad account first —{% endif %}
+                    </option>
+                </select>
+                <div id="pageSelectAvatar" style="
+                    position:absolute; left:10px; top:50%; transform:translateY(-50%);
+                    width:26px; height:26px; border-radius:50%; background:var(--accent);
+                    display:flex; align-items:center; justify-content:center;
+                    font-size:12px; font-weight:800; color:#fff; pointer-events:none;">
+                    ?
+                </div>
+                <span style="position:absolute; right:12px; top:50%; transform:translateY(-50%); pointer-events:none; color:var(--text-dim);">▾</span>
+            </div>
+            <div id="pageSelectMsg" style="font-size:12px; color:var(--text-muted); margin-top:6px; display:none;"></div>
+
+            <input type="hidden" name="page_id"   id="adPageId"   value="{{ ad.page_id   if ad else '' }}">
+            <input type="hidden" name="page_name" id="adPageName" value="{{ ad.page_name if ad else (active_client.fb_page_name if active_client else '') }}">
+        </div>
+    </div>
+
+    <!-- ── 3. Ad Format ── -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <div style="display:flex; align-items:center;">
+                <div class="section-number">3</div>
+                <div>
+                    <div class="section-title">Ad Format</div>
+                    <div class="section-subtitle">Choose how your creative will be structured</div>
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="format-grid">
+                <div class="format-card {{ 'active' if not ad or ad.ad_type == 'image' }}" data-type="image" onclick="selectFormat(this)">
+                    <div class="format-check">✓</div>
+                    <span class="format-icon">🖼</span>
+                    <div class="format-name">Single Image</div>
+                    <div class="format-desc">One image per placement. Best for clean, direct messages.</div>
+                </div>
+                <div class="format-card {{ 'active' if ad and ad.ad_type == 'video' }}" data-type="video" onclick="selectFormat(this)">
+                    <div class="format-check">✓</div>
+                    <span class="format-icon">🎬</span>
+                    <div class="format-name">Single Video</div>
+                    <div class="format-desc">Video ad with optional thumbnail. Higher engagement.</div>
+                </div>
+                <div class="format-card {{ 'active' if ad and ad.ad_type == 'carousel' }}" data-type="carousel" onclick="selectFormat(this)">
+                    <div class="format-check">✓</div>
+                    <span class="format-icon">⊞</span>
+                    <div class="format-name">Carousel</div>
+                    <div class="format-desc">2–10 scrollable cards. Great for showcasing multiple items.</div>
+                </div>
+                <div class="format-card {{ 'active' if ad and ad.ad_type == 'text_only' }}" data-type="text_only" onclick="selectFormat(this)">
+                    <div class="format-check">✓</div>
+                    <span class="format-icon">Aa</span>
+                    <div class="format-name">Text Only</div>
+                    <div class="format-desc">Copy-only ad. No image or video required.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 4. Media / Creative ── -->
+    <div class="section-card" id="sectionMedia">
+        <div class="section-card-header">
+            <div style="display:flex; align-items:center;">
+                <div class="section-number">4</div>
+                <div>
+                    <div class="section-title">Media</div>
+                    <div class="section-subtitle">Add images for every placement you want to run</div>
+                </div>
+            </div>
+            <span class="badge badge-recommended">Recommended</span>
+        </div>
+        <div class="section-body">
+
+            <!-- Image placements -->
+            <div id="mediaImageSection">
+                <p style="font-size:13px; color:var(--text-dim); margin-bottom:16px;">
+                    Click a placement box to upload, or drag &amp; drop an image. You can also paste a URL directly.
+                </p>
+
+                {% set placements = [
+                    ('square',    'Feed — Square',    '1080 × 1080', '1:1',      'Facebook Feed · Instagram Feed · Marketplace · Right Column'),
+                    ('landscape', 'Feed — Landscape', '1200 × 628',  '1.91:1',   'Facebook Feed (landscape) · Audience Network'),
+                    ('portrait',  'Feed — Portrait',  '1080 × 1350', '4:5',      'Facebook & Instagram Feed (portrait) — highest reach'),
+                    ('stories',   'Stories & Reels',  '1080 × 1920', '9:16',     'Facebook Stories & Reels · Instagram Stories & Reels')
+                ] %}
+                {% for key, label, dims, ratio, placements_hint in placements %}
+                {% set saved_url = (ad['image_' ~ key] if ad else '') or '' %}
+                <div class="placement-row">
+                    <!-- Upload zone -->
+                    <div class="upload-zone {% if saved_url %}has-image{% endif %}"
+                         id="zone-{{ key }}"
+                         style="width:80px; height:{% if key=='square' %}80{% elif key=='landscape' %}42{% elif key=='portrait' %}100{% else %}142{% endif %}px;"
+                         onclick="document.getElementById('file-{{ key }}').click()"
+                         ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                         ondragleave="this.classList.remove('drag-over')"
+                         ondrop="handleDrop(event, '{{ key }}')">
+                        <div class="upload-zone-ph">
+                            <span class="up-icon">{% if key == 'stories' %}📲{% else %}🖼{% endif %}</span>
+                            <span class="up-ratio">{{ ratio }}</span>
+                            <span>Upload</span>
+                        </div>
+                        <img id="img-{{ key }}" src="{{ saved_url }}" alt=""
+                             class="{% if saved_url %}has-image{% endif %}">
+                        <div class="upload-zone-overlay">
+                            <button type="button" onclick="event.stopPropagation(); document.getElementById('file-{{ key }}').click()">Change</button>
+                            <button type="button" onclick="event.stopPropagation(); clearPlacement('{{ key }}')">Remove</button>
+                        </div>
+                    </div>
+
+                    <!-- Hidden file input -->
+                    <input type="file" id="file-{{ key }}"
+                           accept="image/jpeg,image/png,image/webp,image/gif"
+                           style="display:none"
+                           onchange="handleFileSelect(this, '{{ key }}')">
+
+                    <div class="placement-info">
+                        <div class="placement-label-row">
+                            <span class="placement-name">{{ label }}</span>
+                            <span class="placement-spec">{{ dims }}</span>
+                            <span class="placement-spec">{{ ratio }}</span>
+                        </div>
+                        <div id="status-{{ key }}" class="upload-status" style="display:none;"></div>
+                        <!-- URL paste toggle -->
+                        <span class="url-toggle" onclick="toggleUrlRow('{{ key }}')">
+                            {% if saved_url %}Edit URL{% else %}Paste URL instead{% endif %}
+                        </span>
+                        <div class="url-row {% if saved_url %}open{% endif %}" id="url-row-{{ key }}">
+                            <input type="text" id="url-inp-{{ key }}" class="form-input"
+                                   placeholder="https://…"
+                                   value="{{ saved_url }}"
+                                   oninput="handleUrlInput(this, '{{ key }}')">
+                        </div>
+                        <!-- Hidden field saved to sheet -->
+                        <input type="hidden" name="image_{{ key }}" id="inp-{{ key }}"
+                               value="{{ saved_url }}">
+                        <div class="placement-placements">{{ placements_hint }}</div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div><!-- /mediaImageSection -->
+
+            <!-- Video section -->
+            <div id="mediaVideoSection" style="display:none;">
+                <div class="form-group">
+                    <label class="form-label">Video URL</label>
+                    <input type="url" name="video_url" id="inp-video" class="form-input"
+                           placeholder="https://… direct link to video file"
+                           value="{{ ad.video_url if ad else '' }}"
+                           oninput="updatePreview()">
+                    <div class="form-hint">Supported formats: MP4, MOV. Facebook accepts square (1:1), portrait (4:5), and vertical (9:16) video.</div>
+                </div>
+                <div style="background:var(--bg-raised); border-radius:var(--radius); padding:14px; border:1px solid var(--border-light);">
+                    <div style="font-size:13px; font-weight:600; margin-bottom:12px; color:var(--text-dim);">Video Specifications</div>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12px; color:var(--text-dim);">
+                        <div>✓ Max file size: 4GB</div>
+                        <div>✓ Min length: 1 second</div>
+                        <div>✓ Max length: 241 minutes</div>
+                        <div>✓ Recommended: H.264, AAC audio</div>
+                        <div>✓ Min resolution: 1080×1080</div>
+                        <div>✓ Aspect ratios: 1:1, 4:5, 9:16, 16:9</div>
+                    </div>
+                </div>
+                <div style="margin-top:16px;">
+                    <div style="font-size:13px; font-weight:600; margin-bottom:10px; color:var(--text);">Thumbnail Images (optional)</div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Square Thumbnail <span class="form-label-hint">1080×1080</span></label>
+                            <input type="url" name="image_square" class="form-input"
+                                   placeholder="https://…" value="{{ ad.image_square if ad else '' }}"
+                                   oninput="updatePreview()">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Portrait Thumbnail <span class="form-label-hint">1080×1350</span></label>
+                            <input type="url" name="image_portrait" class="form-input"
+                                   placeholder="https://…" value="{{ ad.image_portrait if ad else '' }}"
+                                   oninput="updatePreview()">
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /mediaVideoSection -->
+
+            <!-- Carousel section -->
+            <div id="mediaCarouselSection" style="display:none;">
+                <p style="font-size:13px; color:var(--text-dim); margin-bottom:16px;">
+                    Add 2–10 cards. Each card uses a <strong>1:1 square image (1080×1080)</strong>. You can give each card its own headline, description, and destination URL.
+                </p>
+                <div id="carouselList" style="display:flex; flex-direction:column; gap:10px; margin-bottom:14px;"></div>
+                <button type="button" class="btn btn-ghost btn-sm" id="addCardBtn" onclick="addCarouselCard()">
+                    ＋ Add Card
+                </button>
+                <span id="cardCountHint" style="font-size:12px; color:var(--text-muted); margin-left:10px;"></span>
+            </div><!-- /mediaCarouselSection -->
+
+        </div>
+    </div>
+
+    <!-- ── 5. Ad Copy ── -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <div style="display:flex; align-items:center;">
+                <div class="section-number">5</div>
+                <div>
+                    <div class="section-title">Ad Copy</div>
+                    <div class="section-subtitle">Text that appears in your ad</div>
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+
+            <!-- Primary text (with variations) -->
+            <div class="form-group">
+                <label class="form-label">
+                    Primary Text
+                    <span class="badge badge-recommended" style="margin-left:4px;">Up to 5 versions</span>
+                </label>
+                <div class="variation-list" id="primaryTextList">
+                    <div class="variation-item">
+                        <div class="copy-field-wrap">
+                            <textarea name="primary_text" id="ptxt-0" class="form-textarea" rows="3"
+                                      placeholder="Write something people will want to read. This appears above your image."
+                                      oninput="charCount(this,'cc-pt-0',125); updatePreview()">{{ ad.primary_text if ad else '' }}</textarea>
+                            <span class="counter-badge" id="cc-pt-0"></span>
+                        </div>
+                        <div class="form-hint">Recommended: 125 characters. Shown above the creative in the feed.</div>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-text btn-sm" onclick="addTextVariation()" style="margin-top:8px;">
+                    ＋ Add another version
+                </button>
+            </div>
+
+            <!-- Headline -->
+            <div class="form-group">
+                <label class="form-label">
+                    Headline
+                    <span class="form-label-hint">Appears below the image</span>
+                </label>
+                <div class="copy-field-wrap">
+                    <input type="text" name="headline" id="inp-headline" class="form-input"
+                           placeholder="Short, attention-grabbing headline"
+                           value="{{ ad.headline if ad else '' }}"
+                           oninput="charCount(this,'cc-hl',40); updatePreview()">
+                    <span class="counter-badge" id="cc-hl"></span>
+                </div>
+                <div class="form-hint">Recommended: 40 characters. Displayed in bold below the creative.</div>
+            </div>
+
+            <!-- Description -->
+            <div class="form-group">
+                <label class="form-label">
+                    Description
+                    <span class="form-label-hint">Optional additional text</span>
+                </label>
+                <div class="copy-field-wrap">
+                    <input type="text" name="description" id="inp-desc" class="form-input"
+                           placeholder="Brief supporting description"
+                           value="{{ ad.description if ad else '' }}"
+                           oninput="charCount(this,'cc-desc',30); updatePreview()">
+                    <span class="counter-badge" id="cc-desc"></span>
+                </div>
+                <div class="form-hint">Recommended: 30 characters. Shown under the headline in desktop feed.</div>
+            </div>
+
+            <!-- CTA -->
+            <div class="form-group" style="margin-bottom:0;">
+                <label class="form-label">Call to Action Button</label>
+                <select name="cta" id="inp-cta" class="form-select" onchange="updatePreview()">
+                    <option value="NO_BUTTON" {{ 'selected' if ad and ad.cta == 'NO_BUTTON' }}>No Button</option>
+                    <optgroup label="Most Common">
+                        {% for c in ['LEARN_MORE','SHOP_NOW','SIGN_UP','BOOK_NOW','DONATE_NOW','CONTACT_US'] %}
+                        <option value="{{ c }}" {{ 'selected' if ad and ad.cta == c }}>{{ c|replace('_',' ')|title }}</option>
+                        {% endfor %}
+                    </optgroup>
+                    <optgroup label="More Options">
+                        {% for c in ['GET_OFFER','APPLY_NOW','SUBSCRIBE','DOWNLOAD','WATCH_MORE','GET_QUOTE','GET_DIRECTIONS','CALL_NOW','SEND_MESSAGE','OPEN_LINK'] %}
+                        <option value="{{ c }}" {{ 'selected' if ad and ad.cta == c }}>{{ c|replace('_',' ')|title }}</option>
+                        {% endfor %}
+                    </optgroup>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 6. Destination ── -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <div style="display:flex; align-items:center;">
+                <div class="section-number">6</div>
+                <div>
+                    <div class="section-title">Destination</div>
+                    <div class="section-subtitle">Where people go when they click your ad</div>
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+            <div class="form-group">
+                <label class="form-label">Website URL</label>
+                <input type="url" name="link_url" id="inp-url" class="form-input"
+                       placeholder="https://politikanyc.com/…"
+                       value="{{ ad.link_url if ad else '' }}"
+                       oninput="updatePreview()">
+                <div class="form-hint">The page people land on after clicking. Must begin with https://</div>
+            </div>
+
+            <!-- UTM parameters (collapsible) -->
+            <div>
+                <button type="button" class="collapsible-trigger" id="utmToggle" onclick="toggleUtm()">
+                    <span class="chevron">▼</span> Build URL Parameters (UTM)
+                </button>
+                <div class="collapsible-body" id="utmBody">
+                    <div class="utm-grid">
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label">utm_source</label>
+                            <input type="text" id="utm_source" class="form-input" placeholder="facebook" oninput="buildUtm()">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label">utm_medium</label>
+                            <input type="text" id="utm_medium" class="form-input" placeholder="paid_social" oninput="buildUtm()">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label">utm_campaign</label>
+                            <input type="text" id="utm_campaign" class="form-input" placeholder="spring_fundraiser" oninput="buildUtm()">
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label class="form-label">utm_content</label>
+                            <input type="text" id="utm_content" class="form-input" placeholder="square_image" oninput="buildUtm()">
+                        </div>
+                    </div>
+                    <div style="margin-top:10px; padding:10px 12px; background:var(--bg-raised); border-radius:var(--radius-sm); font-family:var(--mono); font-size:11px; color:var(--text-dim); word-break:break-all;" id="utmPreview">
+                        Fill in the fields above to build your tracked URL.
+                    </div>
+                    <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="applyUtm()">Apply to Website URL</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── 7. Audiences & Targeting ── -->
+    <div class="section-card">
+        <div class="section-card-header">
+            <div style="display:flex; align-items:center;">
+                <div class="section-number">7</div>
+                <div>
+                    <div class="section-title">Audiences &amp; Targeting</div>
+                    <div class="section-subtitle">Define who sees this ad</div>
+                </div>
+            </div>
+        </div>
+        <div class="section-body">
+
+            {% if not (active_client and active_client.meta_ad_account_id) %}
+            <div style="padding:12px 14px; background:var(--bg-raised); border-radius:var(--radius); font-size:13px; color:var(--text-dim); margin-bottom:16px;">
+                No ad account linked —
+                <a href="{{ url_for('manage_clients') }}" style="color:var(--accent);">set up client</a>
+                to enable live audience data.
+            </div>
+            {% endif %}
+
+            <!-- ── Saved Audiences ── -->
+            <div class="tgt-group">
+                <div class="tgt-group-label">Saved Audience <span style="font-size:11px; font-weight:400; color:var(--text-muted); text-transform:none; letter-spacing:0;">Use a pre-built audience from Ads Manager</span></div>
+                <div id="savedAudienceList" style="max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; border:1px solid var(--border-light); border-radius:var(--radius); padding:8px;">
+                    <div style="font-size:13px; color:var(--text-muted);" id="savedAudienceMsg">
+                        {% if active_client and active_client.meta_ad_account_id %}Loading…{% else %}—{% endif %}
+                    </div>
+                </div>
+                <input type="hidden" name="targeting_saved_audience_id"   id="savedAudienceId"
+                       value="{{ ad.targeting_saved_audience_id if ad else '' }}">
+                <input type="hidden" name="targeting_saved_audience_name" id="savedAudienceName"
+                       value="{{ ad.targeting_saved_audience_name if ad else '' }}">
+            </div>
+
+            <div class="tgt-divider">— or build a new audience —</div>
+
+            <!-- ── Custom Audiences ── -->
+            <div class="tgt-group">
+                <div class="tgt-group-label">Custom Audiences <span style="font-size:11px; font-weight:400; color:var(--text-muted); text-transform:none; letter-spacing:0;">Retargeting lists, lookalikes</span></div>
+                <div id="customAudienceList" style="max-height:200px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; border:1px solid var(--border-light); border-radius:var(--radius); padding:8px;">
+                    <div style="font-size:13px; color:var(--text-muted);" id="customAudienceMsg">
+                        {% if active_client and active_client.meta_ad_account_id %}Loading…{% else %}—{% endif %}
+                    </div>
+                </div>
+                <input type="hidden" name="targeting_custom_audiences" id="customAudiencesHidden"
+                       value="{{ ad.targeting_custom_audiences if ad else '' }}">
+            </div>
+
+            <!-- ── Locations ── -->
+            <div class="tgt-group">
+                <div class="tgt-group-label" style="display:flex; align-items:center; justify-content:space-between;">
+                    <span>Locations</span>
+                    <span style="font-size:11px; font-weight:400; color:var(--text-muted); text-transform:none; letter-spacing:0;" id="savedLocCount"></span>
+                </div>
+
+                <!-- Saved location sets -->
+                <div id="savedLocList" class="saved-loc-list" style="margin-bottom:12px;">
+                    <div style="padding:10px 12px; font-size:13px; color:var(--text-muted);" id="savedLocMsg">Loading…</div>
+                </div>
+
+                <!-- Type filter chips -->
+                <div class="loc-type-filters">
+                    <span class="loc-type-chip active" data-type="" onclick="setLocTypeFilter(this, '')">All</span>
+                    <span class="loc-type-chip" data-type="country"            onclick="setLocTypeFilter(this, 'country')">🌍 Countries</span>
+                    <span class="loc-type-chip" data-type="region"             onclick="setLocTypeFilter(this, 'region')">🗺 States / Regions</span>
+                    <span class="loc-type-chip" data-type="city"               onclick="setLocTypeFilter(this, 'city')">🏙 Cities</span>
+                    <span class="loc-type-chip" data-type="zip"                onclick="setLocTypeFilter(this, 'zip')">📮 Zip Codes</span>
+                    <span class="loc-type-chip" data-type="geo_market"         onclick="setLocTypeFilter(this, 'geo_market')">📺 DMAs</span>
+                    <span class="loc-type-chip" data-type="electoral_district" onclick="setLocTypeFilter(this, 'electoral_district')">🗳 Districts</span>
+                </div>
+
+                <!-- Search -->
+                <div class="tgt-search-wrap">
+                    <span class="tgt-search-icon">🔍</span>
+                    <input type="text" id="locationSearch" class="tgt-search-input"
+                           placeholder="Search locations…"
+                           autocomplete="off" oninput="debouncedLocationSearch(this.value)">
+                    <div id="locationDropdown" class="tgt-dropdown"></div>
+                </div>
+
+                <!-- Selected location pills -->
+                <div id="locationTags" class="tgt-tags" style="margin-top:10px;"></div>
+
+                <!-- Location presence type -->
+                <select class="loc-presence-select" id="locPresenceSelect"
+                        onchange="onLocPresenceChange(this.value)">
+                    <option value="home"      {% if ad and ad.targeting_location_type == 'home'      %}selected{% endif %}>People who live in this location</option>
+                    <option value="recent"    {% if ad and ad.targeting_location_type == 'recent'    %}selected{% endif %}>People recently in this location</option>
+                    <option value="travel_in" {% if ad and ad.targeting_location_type == 'travel_in' %}selected{% endif %}>People traveling in this location</option>
+                    <option value=""          {% if not ad or not ad.targeting_location_type or ad.targeting_location_type == '' %}selected{% endif %}>Everyone in this location (broadest)</option>
+                </select>
+
+                <input type="hidden" name="targeting_locations"     id="tgtLocations"     value="{{ ad.targeting_locations     if ad else '' }}">
+                <input type="hidden" name="targeting_location_type" id="tgtLocationType"  value="{{ ad.targeting_location_type if ad else 'home' }}">
+
+                <!-- Save current locations as a set -->
+                <div class="save-loc-bar" id="saveLocBar" style="display:none;">
+                    <input type="text" id="saveLocName" placeholder="Name this location set…" maxlength="80"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();saveLocationSet();}">
+                    <button type="button" class="btn btn-primary btn-sm" onclick="saveLocationSet()">Save</button>
+                    <button type="button" class="btn btn-ghost btn-sm" onclick="hideSaveLocBar()">Cancel</button>
+                </div>
+                <button type="button" class="btn btn-ghost btn-sm" id="saveLocBtn"
+                        style="margin-top:8px; display:none;"
+                        onclick="showSaveLocBar()">+ Save as location set</button>
+            </div>
+
+            <!-- ── Age ── -->
+            <div class="tgt-group">
+                <div class="tgt-group-label">Age</div>
+                <div class="tgt-age-row">
+                    <select id="ageMin" class="tgt-age-select" onchange="onAgeChange()">
+                        {% for age in range(18, 66) %}
+                        <option value="{{ age }}" {% if (ad and ad.targeting_age_min == age|string) or (not ad and age == 18) %}selected{% endif %}>{{ age }}</option>
+                        {% endfor %}
+                    </select>
+                    <span style="color:var(--text-dim); font-weight:500;">–</span>
+                    <select id="ageMax" class="tgt-age-select" onchange="onAgeChange()">
+                        {% for age in range(18, 65) %}
+                        <option value="{{ age }}" {% if ad and ad.targeting_age_max == age|string %}selected{% endif %}>{{ age }}</option>
+                        {% endfor %}
+                        <option value="65" {% if not ad or ad.targeting_age_max in ('65','') %}selected{% endif %}>65+</option>
+                    </select>
+                </div>
+                <input type="hidden" name="targeting_age_min" id="tgtAgeMin"
+                       value="{{ ad.targeting_age_min if ad else '18' }}">
+                <input type="hidden" name="targeting_age_max" id="tgtAgeMax"
+                       value="{{ ad.targeting_age_max if ad else '65' }}">
+            </div>
+
+            <!-- ── Gender ── -->
+            <div class="tgt-group">
+                <div class="tgt-group-label">Gender</div>
+                <div class="tgt-gender-row">
+                    {% set cur_gender = ad.targeting_genders if ad else 'all' %}
+                    <label class="tgt-gender-opt">
+                        <input type="radio" name="tgt_gender_radio" value="all"
+                               {% if cur_gender == 'all' %}checked{% endif %}
+                               onchange="onGenderChange('all')"> All genders
+                    </label>
+                    <label class="tgt-gender-opt">
+                        <input type="radio" name="tgt_gender_radio" value="male"
+                               {% if cur_gender == 'male' %}checked{% endif %}
+                               onchange="onGenderChange('male')"> Men only
+                    </label>
+                    <label class="tgt-gender-opt">
+                        <input type="radio" name="tgt_gender_radio" value="female"
+                               {% if cur_gender == 'female' %}checked{% endif %}
+                               onchange="onGenderChange('female')"> Women only
+                    </label>
+                </div>
+                <input type="hidden" name="targeting_genders" id="tgtGenders"
+                       value="{{ ad.targeting_genders if ad else 'all' }}">
+            </div>
+
+            <!-- ── Detailed Targeting — Include ── -->
+            <div class="tgt-group">
+                <div class="tgt-group-label">
+                    Detailed Targeting
+                    <span class="tgt-mode-badge">Include</span>
+                </div>
+                <div class="tgt-search-wrap">
+                    <span class="tgt-search-icon">🔍</span>
+                    <input type="text" id="interestSearch" class="tgt-search-input"
+                           placeholder="Search demographics, interests, behaviors…"
+                           autocomplete="off" oninput="debouncedInterestSearch(this.value, 'include')">
+                    <div id="interestDropdown" class="tgt-dropdown"></div>
+                </div>
+                <div id="interestTags" class="tgt-tags"></div>
+                <input type="hidden" name="targeting_interests" id="tgtInterests"
+                       value="{{ ad.targeting_interests if ad else '' }}">
+            </div>
+
+            <!-- ── Detailed Targeting — Exclude ── -->
+            <div class="tgt-group">
+                <div class="tgt-group-label">
+                    Exclude People
+                    <span class="tgt-mode-badge exclude">Exclude</span>
+                </div>
+                <div class="tgt-search-wrap">
+                    <span class="tgt-search-icon">🚫</span>
+                    <input type="text" id="exclusionSearch" class="tgt-search-input"
+                           placeholder="Add interests or behaviors to exclude…"
+                           autocomplete="off" oninput="debouncedInterestSearch(this.value, 'exclude')">
+                    <div id="exclusionDropdown" class="tgt-dropdown"></div>
+                </div>
+                <div id="exclusionTags" class="tgt-tags"></div>
+                <input type="hidden" name="targeting_exclusions" id="tgtExclusions"
+                       value="{{ ad.targeting_exclusions if ad else '' }}">
+            </div>
+
+            <!-- ── Estimated Audience Size ── -->
+            <div class="tgt-group" id="reachGroup">
+                <div class="tgt-group-label">Estimated Audience Size</div>
+                <div class="reach-wrap">
+                    <div class="reach-spectrum-labels"><span>Specific</span><span>Broad</span></div>
+                    <div class="reach-bar-track">
+                        <div class="reach-bar-fill" id="reachBarFill" style="width:0%;"></div>
+                    </div>
+                    <div id="reachNumber" class="reach-number" style="margin-top:8px;">—</div>
+                    <div id="reachSub" class="reach-sub"></div>
+                </div>
+            </div>
+
+            <!-- ── Budget ── -->
+            <div class="form-row" style="margin-top:4px;">
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Daily Budget</label>
+                    <div style="position:relative;">
+                        <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:var(--text-dim); font-weight:600;">$</span>
+                        <input type="text" name="budget" class="form-input" style="padding-left:26px;"
+                               placeholder="50.00" value="{{ ad.budget if ad else '' }}">
+                    </div>
+                    <div class="form-hint">Per-day spend. Final budget is confirmed in Ads Manager.</div>
+                </div>
+                <div class="form-group" style="margin-bottom:0;">
+                    <label class="form-label">Schedule Notes <span class="form-label-hint">(optional)</span></label>
+                    <input type="text" name="targeting_notes" class="form-input"
+                           placeholder="e.g. Run for 7 days starting Apr 1"
+                           value="{{ ad.targeting_notes if ad else '' }}">
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- ── Save bar ── -->
+    <div style="display:flex; gap:12px; justify-content:flex-end; padding-bottom:40px;">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">Cancel</a>
+        <button type="submit" class="btn btn-primary btn-lg">
+            {% if ad %}💾 Save Changes{% else %}💾 Save Draft{% endif %}
+        </button>
+    </div>
+
+</div><!-- /form-col -->
+
+<!-- ════════════════════════════════════════
+     RIGHT COLUMN — live preview panel
+════════════════════════════════════════ -->
+<div class="preview-col">
+    <div class="preview-panel">
+        <div class="preview-panel-header">
+            <div class="preview-panel-title">Ad Preview</div>
+            <div class="preview-tabs">
+                <button type="button" class="preview-tab active" data-placement="feed_square" onclick="switchPreviewTab(this)">Feed</button>
+                <button type="button" class="preview-tab" data-placement="feed_landscape" onclick="switchPreviewTab(this)">Wide</button>
+                <button type="button" class="preview-tab" data-placement="stories" onclick="switchPreviewTab(this)">Stories</button>
+            </div>
+        </div>
+        <div class="preview-body" id="previewBody">
+            <!-- Rendered by JS -->
+        </div>
+        <div style="padding:12px 16px; border-top:1px solid var(--border-light); background:var(--bg-raised);">
+            <div style="font-size:11px; color:var(--text-muted); text-align:center; line-height:1.5;">
+                This preview is approximate. Final rendering may vary by device and placement.
+            </div>
+        </div>
+    </div>
+</div><!-- /preview-col -->
+
+</div><!-- /ads-manager-layout -->
+</form>
+
+<script>
+// ── Carousel state ──────────────────────────────────────────────────────
+let carouselCards = [];
+try {
+    carouselCards = JSON.parse(document.getElementById('carouselCardsInput').value) || [];
+    if (!Array.isArray(carouselCards)) carouselCards = [];
+} catch(e) { carouselCards = []; }
+
+// ── Page loader (Identity section) ──────────────────────────────────────
+{% if active_client and active_client.meta_ad_account_id %}
+(function loadPages() {
+    const savedPageId   = document.getElementById('adPageId').value;
+    const clientDefault = '{{ active_client.fb_page_name or "" }}';
+    const sel = document.getElementById('pageSelect');
+
+    fetch('/api/meta/pages')
+        .then(r => r.json())
+        .then(d => {
+            const pages = d.pages || [];
+            if (d.error || !pages.length) {
+                const msg = document.getElementById('pageSelectMsg');
+                msg.textContent = d.error || 'No Facebook Pages found for this token.';
+                msg.style.display = 'block';
+                return;
+            }
+
+            // Auto-select logic
+            let autoId = savedPageId;
+            if (!autoId && clientDefault) {
+                const match = pages.find(p => p.name.toLowerCase() === clientDefault.toLowerCase());
+                if (match) autoId = match.id;
+            }
+            if (!autoId) autoId = pages[0].id;
+
+            // Clear loading option and populate
+            sel.innerHTML = '';
+            pages.forEach(page => {
+                const opt = document.createElement('option');
+                opt.value = page.id;
+                opt.textContent = page.name + (page.category ? '  ·  ' + page.category : '') + (page.fans ? '  ·  ' + formatPageFans(page.fans) + ' followers' : '');
+                opt.dataset.name = page.name;
+                if (page.id === autoId) opt.selected = true;
+                sel.appendChild(opt);
+            });
+
+            // Sync hidden inputs with the auto-selected page
+            const chosen = pages.find(p => p.id === autoId) || pages[0];
+            selectPage(chosen.id, chosen.name);
+        })
+        .catch(() => {
+            const msg = document.getElementById('pageSelectMsg');
+            msg.textContent = 'Could not load pages.';
+            msg.style.display = 'block';
+        });
+})();
+{% endif %}
+
+function selectPageFromDropdown(sel) {
+    const opt = sel.options[sel.selectedIndex];
+    selectPage(sel.value, opt.dataset.name || opt.textContent.split('  ·  ')[0]);
+}
+
+function selectPage(id, name) {
+    document.getElementById('adPageId').value   = id;
+    document.getElementById('adPageName').value = name;
+    // Update avatar initial
+    const av = document.getElementById('pageSelectAvatar');
+    if (av) av.textContent = name ? name[0].toUpperCase() : '?';
+    updatePreview();
+}
+
+function formatPageFans(n) {
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+    return String(n);
+}
+
+// ── Format selection ────────────────────────────────────────────────────
+function selectFormat(card) {
+    document.querySelectorAll('.format-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    const type = card.dataset.type;
+    document.getElementById('adTypeInput').value = type;
+    document.getElementById('mediaImageSection').style.display   = (type === 'image')    ? '' : 'none';
+    document.getElementById('mediaVideoSection').style.display   = (type === 'video')    ? '' : 'none';
+    document.getElementById('mediaCarouselSection').style.display= (type === 'carousel') ? '' : 'none';
+    if (type === 'carousel' && carouselCards.length === 0) addCarouselCard();
+    updatePreview();
+}
+
+// ── Image upload helpers ─────────────────────────────────────────────────
+
+function setPlacementImage(key, url) {
+    const zone = document.getElementById('zone-' + key);
+    const img  = document.getElementById('img-' + key);
+    if (url) {
+        img.src = url;
+        img.classList.add('has-image');
+        zone.classList.add('has-image');
+    } else {
+        img.src = '';
+        img.classList.remove('has-image');
+        zone.classList.remove('has-image');
+    }
+    document.getElementById('inp-' + key).value = url || '';
+    updatePreview();
+}
+
+function showStatus(key, msg, type) {
+    const el = document.getElementById('status-' + key);
+    el.textContent = msg;
+    el.className   = 'upload-status ' + (type || '');
+    el.style.display = msg ? 'block' : 'none';
+}
+
+async function handleFileSelect(input, key) {
+    const file = input.files[0];
+    if (!file) return;
+    // Instant local preview
+    setPlacementImage(key, URL.createObjectURL(file));
+    showStatus(key, '⏳ Uploading…', 'busy');
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+        const r = await fetch('/upload', { method: 'POST', body: fd });
+        const d = await r.json();
+        if (d.url) {
+            setPlacementImage(key, d.url);
+            document.getElementById('url-inp-' + key).value = d.url;
+            showStatus(key, '✓ Uploaded', 'ok');
+            setTimeout(() => showStatus(key, '', ''), 3000);
+        } else {
+            showStatus(key, '✗ ' + (d.error || 'Upload failed'), 'err');
+        }
+    } catch(e) {
+        showStatus(key, '✗ Upload failed', 'err');
+    }
+    // Reset file input so same file can be re-selected
+    input.value = '';
+}
+
+function handleDrop(event, key) {
+    event.preventDefault();
+    document.getElementById('zone-' + key).classList.remove('drag-over');
+    const file = event.dataTransfer.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    const inp = document.getElementById('file-' + key);
+    inp.files = dt.files;
+    handleFileSelect(inp, key);
+}
+
+function handleUrlInput(input, key) {
+    setPlacementImage(key, input.value.trim());
+}
+
+function clearPlacement(key) {
+    setPlacementImage(key, '');
+    document.getElementById('url-inp-' + key).value = '';
+    showStatus(key, '', '');
+}
+
+function toggleUrlRow(key) {
+    document.getElementById('url-row-' + key).classList.toggle('open');
+}
+
+// ── Character counters ──────────────────────────────────────────────────
+function charCount(el, counterId, max) {
+    const len = el.value.length;
+    const badge = document.getElementById(counterId);
+    if (!badge) return;
+    badge.textContent = len + ' / ' + max;
+    badge.className = 'counter-badge' + (len > max ? ' over' : len > max * 0.85 ? ' warn' : '');
+}
+// Init on load
+(function() {
+    const pt = document.getElementById('ptxt-0');
+    if (pt) charCount(pt, 'cc-pt-0', 125);
+    const hl = document.getElementById('inp-headline');
+    if (hl) charCount(hl, 'cc-hl', 40);
+    const dc = document.getElementById('inp-desc');
+    if (dc) charCount(dc, 'cc-desc', 30);
+})();
+
+// ── Text variations ─────────────────────────────────────────────────────
+let varCount = 1;
+function addTextVariation() {
+    if (varCount >= 5) return;
+    const list = document.getElementById('primaryTextList');
+    const idx = varCount++;
+    const div = document.createElement('div');
+    div.className = 'variation-item';
+    div.id = 'var-' + idx;
+    div.innerHTML = `
+        <div class="copy-field-wrap" style="position:relative;">
+            <textarea class="form-textarea" rows="3"
+                      placeholder="Alternative version ${idx + 1}…"
+                      oninput="charCount(this,'cc-pt-${idx}',125)"></textarea>
+            <span class="counter-badge" id="cc-pt-${idx}"></span>
+        </div>
+        <button type="button" class="variation-remove" onclick="removeVariation('var-${idx}')">×</button>
+    `;
+    list.appendChild(div);
+}
+function removeVariation(id) {
+    const el = document.getElementById(id);
+    if (el) el.remove();
+}
+
+// ── UTM builder ─────────────────────────────────────────────────────────
+function toggleUtm() {
+    const body    = document.getElementById('utmBody');
+    const trigger = document.getElementById('utmToggle');
+    body.classList.toggle('open');
+    trigger.classList.toggle('open');
+}
+function buildUtm() {
+    const base = document.getElementById('inp-url').value.trim() || 'https://example.com/page';
+    const params = new URLSearchParams();
+    ['utm_source','utm_medium','utm_campaign','utm_content'].forEach(k => {
+        const val = document.getElementById(k).value.trim();
+        if (val) params.set(k, val);
+    });
+    const qs = params.toString();
+    document.getElementById('utmPreview').textContent = qs ? base + '?' + qs : 'Fill in the fields above to build your tracked URL.';
+}
+function applyUtm() {
+    const preview = document.getElementById('utmPreview').textContent;
+    if (!preview.startsWith('http')) return;
+    document.getElementById('inp-url').value = preview;
+    updatePreview();
+}
+
+// ── Carousel builder ────────────────────────────────────────────────────
+function renderCarousel() {
+    const list = document.getElementById('carouselList');
+    list.innerHTML = '';
+    carouselCards.forEach((card, i) => {
+        const div = document.createElement('div');
+        div.className = 'carousel-card-item';
+        div.innerHTML = `
+            <div class="carousel-card-num">
+                Card ${i + 1} of ${carouselCards.length}
+                <button type="button" class="remove-carousel-card" onclick="removeCarouselCard(${i})">×</button>
+            </div>
+            <div class="form-row" style="margin-bottom:10px;">
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">Image URL <span class="form-label-hint">1080×1080</span></label>
+                    <input type="url" class="form-input" placeholder="https://…"
+                           value="${esc(card.image||'')}"
+                           oninput="updateCarouselCard(${i},'image',this.value)">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">Headline</label>
+                    <input type="text" class="form-input" placeholder="Card headline"
+                           value="${esc(card.headline||'')}"
+                           oninput="updateCarouselCard(${i},'headline',this.value)">
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">Description</label>
+                    <input type="text" class="form-input" placeholder="Card description"
+                           value="${esc(card.description||'')}"
+                           oninput="updateCarouselCard(${i},'description',this.value)">
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label class="form-label">Link URL <span class="form-label-hint">optional</span></label>
+                    <input type="url" class="form-input" placeholder="Leave blank to use ad URL"
+                           value="${esc(card.link_url||'')}"
+                           oninput="updateCarouselCard(${i},'link_url',this.value)">
+                </div>
+            </div>
+        `;
+        list.appendChild(div);
+    });
+    document.getElementById('addCardBtn').disabled = carouselCards.length >= 10;
+    document.getElementById('cardCountHint').textContent = carouselCards.length
+        ? `${carouselCards.length} / 10 cards` : '';
+    syncCarouselInput();
+}
+function addCarouselCard() {
+    if (carouselCards.length >= 10) return;
+    carouselCards.push({ image:'', headline:'', description:'', link_url:'' });
+    renderCarousel();
+}
+function removeCarouselCard(i) {
+    carouselCards.splice(i, 1);
+    renderCarousel();
+}
+function updateCarouselCard(i, field, val) {
+    carouselCards[i][field] = val;
+    syncCarouselInput();
+    updatePreview();
+}
+function syncCarouselInput() {
+    document.getElementById('carouselCardsInput').value = JSON.stringify(carouselCards);
+}
+function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// Init carousel if editing
+if (document.getElementById('adTypeInput').value === 'carousel') {
+    document.getElementById('mediaCarouselSection').style.display = '';
+    document.getElementById('mediaImageSection').style.display = 'none';
+    renderCarousel();
+    if (carouselCards.length === 0) addCarouselCard();
+}
+
+// ── Live preview ─────────────────────────────────────────────────────────
+let activePreviewPlacement = 'feed_square';
+const CTA_MAP = {
+    'LEARN_MORE':'Learn More','SHOP_NOW':'Shop Now','SIGN_UP':'Sign Up',
+    'BOOK_NOW':'Book Now','CONTACT_US':'Contact Us','DONATE_NOW':'Donate Now',
+    'GET_OFFER':'Get Offer','APPLY_NOW':'Apply Now','SUBSCRIBE':'Subscribe',
+    'DOWNLOAD':'Download','WATCH_MORE':'Watch More','GET_QUOTE':'Get Quote',
+    'GET_DIRECTIONS':'Get Directions','CALL_NOW':'Call Now','SEND_MESSAGE':'Send Message',
+    'OPEN_LINK':'Open Link','NO_BUTTON':''
+};
+
+function getFormData() {
+    const ptxt  = document.getElementById('ptxt-0');
+    const hl    = document.getElementById('inp-headline');
+    const desc  = document.getElementById('inp-desc');
+    const cta   = document.getElementById('inp-cta');
+    const url   = document.getElementById('inp-url');
+    const raw_url = url ? url.value.trim() : '';
+    let domain = '';
+    try { domain = raw_url ? new URL(raw_url).hostname.replace(/^www\./,'') : ''; } catch(e) {}
+    return {
+        primaryText : ptxt  ? ptxt.value.trim()  : '',
+        headline    : hl    ? hl.value.trim()    : '',
+        description : desc  ? desc.value.trim()  : '',
+        ctaCode     : cta   ? cta.value          : 'LEARN_MORE',
+        ctaLabel    : cta   ? (CTA_MAP[cta.value] || '') : '',
+        link_url    : raw_url,
+        domain      : domain,
+        imgSquare   : (document.getElementById('inp-square')    || {}).value || '',
+        imgLandscape: (document.getElementById('inp-landscape') || {}).value || '',
+        imgPortrait : (document.getElementById('inp-portrait')  || {}).value || '',
+        imgStories  : (document.getElementById('inp-stories')   || {}).value || '',
+        adType      : document.getElementById('adTypeInput').value,
+    };
+}
+
+function getPageName() {
+    return escHtml(document.getElementById('adPageName').value || '{{ active_client.fb_page_name if active_client else "Your Page" }}');
+}
+function getPageInitial() {
+    const n = (document.getElementById('adPageName').value || '{{ active_client.fb_page_name if active_client else "P" }}').trim();
+    return n ? n[0].toUpperCase() : 'P';
+}
+function truncate(str, max) {
+    if (!str) return '';
+    if (str.length <= max) return escHtml(str);
+    return escHtml(str.slice(0, max)) + '<span style="color:#65676B"> … See more</span>';
+}
+function escHtml(s) {
+    return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function buildFeedMockup(imgUrl, d) {
+    const imgHtml = imgUrl
+        ? `<div class="fb-image-box"><img src="${escHtml(imgUrl)}" alt="" onerror="this.parentNode.innerHTML='<div class=fb-image-placeholder><div class=ph-icon>🖼</div><small>Image not loaded</small></div>'"></div>`
+        : `<div class="fb-image-placeholder"><div class="ph-icon">🖼</div><small>No image yet</small></div>`;
+    const linkBar = (d.headline || d.domain || d.ctaLabel) ? `
+        <div class="fb-linkbar">
+            <div class="fb-linkbar-info">
+                ${d.domain ? `<div class="fb-domain">${escHtml(d.domain.toUpperCase())}</div>` : ''}
+                <div class="fb-headline">${escHtml(d.headline || '') || '<span style="color:#bbb">Your headline</span>'}</div>
+                ${d.description ? `<div class="fb-desc">${escHtml(d.description)}</div>` : ''}
+            </div>
+            ${d.ctaLabel ? `<div class="fb-cta-btn">${escHtml(d.ctaLabel)}</div>` : ''}
+        </div>` : '';
+    return `
+        <div class="fb-card">
+            <div class="fb-header">
+                <div class="fb-avatar">${getPageInitial()}</div>
+                <div class="fb-meta">
+                    <div class="fb-pagename">${getPageName()}</div>
+                    <div class="fb-sponsored">Sponsored · 🌐</div>
+                </div>
+                <div class="fb-more">···</div>
+            </div>
+            ${d.primaryText ? `<div class="fb-text">${truncate(d.primaryText, 125)}</div>` : ''}
+            ${imgHtml}
+            ${linkBar}
+            <div class="fb-reactions">
+                <div class="fb-reaction-btn">👍 Like</div>
+                <div class="fb-reaction-btn">💬 Comment</div>
+                <div class="fb-reaction-btn">↗ Share</div>
+            </div>
+        </div>`;
+}
+
+function buildStoriesMockup(imgUrl, d) {
+    const imgHtml = imgUrl
+        ? `<div class="fb-stories-image"><img src="${escHtml(imgUrl)}" alt="" onerror="this.parentNode.innerHTML='<div class=ph>📲<small>9:16 image not loaded</small></div>'"></div>`
+        : `<div class="fb-stories-image"><div class="ph"><span style="font-size:24px">📲</span><small>No 9:16 image yet</small></div></div>`;
+    return `
+        <div class="fb-stories-card">
+            <div class="fb-stories-header">
+                <div class="fb-stories-bars">
+                    <div class="fb-stories-bar"></div>
+                    <div class="fb-stories-bar"></div>
+                    <div class="fb-stories-bar active"></div>
+                </div>
+                <div class="fb-stories-profile">
+                    <div class="fb-stories-avatar">${getPageInitial()}</div>
+                    <div class="fb-stories-name">${getPageName()} <br><small>Sponsored</small></div>
+                </div>
+            </div>
+            ${imgHtml}
+            <div class="fb-stories-footer">
+                ${d.ctaLabel ? `<div class="fb-stories-cta">${escHtml(d.ctaLabel)} ↑</div>` : ''}
+            </div>
+        </div>`;
+}
+
+function updatePreview() {
+    const d = getFormData();
+    const body = document.getElementById('previewBody');
+    let html = '';
+    if (activePreviewPlacement === 'stories') {
+        html = buildStoriesMockup(d.imgStories, d);
+    } else if (activePreviewPlacement === 'feed_landscape') {
+        html = buildFeedMockup(d.imgLandscape || d.imgSquare, d);
+    } else {
+        // feed_square — default
+        if (d.adType === 'carousel' && carouselCards.length > 0) {
+            // Show first carousel card
+            const card = carouselCards[0];
+            const merged = { ...d, headline: card.headline || d.headline, description: card.description || d.description };
+            html = buildFeedMockup(card.image, merged);
+            if (carouselCards.length > 1) {
+                html += `<div style="text-align:center; font-size:12px; color:var(--text-muted); margin-top:8px;">
+                    Showing card 1 of ${carouselCards.length} — scroll to see more
+                </div>`;
+            }
+        } else {
+            html = buildFeedMockup(d.imgSquare || d.imgPortrait, d);
+        }
+    }
+    body.innerHTML = html;
+}
+
+function switchPreviewTab(btn) {
+    document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    activePreviewPlacement = btn.dataset.placement;
+    updatePreview();
+}
+
+// Init
+updatePreview();
+
+// ═══════════════════════════════════════════════════════════════
+// TARGETING ENGINE
+// ═══════════════════════════════════════════════════════════════
+
+const AD_ACCOUNT_ID = '{{ active_client.meta_ad_account_id if active_client else "" }}';
+
+// State — loaded from saved ad data on init
+let tgtLocations  = [];
+let tgtInterests  = [];
+let tgtExclusions = [];
+
+// ── Init from existing ad data ──────────────────────────────────
+(function initTargeting() {
+    try { tgtLocations  = JSON.parse(document.getElementById('tgtLocations').value  || '[]'); } catch(e) {}
+    try { tgtInterests  = JSON.parse(document.getElementById('tgtInterests').value  || '[]'); } catch(e) {}
+    try { tgtExclusions = JSON.parse(document.getElementById('tgtExclusions').value || '[]'); } catch(e) {}
+    renderLocationTags();
+    renderInterestTags('include');
+    renderInterestTags('exclude');
+    // Show save button if locations already set on this ad
+    setTimeout(updateSaveLocBtn, 50);
+})();
+
+// ── Saved & Custom audiences from Meta ─────────────────────────
+{% if active_client and active_client.meta_ad_account_id %}
+(function loadAudiences() {
+    const savedId      = document.getElementById('savedAudienceId').value;
+    let selectedCustom = [];
+    try { selectedCustom = JSON.parse(document.getElementById('customAudiencesHidden').value || '[]'); } catch(e) {}
+
+    fetch('/api/meta/audiences/' + AD_ACCOUNT_ID)
+        .then(r => r.json())
+        .then(d => {
+            // Saved audiences (radio)
+            const savedList = document.getElementById('savedAudienceList');
+            const savedMsg  = document.getElementById('savedAudienceMsg');
+            if ((d.saved || []).length) {
+                savedMsg.style.display = 'none';
+                savedList.innerHTML = '';
+                d.saved.forEach(a => {
+                    const row = document.createElement('label');
+                    row.className = 'tgt-audience-row';
+                    row.innerHTML = `
+                        <input type="radio" name="_saved_audience_radio" value="${a.id}"
+                               ${a.id === savedId ? 'checked' : ''}
+                               data-name="${a.name.replace(/"/g,'&quot;')}"
+                               onchange="selectSavedAudience(this)">
+                        <span style="flex:1; font-size:13px;">${a.name}</span>
+                        <span style="font-size:11px; color:var(--text-muted);">${a.subtype || ''}</span>`;
+                    savedList.appendChild(row);
+                });
+            } else {
+                savedMsg.textContent = d.saved_error || 'No saved audiences in this account.';
+            }
+
+            // Custom audiences (checkboxes)
+            const customList = document.getElementById('customAudienceList');
+            const customMsg  = document.getElementById('customAudienceMsg');
+            if ((d.custom || []).length) {
+                customMsg.style.display = 'none';
+                customList.innerHTML = '';
+                d.custom.forEach(a => {
+                    const isChecked = selectedCustom.some(c => c.id === a.id);
+                    const row = document.createElement('label');
+                    row.className = 'tgt-audience-row';
+                    row.innerHTML = `
+                        <input type="checkbox" name="_custom_audience_cb" value="${a.id}"
+                               ${isChecked ? 'checked' : ''}
+                               data-name="${a.name.replace(/"/g,'&quot;')}"
+                               onchange="syncCustomAudiences()">
+                        <span style="flex:1; font-size:13px;">${a.name}</span>
+                        <span style="font-size:11px; color:var(--text-muted);">${a.subtype || ''}</span>`;
+                    customList.appendChild(row);
+                });
+            } else {
+                customMsg.textContent = d.custom_error || 'No custom audiences in this account.';
+            }
+        })
+        .catch(() => {
+            document.getElementById('savedAudienceMsg').textContent = 'Could not load audiences.';
+            document.getElementById('customAudienceMsg').textContent = '';
+        });
+})();
+{% endif %}
+
+function selectSavedAudience(radio) {
+    document.getElementById('savedAudienceId').value   = radio.value;
+    document.getElementById('savedAudienceName').value = radio.dataset.name;
+}
+function syncCustomAudiences() {
+    const checked = Array.from(document.querySelectorAll('input[name="_custom_audience_cb"]:checked'))
+        .map(cb => ({ id: cb.value, name: cb.dataset.name }));
+    document.getElementById('customAudiencesHidden').value = JSON.stringify(checked);
+}
+
+// ── Debounce helper ─────────────────────────────────────────────
+function debounce(fn, ms) {
+    let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+// ── Location search ─────────────────────────────────────────────
+let locTypeFilter = '';
+
+const LOC_ICONS = {
+    country:            '🌍',
+    country_group:      '🌐',
+    region:             '🗺',
+    city:               '🏙',
+    zip:                '📮',
+    geo_market:         '📺',
+    electoral_district: '🗳',
+    neighborhood:       '🏘',
+    subcity:            '🏙',
+};
+const LOC_LABELS = {
+    country:            'Country',
+    country_group:      'Country Group',
+    region:             'State / Region',
+    city:               'City',
+    zip:                'Zip Code',
+    geo_market:         'DMA',
+    electoral_district: 'Electoral District',
+    neighborhood:       'Neighborhood',
+    subcity:            'Sub-city',
+};
+
+function setLocTypeFilter(chip, type) {
+    locTypeFilter = type;
+    document.querySelectorAll('.loc-type-chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    const q = document.getElementById('locationSearch').value;
+    if (q.trim()) debouncedLocationSearch(q);
+}
+
+const debouncedLocationSearch = debounce(doLocationSearch, 300);
+
+function doLocationSearch(q) {
+    const dd = document.getElementById('locationDropdown');
+    if (!q.trim()) { dd.classList.remove('open'); return; }
+    dd.innerHTML = '<div class="tgt-drop-loading">Searching…</div>';
+    dd.classList.add('open');
+    let url = '/api/meta/location/search?q=' + encodeURIComponent(q);
+    if (locTypeFilter) url += '&type_filter=' + encodeURIComponent(locTypeFilter);
+    fetch(url)
+        .then(r => r.json())
+        .then(d => renderLocationDropdown(d.data || []))
+        .catch(() => { dd.innerHTML = '<div class="tgt-drop-loading">Error loading locations.</div>'; });
+}
+
+function renderLocationDropdown(items) {
+    const dd = document.getElementById('locationDropdown');
+    if (!items.length) {
+        dd.innerHTML = '<div class="tgt-drop-loading">No results found.</div>';
+        return;
+    }
+    dd.innerHTML = '';
+    items.forEach(loc => {
+        const icon      = LOC_ICONS[loc.type]  || '📍';
+        const typeLabel = LOC_LABELS[loc.type] || loc.type;
+        const already   = tgtLocations.find(l => l.key === loc.key);
+        const el = document.createElement('div');
+        el.className = 'tgt-drop-item' + (already ? ' tgt-drop-item-selected' : '');
+        el.style.opacity = already ? '0.5' : '1';
+        el.innerHTML = `
+            <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
+                <span style="font-size:18px; flex-shrink:0;">${icon}</span>
+                <div style="min-width:0;">
+                    <div class="tgt-drop-item-name">${loc.name}</div>
+                    <div class="tgt-drop-item-crumb">${loc.breadcrumb || loc.country_name || ''}</div>
+                </div>
+            </div>
+            <span style="font-size:11px; font-weight:600; color:var(--text-muted); white-space:nowrap;
+                         background:var(--bg-raised); padding:2px 7px; border-radius:10px;">
+                ${typeLabel}
+            </span>`;
+        if (!already) {
+            el.onclick = () => addLocation({
+                key: loc.key, name: loc.name, type: loc.type,
+                country_code: loc.country_code, breadcrumb: loc.breadcrumb,
+                region: loc.region, country_name: loc.country_name,
+            });
+        }
+        dd.appendChild(el);
+    });
+}
+
+function addLocation(loc) {
+    if (tgtLocations.find(l => l.key === loc.key)) return;
+    tgtLocations.push(loc);
+    renderLocationTags();
+    syncHiddenInputs();
+    updateSaveLocBtn();
+    document.getElementById('locationSearch').value = '';
+    document.getElementById('locationDropdown').classList.remove('open');
+    scheduleReach();
+}
+function removeLocation(key) {
+    tgtLocations = tgtLocations.filter(l => l.key !== key);
+    renderLocationTags();
+    syncHiddenInputs();
+    updateSaveLocBtn();
+    scheduleReach();
+}
+function renderLocationTags() {
+    const wrap = document.getElementById('locationTags');
+    wrap.innerHTML = '';
+    tgtLocations.forEach(loc => {
+        const icon      = LOC_ICONS[loc.type]  || '📍';
+        const typeLabel = LOC_LABELS[loc.type] || '';
+        const sub       = loc.breadcrumb || loc.country_name || '';
+        const safeKey   = CSS.escape ? CSS.escape(loc.key) : loc.key.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const tag = document.createElement('div');
+        tag.style.cssText = 'display:inline-flex; align-items:center; gap:8px; background:#E7F0FD; border:1px solid rgba(24,119,242,0.25); border-radius:var(--radius); padding:6px 10px; font-size:13px; margin:3px;';
+        tag.innerHTML = `
+            <span style="font-size:16px;">${icon}</span>
+            <div>
+                <div style="font-weight:600; color:#1877F2; line-height:1.2;">${loc.name}</div>
+                ${sub ? `<div style="font-size:11px; color:var(--text-muted);">${sub}</div>` : ''}
+            </div>
+            ${typeLabel ? `<span class="loc-type-badge" style="color:#1877F2;">${typeLabel}</span>` : ''}
+            <span style="cursor:pointer; font-size:16px; color:rgba(24,119,242,0.6); margin-left:2px;"
+                  onclick="removeLocation(${JSON.stringify(loc.key)})">×</span>`;
+        wrap.appendChild(tag);
+    });
+}
+
+function onLocPresenceChange(val) {
+    document.getElementById('tgtLocationType').value = val;
+}
+
+// ── Saved Location Sets ──────────────────────────────────────────
+let savedLocSets = [];
+
+function loadSavedLocations() {
+    fetch('/api/saved-locations')
+        .then(r => r.json())
+        .then(d => {
+            savedLocSets = d.locations || [];
+            renderSavedLocList();
+        })
+        .catch(() => {
+            document.getElementById('savedLocMsg').textContent = 'Could not load saved locations.';
+        });
+}
+
+function renderSavedLocList() {
+    const list = document.getElementById('savedLocList');
+    const msg  = document.getElementById('savedLocMsg');
+    const cnt  = document.getElementById('savedLocCount');
+    if (!savedLocSets.length) {
+        list.innerHTML = '<div style="padding:10px 12px; font-size:13px; color:var(--text-muted);">No saved location sets yet.</div>';
+        cnt.textContent = '';
+        return;
+    }
+    cnt.textContent = savedLocSets.length + ' saved';
+    list.innerHTML = '';
+    savedLocSets.forEach(set => {
+        let locs = [];
+        try { locs = JSON.parse(set.locations || '[]'); } catch(e) {}
+        const presenceLabel = { home:'Lives here', recent:'Recently here', travel_in:'Traveling here', '':'Everyone' }[set.location_type] || '';
+        const row = document.createElement('div');
+        row.className = 'saved-loc-row';
+        row.innerHTML = `
+            <span style="font-size:18px; flex-shrink:0;">📍</span>
+            <div style="flex:1; min-width:0;">
+                <div class="saved-loc-row-name">${set.name}</div>
+                <div class="saved-loc-row-meta">${locs.length} location${locs.length !== 1 ? 's' : ''}${presenceLabel ? ' · ' + presenceLabel : ''}</div>
+            </div>
+            <button type="button" class="saved-loc-apply" onclick="applySavedLocSet(${JSON.stringify(set.id)})">Apply</button>
+            <button type="button" class="saved-loc-del" title="Delete" onclick="deleteSavedLocSet(event, ${JSON.stringify(set.id)})">×</button>`;
+        list.appendChild(row);
+    });
+}
+
+function applySavedLocSet(id) {
+    const set = savedLocSets.find(s => s.id === id);
+    if (!set) return;
+    try { tgtLocations = JSON.parse(set.locations || '[]'); } catch(e) { tgtLocations = []; }
+    renderLocationTags();
+    syncHiddenInputs();
+    // Apply presence type
+    const sel = document.getElementById('locPresenceSelect');
+    if (sel) sel.value = set.location_type || '';
+    document.getElementById('tgtLocationType').value = set.location_type || '';
+    scheduleReach();
+}
+
+function deleteSavedLocSet(evt, id) {
+    evt.stopPropagation();
+    if (!confirm('Delete this saved location set?')) return;
+    fetch('/api/saved-locations/' + id, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                savedLocSets = savedLocSets.filter(s => s.id !== id);
+                renderSavedLocList();
+            } else {
+                alert('Delete failed: ' + (d.error || 'unknown error'));
+            }
+        })
+        .catch(() => alert('Delete failed.'));
+}
+
+function showSaveLocBar() {
+    document.getElementById('saveLocBar').style.display = 'flex';
+    document.getElementById('saveLocBtn').style.display = 'none';
+    document.getElementById('saveLocName').focus();
+}
+function hideSaveLocBar() {
+    document.getElementById('saveLocBar').style.display = 'none';
+    document.getElementById('saveLocName').value = '';
+    if (tgtLocations.length) document.getElementById('saveLocBtn').style.display = '';
+}
+
+function saveLocationSet() {
+    const name = document.getElementById('saveLocName').value.trim();
+    if (!name) { document.getElementById('saveLocName').focus(); return; }
+    if (!tgtLocations.length) { alert('Add at least one location first.'); return; }
+    const locType = document.getElementById('tgtLocationType').value;
+    fetch('/api/saved-locations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, locations: tgtLocations, location_type: locType }),
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.ok) {
+            hideSaveLocBar();
+            loadSavedLocations();
+        } else {
+            alert('Save failed: ' + (d.error || 'unknown error'));
+        }
+    })
+    .catch(() => alert('Save failed.'));
+}
+
+// Show/hide "Save as…" button based on whether locations are selected
+function updateSaveLocBtn() {
+    const btn = document.getElementById('saveLocBtn');
+    const bar = document.getElementById('saveLocBar');
+    if (btn && bar.style.display === 'none') {
+        btn.style.display = tgtLocations.length ? '' : 'none';
+    }
+}
+
+// Load saved locations on init
+loadSavedLocations();
+
+// ── Age & Gender ────────────────────────────────────────────────
+function onAgeChange() {
+    document.getElementById('tgtAgeMin').value = document.getElementById('ageMin').value;
+    document.getElementById('tgtAgeMax').value = document.getElementById('ageMax').value;
+    scheduleReach();
+}
+function onGenderChange(val) {
+    document.getElementById('tgtGenders').value = val;
+    scheduleReach();
+}
+
+// ── Interest / behavior search ──────────────────────────────────
+const debouncedInterestSearch = debounce(doInterestSearch, 300);
+
+function doInterestSearch(q, mode) {
+    const ddId = mode === 'include' ? 'interestDropdown' : 'exclusionDropdown';
+    const dd   = document.getElementById(ddId);
+    if (!q.trim()) { dd.classList.remove('open'); return; }
+    dd.innerHTML = '<div class="tgt-drop-loading">Searching…</div>';
+    dd.classList.add('open');
+    fetch('/api/meta/targeting/search?q=' + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(d => renderInterestDropdown(d.data || [], mode))
+        .catch(() => { dd.innerHTML = '<div class="tgt-drop-loading">Error loading results.</div>'; });
+}
+
+function renderInterestDropdown(items, mode) {
+    const ddId = mode === 'include' ? 'interestDropdown' : 'exclusionDropdown';
+    const dd   = document.getElementById(ddId);
+    if (!items.length) {
+        dd.innerHTML = '<div class="tgt-drop-loading">No results found.</div>';
+        return;
+    }
+    dd.innerHTML = '';
+    items.forEach(item => {
+        const size = item.size_high > 0 ? formatNum(item.size_high) : '';
+        const el = document.createElement('div');
+        el.className = 'tgt-drop-item';
+        el.innerHTML = `
+            <div style="flex:1; min-width:0;">
+                <div class="tgt-drop-item-name">${item.name}</div>
+                <div class="tgt-drop-item-crumb">${item.breadcrumb || ''}</div>
+            </div>
+            ${size ? `<div class="tgt-drop-item-size">${size}</div>` : ''}`;
+        el.onclick = () => addInterest({ id: item.id, name: item.name, type: item.type }, mode);
+        dd.appendChild(el);
+    });
+}
+
+function addInterest(item, mode) {
+    const list = mode === 'include' ? tgtInterests : tgtExclusions;
+    if (list.find(i => i.id === item.id)) return;
+    list.push(item);
+    renderInterestTags(mode);
+    syncHiddenInputs();
+    const inputId = mode === 'include' ? 'interestSearch' : 'exclusionSearch';
+    const ddId    = mode === 'include' ? 'interestDropdown' : 'exclusionDropdown';
+    document.getElementById(inputId).value = '';
+    document.getElementById(ddId).classList.remove('open');
+    scheduleReach();
+}
+function removeInterest(id, mode) {
+    if (mode === 'include') tgtInterests  = tgtInterests.filter(i  => i.id !== id);
+    else                    tgtExclusions = tgtExclusions.filter(i => i.id !== id);
+    renderInterestTags(mode);
+    syncHiddenInputs();
+    scheduleReach();
+}
+function renderInterestTags(mode) {
+    const list = mode === 'include' ? tgtInterests : tgtExclusions;
+    const wrapId = mode === 'include' ? 'interestTags' : 'exclusionTags';
+    const wrap = document.getElementById(wrapId);
+    wrap.innerHTML = '';
+    list.forEach(item => {
+        const tag = document.createElement('span');
+        tag.className = 'tgt-tag' + (mode === 'exclude' ? ' exclude' : '');
+        tag.innerHTML = `${item.name} <span class="tgt-tag-remove" onclick="removeInterest('${item.id}', '${mode}')">×</span>`;
+        wrap.appendChild(tag);
+    });
+}
+
+// ── Sync hidden inputs ──────────────────────────────────────────
+function syncHiddenInputs() {
+    document.getElementById('tgtLocations').value  = JSON.stringify(tgtLocations);
+    document.getElementById('tgtInterests').value  = JSON.stringify(tgtInterests);
+    document.getElementById('tgtExclusions').value = JSON.stringify(tgtExclusions);
+}
+
+// ── Reach estimate ──────────────────────────────────────────────
+const scheduleReach = debounce(fetchReach, 600);
+
+function fetchReach() {
+    if (!AD_ACCOUNT_ID) return;
+    const ageMin  = parseInt(document.getElementById('tgtAgeMin').value) || 18;
+    const ageMax  = parseInt(document.getElementById('tgtAgeMax').value) || 65;
+    const genders = document.getElementById('tgtGenders').value;
+
+    // Build geo_locations
+    const geoLocations = {};
+    tgtLocations.forEach(l => {
+        const key = l.type === 'city' ? 'cities' : l.type === 'region' ? 'regions' : l.type === 'country' ? 'countries' : 'zips';
+        if (!geoLocations[key]) geoLocations[key] = [];
+        geoLocations[key].push(l.type === 'country' ? l.country_code : { key: l.key });
+    });
+    if (!Object.keys(geoLocations).length) geoLocations.countries = ['US'];
+
+    const spec = {
+        age_min: ageMin,
+        age_max: ageMax,
+        geo_locations: geoLocations,
+    };
+    if (genders === 'male')   spec.genders = [1];
+    if (genders === 'female') spec.genders = [2];
+    if (tgtInterests.length) {
+        spec.flexible_spec = [{ interests: tgtInterests.map(i => ({ id: i.id })) }];
+    }
+    if (tgtExclusions.length) {
+        spec.exclusions = { interests: tgtExclusions.map(i => ({ id: i.id })) };
+    }
+
+    document.getElementById('reachNumber').textContent = 'Estimating…';
+    document.getElementById('reachSub').textContent = '';
+
+    fetch('/api/meta/targeting/reach?account_id=' + AD_ACCOUNT_ID + '&spec=' + encodeURIComponent(JSON.stringify(spec)))
+        .then(r => r.json())
+        .then(d => {
+            const lo = d.users_lower_bound || d.users || 0;
+            const hi = d.users_upper_bound || 0;
+            if (lo > 0) {
+                const display = hi ? `${formatNum(lo)} – ${formatNum(hi)} people` : `~${formatNum(lo)} people`;
+                document.getElementById('reachNumber').textContent = display;
+                // Position fill bar: log scale 10K=10%, 1B=100%
+                const pct = Math.min(100, Math.max(5, Math.log10(lo / 10000) / Math.log10(100000) * 100));
+                document.getElementById('reachBarFill').style.width = pct + '%';
+                document.getElementById('reachSub').textContent = pct < 40 ? 'Your audience is fairly specific.' : pct > 70 ? 'Your audience is quite broad.' : '';
+            } else {
+                document.getElementById('reachNumber').textContent = d.error ? 'Unable to estimate' : 'No estimate available';
+                document.getElementById('reachBarFill').style.width = '0%';
+            }
+        })
+        .catch(() => { document.getElementById('reachNumber').textContent = '—'; });
+}
+
+// ── Number formatter ────────────────────────────────────────────
+function formatNum(n) {
+    if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(0) + 'K';
+    return String(n);
+}
+
+// ── Close dropdowns on outside click ────────────────────────────
+document.addEventListener('click', e => {
+    ['locationDropdown','interestDropdown','exclusionDropdown'].forEach(id => {
+        const dd = document.getElementById(id);
+        if (dd && !dd.parentElement.contains(e.target)) dd.classList.remove('open');
+    });
+});
+
+// Initial reach fetch if editing existing ad
+if (AD_ACCOUNT_ID) scheduleReach();
+</script>
+{% endblock %}

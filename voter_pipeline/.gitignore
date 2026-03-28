@@ -1,0 +1,72 @@
+# Credentials
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Logs and temp output
+logs/
+*.log
+*.txt
+!requirements.txt
+
+# Data files (large - never commit)
+data/**/*.csv
+data/**/*.xlsx
+data/**/*.zip
+data/**/*.txt
+data/**/*.md5
+data/census_surnames/
+data/fec_downloads/
+data/boe_donors/
+data/boe_reports/
+data/cfb/
+data/full voter 2025/
+data/secondary/
+data/skipped/
+data/voter phone data/
+data/zipped/
+output/
+
+# Spreadsheets
+*.xlsx
+
+# SQL scratch files
+*.sql
+!config/sql/*.sql
+
+# Batch/cmd one-offs
+*.bat
+*.cmd
+
+# Backup files
+*.bak
+backups/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Database dumps
+*.dump
+
+# Certs (keep ca.pem locally, don't commit)
+certs/
+
+# Claude desktop config
+.claude/

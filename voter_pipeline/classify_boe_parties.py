@@ -1,0 +1,515 @@
+#!/usr/bin/env python3
+"""
+classify_boe_parties.py — Reclassify BOE contribution party labels
+===================================================================
+
+Runs AFTER load_raw_boe.py to reduce the "U" (Unknown) party bucket.
+
+Strategy (multi-tier):
+  1. Load COMMCAND.CSV filer lookup → boe_filers table
+  2. Keyword matching on filer names (expanded: unions, PACs, known patterns)
+  3. Candidate committee cross-reference: match filer's candidate name against
+     voter_file OfficialParty registration
+  4. Update contributions.party based on filer→party mapping
+
+Called by: python main.py boe-enrich  (after load_raw_boe.py)
+Standalone: python classify_boe_parties.py
+"""
+
+import os, sys, csv, time
+from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from utils.db import get_conn
+
+# ---------------------------------------------------------------------------
+# COMMCAND.CSV path
+# ---------------------------------------------------------------------------
+COMMCAND_PATH = Path("data/boe_reports/commcand_extract/COMMCAND.CSV")
+
+# ---------------------------------------------------------------------------
+# Keyword lists (modeled after step4_classify_parties.py FEC classifier)
+# ---------------------------------------------------------------------------
+DEM_KEYWORDS = [
+    'democratic', 'democrat', 'dem party',
+    'dccc', 'dscc', 'dnc ',
+    'progressive', 'working families', 'dsa ',
+    'actblue',
+    # Unions (overwhelmingly D in NYS)
+    'seiu', 'afscme', 'afl-cio', 'afl cio',
+    'teachers', 'nurses', 'aft ',
+    'cwa ', 'uaw ', 'ibew',
+    'laborers', 'plumbers', 'pipefitters', 'steamfitters',
+    'ironworkers', 'carpenters', 'painters', 'electricians',
+    'teamsters', 'mason tenders', 'bricklayers',
+    'transport workers', 'transit workers',
+    'hotel trades', 'hotel workers',
+    'retail wholesale', 'rwdsu',
+    'unite here', 'ufcw', 'liuna',
+    'building trades', 'sheet metal',
+    'doctors council', 'workers united',
+    'moveon', 'emily\'s list', 'priorities usa',
+    'planned parenthood',
+    'for the many', 'courage to change',
+    'dga ',  # Democratic Governors Association
+    'dlcc',  # Democratic Legislative Campaign Committee
+]
+
+REP_KEYWORDS = [
+    'republican', 'gop',
+    'rnc ', 'nrcc', 'nrsc',
+    'conservative party', 'conservative ',
+    'trump', 'maga', 'america first',
+    'winred',
+    'club for growth', 'heritage',
+    'liberty', 'freedom caucus',
+    'right to life', 'pro-life',
+    'national rifle', 'nra ',
+    'job creators',
+    'rga ',  # Republican Governors Association
+    'rlcc',  # Republican Legislative Campaign Committee
+]
+
+
+def _classify_name(name):
+    """Classify a filer/committee name by keyword matching.
+
+    Returns 'D', 'R', or None (unknown).
+    """
+    if not name:
+        return None
+    nl = name.lower()
+    d_hits = any(k in nl for k in DEM_KEYWORDS)
+    r_hits = any(k in nl for k in REP_KEYWORDS)
+    if d_hits and not r_hits:
+        return 'D'
+    if r_hits and not d_hits:
+        return 'R'
+    return None
+
+
+def load_boe_filers(conn):
+    """Load COMMCAND.CSV into boe_filers table.
+
+    Schema:
+      filer_id INT PK, name VARCHAR, type ENUM(COMMITTEE,CANDIDATE),
+      level VARCHAR, status VARCHAR, committee_type VARCHAR, office VARCHAR
+    """
+    if not COMMCAND_PATH.exists():
+        print(f"  WARNING: {COMMCAND_PATH} not found — skipping filer lookup")
+        return 0
+
+    cur = conn.cursor()
+    cur.execute("DROP TABLE IF EXISTS boe_filers")
+    cur.execute("""
+        CREATE TABLE boe_filers (
+            filer_id        INT PRIMARY KEY,
+            name            VARCHAR(255),
+            type            VARCHAR(20),
+            level           VARCHAR(20),
+            status          VARCHAR(20),
+            committee_type  VARCHAR(100),
+            office          VARCHAR(100),
+            district        VARCHAR(50),
+            county          VARCHAR(100),
+            party           CHAR(1) DEFAULT NULL,
+            INDEX idx_type  (type),
+            INDEX idx_party (party)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+    """)
+
+    rows = []
+    with open(COMMCAND_PATH, "r", encoding="latin-1") as f:
+        reader = csv.reader(f)
+        for r in reader:
+            if len(r) < 10:
+                continue
+            try:
+                filer_id = int(r[0].strip('"'))
+            except (ValueError, IndexError):
+                continue
+            name = r[1].strip('"').strip()
+            ftype = r[2].strip('"').strip()        # COMMITTEE or CANDIDATE
+            level = r[3].strip('"').strip()        # State, County
+            status = r[4].strip('"').strip()       # ACTIVE, TERMINATED
+            ctype = r[5].strip('"').strip()        # "Authorized Single Candidate Committee" etc
+            office = r[6].strip('"').strip() if len(r) > 6 else ''
+            district = r[7].strip('"').strip() if len(r) > 7 else ''
+            county = r[8].strip('"').strip() if len(r) > 8 else ''
+            rows.append((filer_id, name, ftype, level, status, ctype, office, district, county))
+
+    cur.executemany(
+        "INSERT IGNORE INTO boe_filers "
+        "(filer_id, name, type, level, status, committee_type, office, district, county) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        rows
+    )
+    conn.commit()
+    print(f"  Loaded {len(rows):,} filers from COMMCAND.CSV")
+    return len(rows)
+
+
+def classify_by_keywords(conn):
+    """Tier 1: Classify filers by expanded keyword matching on name."""
+    cur = conn.cursor()
+    cur.execute("SELECT filer_id, name FROM boe_filers WHERE party IS NULL")
+    filers = cur.fetchall()
+
+    updates = []
+    for fid, name in filers:
+        p = _classify_name(name)
+        if p:
+            updates.append((p, fid))
+
+    if updates:
+        cur.executemany("UPDATE boe_filers SET party = %s WHERE filer_id = %s", updates)
+        conn.commit()
+
+    print(f"  Tier 1 (keywords): {len(updates):,} filers classified")
+    return len(updates)
+
+
+def classify_by_voter_registration(conn):
+    """Tier 2: For candidate committees, look up the candidate's voter registration party.
+
+    COMMCAND has 'Authorized Single Candidate Committee' types where the committee
+    name often contains the candidate's name (e.g. 'Friends of Kathy Hochul').
+    We extract candidate names from the filer record and match against voter_file.
+    """
+    cur = conn.cursor()
+
+    # Get unclassified filers that have filer_id in contributions
+    cur.execute("""
+        SELECT DISTINCT f.filer_id, f.name
+        FROM boe_filers f
+        JOIN contributions c ON c.filer_id = f.filer_id
+        WHERE f.party IS NULL
+    """)
+    unclassified = cur.fetchall()
+    if not unclassified:
+        print("  Tier 2 (voter registration): 0 filers to check")
+        return 0
+
+    # Build a lookup: for each filer_id, find the dominant voter registration party
+    # of people who donated TO this filer.  If 70%+ of donors sharing a last name
+    # with the filer are one party, that's a strong signal.
+    #
+    # Actually, a simpler approach: look at the COMMCAND candidate name fields.
+    # COMMCAND cols: 0=id, 1=name, 2=type, ... 10=first, 11=middle, 12=last
+    # For CANDIDATE rows, cols 10-12 are the candidate's own name.
+    # For COMMITTEE rows, cols 10-12 are the treasurer, not the candidate.
+    #
+    # So for CANDIDATE type filers, we can directly look up their party in voter_file.
+
+    # Step 1: Match CANDIDATE type filers to voter_file
+    cur.execute("""
+        SELECT f.filer_id, f.name
+        FROM boe_filers f
+        WHERE f.party IS NULL AND f.type = 'CANDIDATE'
+    """)
+    candidates = cur.fetchall()
+
+    classified = 0
+    for fid, name in candidates:
+        # Parse candidate name from the filer name
+        # COMMCAND candidate names are in the 'name' field itself
+        # Try matching against voter_file by name
+        parts = name.strip().split()
+        if len(parts) < 2:
+            continue
+        # Use first and last name tokens
+        first = parts[0].upper()
+        last = parts[-1].upper()
+        # Skip very short names (initials)
+        if len(first) < 2 or len(last) < 2:
+            continue
+
+        cur.execute("""
+            SELECT OfficialParty, COUNT(*) as cnt
+            FROM nys_voter_tagging.voter_file
+            WHERE UPPER(FirstName) = %s AND UPPER(LastName) = %s
+            GROUP BY OfficialParty
+            ORDER BY cnt DESC
+            LIMIT 1
+        """, (first, last))
+        row = cur.fetchone()
+        if row and row[1] >= 1:
+            party = row[0]
+            if party == 'Republican':
+                cur.execute("UPDATE boe_filers SET party = 'R' WHERE filer_id = %s", (fid,))
+                classified += 1
+            elif party == 'Democrat':
+                cur.execute("UPDATE boe_filers SET party = 'D' WHERE filer_id = %s", (fid,))
+                classified += 1
+
+    conn.commit()
+    print(f"  Tier 2 (candidate voter reg): {classified:,} candidate filers classified")
+
+    # Step 2: For remaining COMMITTEE filers, extract candidate name from common patterns
+    # like "Friends of [Name]", "[Name] for [Office]", "Committee to Elect [Name]"
+    cur.execute("""
+        SELECT f.filer_id, f.name
+        FROM boe_filers f
+        JOIN contributions c ON c.filer_id = f.filer_id
+        WHERE f.party IS NULL AND f.type = 'COMMITTEE'
+        GROUP BY f.filer_id, f.name
+    """)
+    committees = cur.fetchall()
+
+    import re
+    # Patterns that extract candidate names from committee names
+    name_patterns = [
+        re.compile(r'(?:friends of|friends for|people for|citizens for|committee to (?:re-?)?elect|vote for)\s+(.+?)(?:\s+(?:for|inc|pac|committee|cmte|\d{4}).*)?$', re.I),
+        re.compile(r'^(.+?)\s+(?:for|4)\s+(?:ny|new york|governor|senate|congress|assembly|mayor|council|da|district attorney|comptroller|ag|attorney general|state senate|state assembly)\b', re.I),
+        re.compile(r'^(.+?)\s+\d{4}\s*$', re.I),  # "Name 2024"
+    ]
+
+    classified2 = 0
+    for fid, name in committees:
+        candidate_name = None
+        for pat in name_patterns:
+            m = pat.search(name)
+            if m:
+                candidate_name = m.group(1).strip()
+                break
+        if not candidate_name:
+            continue
+
+        parts = candidate_name.split()
+        if len(parts) < 2:
+            continue
+        first = parts[0].upper()
+        last = parts[-1].upper()
+        if len(first) < 2 or len(last) < 2:
+            continue
+        # Skip common false positives
+        if last in ('FOR', 'THE', 'OF', 'AND', 'INC', 'PAC', 'NYC', 'NYS'):
+            continue
+
+        cur.execute("""
+            SELECT OfficialParty, COUNT(*) as cnt
+            FROM nys_voter_tagging.voter_file
+            WHERE UPPER(FirstName) = %s AND UPPER(LastName) = %s
+            GROUP BY OfficialParty
+            ORDER BY cnt DESC
+            LIMIT 1
+        """, (first, last))
+        row = cur.fetchone()
+        if row and row[1] >= 1:
+            party = row[0]
+            if party == 'Republican':
+                cur.execute("UPDATE boe_filers SET party = 'R' WHERE filer_id = %s", (fid,))
+                classified2 += 1
+            elif party == 'Democrat':
+                cur.execute("UPDATE boe_filers SET party = 'D' WHERE filer_id = %s", (fid,))
+                classified2 += 1
+
+    conn.commit()
+    print(f"  Tier 2 (committee name → voter reg): {classified2:,} committee filers classified")
+    return classified + classified2
+
+
+def apply_to_contributions(conn):
+    """Update contributions.party from the classified boe_filers lookup."""
+    cur = conn.cursor()
+
+    # Count current U
+    cur.execute("SELECT COUNT(*) FROM contributions WHERE party = 'U'")
+    before_u = cur.fetchone()[0]
+
+    cur.execute("""
+        UPDATE contributions c
+        JOIN boe_filers f ON c.filer_id = f.filer_id
+        SET c.party = f.party
+        WHERE c.party = 'U'
+          AND f.party IS NOT NULL
+    """)
+    reclassified = cur.rowcount
+    conn.commit()
+
+    cur.execute("SELECT COUNT(*) FROM contributions WHERE party = 'U'")
+    after_u = cur.fetchone()[0]
+
+    print(f"\n  Applied to contributions:")
+    print(f"    Before: {before_u:,} unknown")
+    print(f"    Reclassified: {reclassified:,}")
+    print(f"    After:  {after_u:,} unknown")
+
+    return reclassified
+
+
+def rebuild_donor_summary_parties(conn):
+    """Re-aggregate boe_donor_summary D/R/U columns after reclassification.
+
+    This replays the pivot from voter_contribs (which itself pulls from
+    contributions.party).  We rebuild voter_contribs from scratch to pick up
+    the new party labels.
+    """
+    import datetime
+    YEAR_MAX = datetime.date.today().year
+    YEAR_MIN = YEAR_MAX - 9
+    YEARS = list(range(YEAR_MIN, YEAR_MAX + 1))
+
+    cur = conn.cursor()
+
+    print("\n  Rebuilding voter_contribs with reclassified parties...")
+    cur.execute("TRUNCATE TABLE voter_contribs")
+
+    # Exact match
+    cur.execute(
+        "INSERT INTO voter_contribs (StateVoterId, year, party, total, count)"
+        " SELECT v.StateVoterId, c.year, c.party, SUM(c.amount), COUNT(*)"
+        " FROM nys_voter_tagging.voter_file v"
+        " JOIN boe_donors.contributions c"
+        "   ON v.clean_last  = c.last"
+        "  AND v.clean_first = c.first"
+        "  AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5"
+        " WHERE v.clean_last IS NOT NULL"
+        "  AND c.zip5 != ''"
+        " GROUP BY v.StateVoterId, c.year, c.party"
+    )
+    exact = cur.rowcount
+    print(f"    Exact: {exact:,}")
+
+    # Hyphenated fallback
+    for part_col in ["clean_last_h1", "clean_last_h2"]:
+        cur.execute(
+            "INSERT IGNORE INTO voter_contribs (StateVoterId, year, party, total, count)"
+            " SELECT v.StateVoterId, c.year, c.party, SUM(c.amount), COUNT(*)"
+            " FROM nys_voter_tagging.voter_file v"
+            " JOIN boe_donors.contributions c"
+            f"   ON v.{part_col}  = c.last"
+            "  AND v.clean_first = c.first"
+            "  AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5"
+            f" WHERE v.{part_col} IS NOT NULL"
+            "  AND c.zip5 != ''"
+            " GROUP BY v.StateVoterId, c.year, c.party"
+        )
+
+    # Re-pivot boe_donor_summary
+    print("  Re-pivoting boe_donor_summary...")
+
+    # Reset all D/R/U columns to 0
+    zero_cols = []
+    for yr in YEARS:
+        for p in ['D', 'R', 'U']:
+            zero_cols += [f"y{yr}_{p}_amt = 0", f"y{yr}_{p}_count = 0"]
+    zero_cols += ["total_D_amt = 0", "total_D_count = 0",
+                  "total_R_amt = 0", "total_R_count = 0",
+                  "total_U_amt = 0", "total_U_count = 0",
+                  "total_amt = 0", "total_count = 0"]
+    cur.execute(f"UPDATE boe_donor_summary SET {', '.join(zero_cols)}")
+
+    for yr in YEARS:
+        for party in ['D', 'R', 'U']:
+            cur.execute(
+                f"UPDATE boe_donor_summary s"
+                f" JOIN ("
+                f"   SELECT StateVoterId, SUM(total) AS amt, SUM(count) AS cnt"
+                f"   FROM voter_contribs"
+                f"   WHERE year = {yr} AND party = '{party}'"
+                f"   GROUP BY StateVoterId"
+                f" ) v ON s.StateVoterId = v.StateVoterId"
+                f" SET s.y{yr}_{party}_amt = v.amt, s.y{yr}_{party}_count = v.cnt"
+            )
+
+    # Grand totals
+    d_sum = " + ".join([f"y{yr}_D_amt" for yr in YEARS])
+    d_cnt = " + ".join([f"y{yr}_D_count" for yr in YEARS])
+    r_sum = " + ".join([f"y{yr}_R_amt" for yr in YEARS])
+    r_cnt = " + ".join([f"y{yr}_R_count" for yr in YEARS])
+    u_sum = " + ".join([f"y{yr}_U_amt" for yr in YEARS])
+    u_cnt = " + ".join([f"y{yr}_U_count" for yr in YEARS])
+
+    cur.execute(
+        f"UPDATE boe_donor_summary SET"
+        f"  total_D_amt   = {d_sum},"
+        f"  total_D_count = {d_cnt},"
+        f"  total_R_amt   = {r_sum},"
+        f"  total_R_count = {r_cnt},"
+        f"  total_U_amt   = {u_sum},"
+        f"  total_U_count = {u_cnt},"
+        f"  total_amt     = ({d_sum}) + ({r_sum}) + ({u_sum}),"
+        f"  total_count   = ({d_cnt}) + ({r_cnt}) + ({u_cnt})"
+    )
+    conn.commit()
+    print("  OK boe_donor_summary re-aggregated")
+
+
+def print_stats(conn):
+    """Print final party distribution."""
+    cur = conn.cursor()
+    cur.execute("SELECT party, COUNT(*) FROM contributions GROUP BY party ORDER BY COUNT(*) DESC")
+    total = 0
+    rows = cur.fetchall()
+    for _, c in rows:
+        total += c
+
+    print(f"\n{'='*60}")
+    print("BOE PARTY CLASSIFICATION RESULTS")
+    print(f"{'='*60}")
+    print(f"\n  {'Party':<15} {'Contributions':>15} {'%':>8}")
+    print(f"  {'-'*40}")
+    for p, c in rows:
+        label = {'D': 'Democrat', 'R': 'Republican', 'U': 'Unknown'}[p]
+        print(f"  {label:<15} {c:>15,} {c/total*100:>7.1f}%")
+    print(f"  {'Total':<15} {total:>15,}")
+
+    # Filer stats
+    cur.execute("""
+        SELECT
+            SUM(party IS NOT NULL) as classified,
+            SUM(party IS NULL) as unclassified,
+            COUNT(*) as total
+        FROM boe_filers
+    """)
+    cf, uf, tf = cur.fetchone()
+    print(f"\n  Filer lookup: {cf:,} classified / {uf:,} unknown / {tf:,} total")
+
+
+def main():
+    t0 = time.time()
+    print("=" * 60)
+    print("BOE PARTY RECLASSIFICATION")
+    print("=" * 60)
+
+    conn = get_conn('boe_donors')
+
+    # Check contributions table exists and has filer_id
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT filer_id FROM contributions LIMIT 0")
+    except Exception:
+        print("\nERROR: contributions.filer_id not found.")
+        print("Re-run: python main.py boe-enrich  (will rebuild contributions with filer_id)")
+        conn.close()
+        sys.exit(1)
+
+    print("\nStep 1: Loading COMMCAND.CSV filer lookup...")
+    load_boe_filers(conn)
+
+    print("\nStep 2: Classifying filers...")
+    classify_by_keywords(conn)
+    classify_by_voter_registration(conn)
+
+    print("\nStep 3: Applying to contributions...")
+    reclassified = apply_to_contributions(conn)
+
+    if reclassified > 0:
+        print("\nStep 4: Rebuilding donor summary with new party labels...")
+        rebuild_donor_summary_parties(conn)
+    else:
+        print("\nStep 4: No reclassifications — skipping summary rebuild")
+
+    print_stats(conn)
+
+    elapsed = time.time() - t0
+    print(f"\nDone in {elapsed:.0f}s")
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()

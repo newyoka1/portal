@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+{% block title %}User Management{% endblock %}
+{% block content %}
+<div class="page-header" style="margin-bottom:16px;">
+    <div>
+        <h1 class="page-title">User Management</h1>
+        <p style="color:var(--text-muted); font-size:13px;">Add team members and assign roles.</p>
+    </div>
+</div>
+
+<div style="max-width:900px; margin:0 auto;">
+
+<!-- Add User Form -->
+<div class="sc" style="margin-bottom:24px;">
+    <div class="sc-head">Add User</div>
+    <div class="sc-body">
+        <form method="POST" action="{{ url_for('add_user') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+                <div class="form-group">
+                    <label class="form-label">Name <span style="color:var(--red)">*</span></label>
+                    <input type="text" name="name" class="form-input" placeholder="John Smith" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email <span style="color:var(--red)">*</span></label>
+                    <input type="email" name="email" class="form-input" placeholder="john@company.com" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Password <span style="color:var(--red)">*</span></label>
+                    <input type="password" name="password" class="form-input" placeholder="Min 6 characters" required minlength="6">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Role</label>
+                    <select name="role" class="form-select">
+                        <option value="viewer">Viewer — Can view ads only</option>
+                        <option value="manager" selected>Manager — Can create & edit ads</option>
+                        <option value="admin">Admin — Full access + user management</option>
+                    </select>
+                </div>
+            </div>
+            <div style="text-align:right; margin-top:8px;">
+                <button type="submit" class="btn btn-primary">+ Add User</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- User List -->
+<div class="sc">
+    <div class="sc-head">Team Members ({{ users|length }})</div>
+    <div class="sc-body" style="padding:0;">
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead>
+                <tr style="background:var(--bg-raised); border-bottom:1px solid var(--border);">
+                    <th style="padding:10px 14px; text-align:left;">Name</th>
+                    <th style="padding:10px 14px; text-align:left;">Email</th>
+                    <th style="padding:10px 14px; text-align:left;">Role</th>
+                    <th style="padding:10px 14px; text-align:left;">Status</th>
+                    <th style="padding:10px 14px; text-align:left;">Last Login</th>
+                    <th style="padding:10px 14px; text-align:right;">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr style="border-bottom:1px solid var(--border-light); {{ 'opacity:0.5;' if not u.is_active }}">
+                    <td style="padding:10px 14px; font-weight:600;">
+                        {{ u.name }}
+                        {% if u.id == user.id %}<span style="color:var(--accent); font-size:11px;">(you)</span>{% endif %}
+                    </td>
+                    <td style="padding:10px 14px; color:var(--text-muted);">{{ u.email }}</td>
+                    <td style="padding:10px 14px;">
+                        <form method="POST" action="{{ url_for('change_role', uid=u.id) }}" style="display:inline;">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <select name="role" onchange="this.form.submit()" class="form-select" style="width:auto; padding:4px 8px; font-size:12px;">
+                                <option value="viewer" {{ 'selected' if u.role == 'viewer' }}>Viewer</option>
+                                <option value="manager" {{ 'selected' if u.role == 'manager' }}>Manager</option>
+                                <option value="admin" {{ 'selected' if u.role == 'admin' }}>Admin</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td style="padding:10px 14px;">
+                        {% if u.is_active %}
+                            <span style="color:#42B72A; font-size:12px; font-weight:600;">Active</span>
+                        {% else %}
+                            <span style="color:var(--text-muted); font-size:12px;">Disabled</span>
+                        {% endif %}
+                    </td>
+                    <td style="padding:10px 14px; color:var(--text-muted); font-size:12px;">
+                        {{ u.last_login or 'Never' }}
+                    </td>
+                    <td style="padding:10px 14px; text-align:right;">
+                        <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
+                            <!-- Toggle active/disabled -->
+                            <form method="POST" action="{{ url_for('toggle_user', uid=u.id) }}" style="display:inline;">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-ghost btn-sm" style="font-size:11px;">
+                                    {{ 'Disable' if u.is_active else 'Enable' }}
+                                </button>
+                            </form>
+                            <!-- Reset password -->
+                            <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px;"
+                                    onclick="resetPw('{{ u.id }}', '{{ u.name }}')">Reset PW</button>
+                            <!-- Delete (not self) -->
+                            {% if u.id != user.id %}
+                            <form method="POST" action="{{ url_for('delete_user', uid=u.id) }}" style="display:inline;"
+                                  onsubmit="return confirm('Delete {{ u.name }}?');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--red); font-size:11px;">Delete</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+</div>
+
+<!-- Reset Password Modal -->
+<div id="pw-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:999;
+     display:none; align-items:center; justify-content:center;">
+    <div style="background:#fff; border-radius:12px; padding:24px; width:360px; max-width:90vw;">
+        <h3 style="margin-bottom:12px; font-size:16px;">Reset Password</h3>
+        <p id="pw-modal-name" style="font-size:13px; color:var(--text-muted); margin-bottom:12px;"></p>
+        <form id="pw-form" method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input type="password" name="password" class="form-input" placeholder="New password" required minlength="6" style="margin-bottom:12px;">
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button type="button" class="btn btn-ghost" onclick="closePwModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Reset</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function resetPw(uid, name) {
+    document.getElementById('pw-modal-name').textContent = 'Reset password for ' + name;
+    document.getElementById('pw-form').action = '/users/' + uid + '/reset-password';
+    const m = document.getElementById('pw-modal');
+    m.style.display = 'flex';
+}
+function closePwModal() {
+    document.getElementById('pw-modal').style.display = 'none';
+}
+</script>
+{% endblock %}

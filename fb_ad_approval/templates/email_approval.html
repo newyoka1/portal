@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ad Approval Request</title>
+<style>
+  body { margin:0; padding:0; background:#f0f2f5; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f0f2f5; padding:32px 16px;">
+  <tr><td align="center">
+
+    <!-- Outer wrapper: max 600px -->
+    <table cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;">
+
+      <!-- ── Header ── -->
+      <tr>
+        <td style="background:#1a1a2e; border-radius:12px 12px 0 0; padding:28px 36px;">
+          <table cellpadding="0" cellspacing="0" border="0" width="100%">
+            <tr>
+              <td>
+                <div style="font-size:20px; font-weight:700; color:#ffffff; letter-spacing:-0.3px;">Ad Approval Request</div>
+                <div style="font-size:13px; color:#8b95a5; margin-top:4px;">From Politika NYC</div>
+              </td>
+              <td align="right" valign="middle">
+                <div style="width:44px; height:44px; background:#1877F2; border-radius:10px; text-align:center; line-height:44px; font-size:22px; font-weight:800; color:#ffffff;">P</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- ── Intro ── -->
+      <tr>
+        <td style="background:#ffffff; padding:28px 36px 20px;">
+          <p style="margin:0 0 8px; font-size:15px; color:#050505;">Hi {{ to_name }},</p>
+          <p style="margin:0; font-size:15px; color:#65676B; line-height:1.6;">
+            Please review the Facebook ad below and let us know if you approve.<br>
+            The previews show exactly how the ad will appear in each placement.
+          </p>
+        </td>
+      </tr>
+
+      <!-- ── Ad title / type strip ── -->
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 24px;">
+          <table cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="font-size:18px; font-weight:700; color:#050505;">{{ ad.title or ad.ad_name or 'Untitled Ad' }}</td>
+              <td width="12"></td>
+              <td style="background:#e8ebf0; border-radius:20px; padding:4px 12px; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; color:#4a5568; white-space:nowrap;">
+                {{ (ad.ad_type or 'image') | replace('_',' ') | title }}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      {# ══════════════════════════════════════════════════════════
+         FEED PLACEMENTS  (square, landscape, portrait)
+         Each one that has an image URL gets its own mockup
+         ══════════════════════════════════════════════════════════ #}
+      {% for field, label, dims, ratio in placements if field != 'image_stories' %}
+        {% set img_url = ad.get(field, '') %}
+        {% if img_url %}
+
+      <!-- ── Placement: {{ label }} ── -->
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 8px;">
+          <table cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="font-size:13px; font-weight:600; color:#65676B; border-top:1px solid #e4e6eb; padding-top:20px;">
+                📱 {{ label }} &nbsp;·&nbsp; {{ dims }} &nbsp;·&nbsp; {{ ratio }}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 28px;" align="center">
+
+          <!-- Facebook feed card -->
+          <table cellpadding="0" cellspacing="0" border="0" width="528" style="max-width:528px; background:#ffffff; border:1px solid #ced0d4; border-radius:8px; overflow:hidden;">
+
+            <!-- Profile row -->
+            <tr>
+              <td style="padding:12px 16px 8px;">
+                <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td width="40" valign="top">
+                      <table cellpadding="0" cellspacing="0" border="0"><tr><td style="width:40px; height:40px; background:#1877F2; border-radius:50%; text-align:center; color:#ffffff; font-size:18px; font-weight:800; line-height:40px;">{{ (ad.page_name or 'P')[0] | upper }}</td></tr></table>
+                    </td>
+                    <td style="padding-left:10px;" valign="top">
+                      <div style="font-size:15px; font-weight:600; color:#050505; line-height:1.2;">{{ ad.page_name or 'Your Page' }} <span style="color:#1877F2;">✓</span></div>
+                      <div style="font-size:12px; color:#65676B; margin-top:2px;">Ad · Paid for by {{ ad.page_name or 'Advertiser' }}</div>
+                    </td>
+                    <td align="right" valign="top" style="font-size:22px; color:#65676B; letter-spacing:3px; padding-top:2px;">··· ✕</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Primary text (full — no truncation in approval email) -->
+            {% if ad.primary_text %}
+            <tr>
+              <td style="padding:4px 16px 12px; font-size:15px; color:#050505; line-height:1.55; white-space:pre-wrap;">{{ ad.primary_text }}</td>
+            </tr>
+            {% endif %}
+
+            <!-- Ad image -->
+            <tr>
+              <td style="line-height:0; padding:0;">
+                <img src="{{ img_url }}" width="528" alt="Ad image" style="display:block; width:100%; max-width:528px; border:none;">
+              </td>
+            </tr>
+
+            <!-- Link bar -->
+            <tr>
+              <td style="background:#f0f2f5; padding:10px 16px;">
+                <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td valign="middle">
+                      {% if domain %}
+                      <div style="font-size:12px; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">{{ domain }}</div>
+                      {% endif %}
+                      <div style="font-size:16px; font-weight:600; color:#050505; margin:3px 0 2px; line-height:1.3;">{{ ad.headline or ad.title or '' }}</div>
+                      {% if ad.description %}
+                      <div style="font-size:14px; color:#65676B; line-height:1.3;">{{ ad.description }}</div>
+                      {% endif %}
+                    </td>
+                    {% if cta_label %}
+                    <td width="12"></td>
+                    <td valign="middle" align="right" style="white-space:nowrap;">
+                      <table cellpadding="0" cellspacing="0" border="0"><tr><td style="background:#e4e6eb; border-radius:6px; padding:8px 16px; font-size:14px; font-weight:600; color:#050505;">{{ cta_label }}</td></tr></table>
+                    </td>
+                    {% endif %}
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Reactions row -->
+            <tr>
+              <td style="padding:8px 16px; border-top:1px solid #e4e6eb;">
+                <span style="font-size:14px; color:#65676B;">👍 Like &nbsp;&nbsp; 💬 Comment &nbsp;&nbsp; ↗ Share</span>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+
+        {% endif %}
+      {% endfor %}
+
+      {# ══════════════════════════════════════════════════════════
+         STORIES / REELS placement
+         ══════════════════════════════════════════════════════════ #}
+      {% if ad.get('image_stories') %}
+
+      <!-- ── Placement: Stories & Reels ── -->
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 8px;">
+          <table cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="font-size:13px; font-weight:600; color:#65676B; border-top:1px solid #e4e6eb; padding-top:20px;">
+                📲 Stories &amp; Reels &nbsp;·&nbsp; 1080×1920 &nbsp;·&nbsp; 9:16
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 28px;" align="center">
+
+          <!-- Phone-frame mockup — narrower card -->
+          <table cellpadding="0" cellspacing="0" border="0" width="280" style="background:#000000; border-radius:16px; overflow:hidden; border:4px solid #333;">
+
+            <!-- Dark header bar with progress lines + profile -->
+            <tr>
+              <td style="background:#111111; padding:10px 12px 8px;">
+                <!-- Progress bars -->
+                <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin-bottom:8px;">
+                  <tr>
+                    <td height="2" style="background:#555555; border-radius:2px;"></td>
+                    <td width="4"></td>
+                    <td height="2" style="background:#555555; border-radius:2px;"></td>
+                    <td width="4"></td>
+                    <td height="2" style="background:#ffffff; border-radius:2px;"></td>
+                  </tr>
+                </table>
+                <!-- Profile -->
+                <table cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td width="28">
+                      <table cellpadding="0" cellspacing="0" border="0"><tr><td style="width:28px; height:28px; background:#1877F2; border-radius:50%; border:2px solid #ffffff; text-align:center; color:#ffffff; font-size:12px; font-weight:800; line-height:24px;">P</td></tr></table>
+                    </td>
+                    <td style="padding-left:8px; color:#ffffff; font-size:12px; font-weight:600; line-height:1.3;">
+                      Politika NYC
+                      <span style="font-weight:400; color:#aaaaaa; font-size:11px;"> · Sponsored</span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Stories image -->
+            <tr>
+              <td style="line-height:0; padding:0;">
+                <img src="{{ ad.image_stories }}" width="272" alt="Stories ad" style="display:block; width:100%; max-width:272px; border:none;">
+              </td>
+            </tr>
+
+            <!-- Dark footer with CTA -->
+            <tr>
+              <td style="background:#111111; padding:14px 12px; text-align:center;">
+                {% if cta_label %}
+                <table cellpadding="0" cellspacing="0" border="0" align="center">
+                  <tr>
+                    <td style="background:#ffffff; border-radius:20px; padding:10px 24px; font-size:13px; font-weight:700; color:#000000;">
+                      {{ cta_label }} ↑
+                    </td>
+                  </tr>
+                </table>
+                {% endif %}
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+
+      {% endif %}
+
+      {# ══════════════════════════════════════════════════════════
+         CAROUSEL placement
+         ══════════════════════════════════════════════════════════ #}
+      {% if ad.get('ad_type') == 'carousel' and carousel_cards %}
+
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 8px;">
+          <table cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="font-size:13px; font-weight:600; color:#65676B; border-top:1px solid #e4e6eb; padding-top:20px;">
+                ⊞ Carousel — {{ carousel_cards | length }} card{{ 's' if carousel_cards | length != 1 else '' }}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <!-- Carousel: feed header (shared) -->
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 0;" align="center">
+          <table cellpadding="0" cellspacing="0" border="0" width="528" style="max-width:528px; background:#ffffff; border:1px solid #ced0d4; border-radius:8px 8px 0 0; overflow:hidden;">
+            <tr>
+              <td style="padding:12px 16px 8px;">
+                <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td width="40" valign="top">
+                      <table cellpadding="0" cellspacing="0"><tr><td style="width:40px; height:40px; background:#1877F2; border-radius:50%; text-align:center; color:#ffffff; font-size:18px; font-weight:800; line-height:40px;">P</td></tr></table>
+                    </td>
+                    <td style="padding-left:10px;" valign="top">
+                      <div style="font-size:15px; font-weight:600; color:#050505;">Politika NYC</div>
+                      <div style="font-size:12px; color:#65676B; margin-top:2px;">Sponsored &nbsp;·&nbsp; 🌐</div>
+                    </td>
+                    <td align="right" valign="top" style="font-size:22px; color:#65676B; letter-spacing:3px;">···</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            {% if ad.primary_text %}
+            <tr>
+              <td style="padding:4px 16px 10px; font-size:15px; color:#050505; line-height:1.55;">
+                {% if ad.primary_text | length > 130 %}{{ ad.primary_text[:130] }}&hellip; <span style="color:#65676B;">See more</span>{% else %}{{ ad.primary_text }}{% endif %}
+              </td>
+            </tr>
+            {% endif %}
+          </table>
+        </td>
+      </tr>
+
+      <!-- Carousel cards -->
+      {% for card in carousel_cards %}
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 0;" align="center">
+          <table cellpadding="0" cellspacing="0" border="0" width="528" style="max-width:528px; background:#ffffff; border-left:1px solid #ced0d4; border-right:1px solid #ced0d4; border-bottom:1px solid #e4e6eb;">
+            <!-- Card number -->
+            <tr>
+              <td style="padding:6px 16px 4px;">
+                <span style="font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Card {{ loop.index }} of {{ carousel_cards | length }}</span>
+              </td>
+            </tr>
+            <!-- Card image -->
+            {% if card.get('image') %}
+            <tr>
+              <td style="line-height:0; padding:0;">
+                <img src="{{ card.image }}" width="528" alt="Card {{ loop.index }}" style="display:block; width:100%; max-width:528px; border:none;">
+              </td>
+            </tr>
+            {% endif %}
+            <!-- Card link bar -->
+            <tr>
+              <td style="background:#f0f2f5; padding:10px 16px;">
+                <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td valign="middle">
+                      <div style="font-size:15px; font-weight:600; color:#050505;">{{ card.get('headline', ad.headline or '') }}</div>
+                      {% if card.get('description') %}
+                      <div style="font-size:13px; color:#65676B; margin-top:2px;">{{ card.description }}</div>
+                      {% endif %}
+                    </td>
+                    {% if cta_label %}
+                    <td width="12"></td>
+                    <td valign="middle" align="right" style="white-space:nowrap;">
+                      <table cellpadding="0" cellspacing="0"><tr><td style="background:#e4e6eb; border-radius:6px; padding:8px 16px; font-size:14px; font-weight:600; color:#050505;">{{ cta_label }}</td></tr></table>
+                    </td>
+                    {% endif %}
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      {% endfor %}
+
+      <!-- Carousel footer (reactions) -->
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 28px;" align="center">
+          <table cellpadding="0" cellspacing="0" border="0" width="528" style="max-width:528px; background:#ffffff; border:1px solid #ced0d4; border-top:none; border-radius:0 0 8px 8px;">
+            <tr>
+              <td style="padding:8px 16px; border-top:1px solid #e4e6eb;">
+                <span style="font-size:14px; color:#65676B;">👍 Like &nbsp;&nbsp; 💬 Comment &nbsp;&nbsp; ↗ Share</span>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      {% endif %}
+
+      {# ══════════════════════════════════════════════════════════
+         VIDEO placeholder notice
+         ══════════════════════════════════════════════════════════ #}
+      {% if ad.get('ad_type') == 'video' and ad.get('video_url') %}
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 28px;">
+          <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8f9fc; border:1px solid #e8ebf0; border-radius:8px; padding:0;">
+            <tr>
+              <td style="padding:20px 24px;">
+                <div style="font-size:13px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px; border-top:1px solid #e4e6eb; padding-top:16px;">🎬 Video Ad</div>
+                <div style="font-size:14px; color:#050505;">Video URL: <a href="{{ ad.video_url }}" style="color:#1877F2;">{{ ad.video_url }}</a></div>
+                <div style="font-size:12px; color:#65676B; margin-top:4px;">The video preview must be viewed in Facebook Ads Manager.</div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      {% endif %}
+
+      {# Full Ad Copy section removed — all copy is visible in the ad mockups above #}
+
+      {# ══════════════════════════════════════════════════════════
+         APPROVE / REJECT BUTTONS
+         ══════════════════════════════════════════════════════════ #}
+      {# ══════════════════════════════════════════════════════════
+         LEAD FORM PREVIEW (only shown for lead gen ads)
+         ══════════════════════════════════════════════════════════ #}
+      {% if lead_form %}
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 8px;">
+          <div style="font-size:11px; font-weight:700; color:#1877F2; text-transform:uppercase; letter-spacing:0.5px; border-top:1px solid #e4e6eb; padding-top:20px;">
+            FORM PREVIEW
+          </div>
+        </td>
+      </tr>
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 28px;" align="center">
+          <!-- Phone-style form mockup -->
+          <table cellpadding="0" cellspacing="0" border="0" width="340" style="max-width:340px; background:#ffffff; border-radius:16px; overflow:hidden; border:2px solid #d1d5db; box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+
+            <!-- Blue header with page name -->
+            <tr>
+              <td style="background:#1877F2; padding:10px 16px;">
+                <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td style="font-size:13px; color:#ffffff;">&#8592;</td>
+                    <td style="padding-left:8px; font-size:13px; font-weight:600; color:#ffffff;">{{ ad.page_name or 'Your Page' }}</td>
+                    <td align="right" style="font-size:13px; color:rgba(255,255,255,0.7);">&#8943;</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            {% if lead_form.context_card %}
+            <!-- Context card (headline + description) -->
+            <tr>
+              <td style="padding:16px 20px; border-bottom:1px solid #e4e6eb;">
+                {% if lead_form.context_card.title %}
+                <div style="font-size:16px; font-weight:700; color:#050505; margin-bottom:6px; line-height:1.3;">{{ lead_form.context_card.title }}</div>
+                {% endif %}
+                {% if lead_form.context_card.content %}
+                {% for line in lead_form.context_card.content %}
+                <div style="font-size:13px; color:#65676B; line-height:1.5;">{{ line }}</div>
+                {% endfor %}
+                {% endif %}
+              </td>
+            </tr>
+            {% endif %}
+
+            <!-- Questions -->
+            {% if lead_form.questions %}
+            <tr>
+              <td style="padding:16px 20px;">
+                <div style="font-size:12px; font-weight:700; color:#1877F2; margin-bottom:14px;">Contact information</div>
+                {% for q in lead_form.questions %}
+                <div style="margin-bottom:12px;">
+                  <div style="font-size:12px; font-weight:600; color:#050505; margin-bottom:4px;">{{ q.label or q.type.replace('_',' ').title() }}</div>
+                  <div style="border:1px solid #dddfe2; border-radius:8px; padding:10px 14px; font-size:13px; color:#bec3c9; background:#fafbfc;">
+                    Enter your answer.
+                  </div>
+                </div>
+                {% endfor %}
+              </td>
+            </tr>
+            {% endif %}
+
+            <!-- Privacy -->
+            <tr>
+              <td style="padding:10px 20px; border-top:1px solid #e4e6eb;">
+                <div style="font-size:10px; color:#65676B; line-height:1.5;">
+                  By clicking Submit, you agree to send your info to <strong>{{ ad.page_name or 'this business' }}</strong>.
+                  {% if lead_form.privacy_policy and lead_form.privacy_policy.url %}
+                  <a href="{{ lead_form.privacy_policy.url }}" style="color:#1877F2; text-decoration:none;">View Privacy Policy.</a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+
+            <!-- Submit button -->
+            <tr>
+              <td style="padding:12px 20px 16px;">
+                <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                  <tr>
+                    <td style="background:#1877F2; border-radius:8px; padding:12px; text-align:center; font-size:14px; font-weight:700; color:#ffffff;">
+                      Submit
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            {% if lead_form.thank_you_page %}
+            <!-- Thank you section (green background like FB) -->
+            <tr>
+              <td style="padding:0;">
+                <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f0fdf4; border-top:2px solid #22c55e;">
+                  <tr>
+                    <td style="padding:16px 20px; text-align:center;">
+                      <div style="font-size:20px; margin-bottom:6px;">&#9989;</div>
+                      {% if lead_form.thank_you_page.title %}
+                      <div style="font-size:15px; font-weight:700; color:#050505; margin-bottom:4px;">{{ lead_form.thank_you_page.title }}</div>
+                      {% endif %}
+                      {% if lead_form.thank_you_page.body %}
+                      <div style="font-size:12px; color:#65676B; line-height:1.5; margin-bottom:12px;">{{ lead_form.thank_you_page.body }}</div>
+                      {% endif %}
+                      <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                        <tr>
+                          <td style="background:#1877F2; border-radius:8px; padding:10px; text-align:center; font-size:13px; font-weight:600; color:#ffffff;">
+                            {{ lead_form.thank_you_page.button_text or 'View website' }}
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            {% endif %}
+
+          </table>
+        </td>
+      </tr>
+      {% endif %}
+
+      {# ══════════════════════════════════════════════════════════
+         CAMPAIGN & AD SET DETAILS
+         ══════════════════════════════════════════════════════════ #}
+      <tr>
+        <td style="background:#ffffff; padding:0 36px 24px;">
+          <table cellpadding="0" cellspacing="0" border="0" width="100%" style="border-top:1px solid #e4e6eb; padding-top:20px;">
+            <tr>
+              <td style="font-size:13px; font-weight:600; color:#65676B; padding-bottom:12px;">
+                📊 Campaign Details
+              </td>
+            </tr>
+          </table>
+          <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f8f9fc; border-radius:8px; border:1px solid #e4e6eb;">
+            {% if campaign %}
+            <tr>
+              <td style="padding:10px 16px 4px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Campaign</td>
+              <td style="padding:10px 16px 4px; font-size:13px; color:#050505;">{{ campaign.campaign_name or '-' }}</td>
+            </tr>
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Objective</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">{{ (campaign.objective or 'OUTCOME_TRAFFIC') | replace('OUTCOME_','') | replace('_',' ') | title }}</td>
+            </tr>
+            {% set cats = campaign.special_ad_categories or '[]' %}
+            {% if cats and cats != '[]' and cats != '["NONE"]' %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Ad Category</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">{{ cats | replace('[','') | replace(']','') | replace('"','') | replace('_',' ') | title }}</td>
+            </tr>
+            {% endif %}
+            {% endif %}
+            {% if adset %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px; border-top:1px solid #e4e6eb; padding-top:10px;">Ad Set</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505; border-top:1px solid #e4e6eb; padding-top:10px;">{{ adset.adset_name or '-' }}</td>
+            </tr>
+            {% if adset.daily_budget %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Budget</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">${{ adset.daily_budget }}/day</td>
+            </tr>
+            {% elif adset.lifetime_budget %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Budget</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">${{ adset.lifetime_budget }} lifetime</td>
+            </tr>
+            {% endif %}
+            {% if adset.optimization_goal %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Optimization</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">{{ adset.optimization_goal | replace('_',' ') | title }}</td>
+            </tr>
+            {% endif %}
+            {% if adset.start_time %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Schedule</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">{{ adset.start_time }}{% if adset.end_time %} → {{ adset.end_time }}{% endif %}</td>
+            </tr>
+            {% endif %}
+            {% set locs = adset.targeting_locations | default('[]') %}
+            {% set loc_list = locs | tojson_parse if locs != '[]' and locs else [] %}
+            {% if loc_list %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Locations</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">{{ loc_list | map(attribute='name') | join(', ') }}</td>
+            </tr>
+            {% endif %}
+            {% set age_range = (adset.targeting_age_min or '18') ~ ' - ' ~ (adset.targeting_age_max or '65') %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Ages</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">{{ age_range }}</td>
+            </tr>
+            {% set ints = adset.targeting_interests | default('[]') %}
+            {% set int_list = ints | tojson_parse if ints != '[]' and ints else [] %}
+            {% if int_list %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Interests</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">{{ int_list | map(attribute='name') | join(', ') }}</td>
+            </tr>
+            {% endif %}
+            {% set custs = adset.targeting_custom_audiences | default('[]') %}
+            {% set cust_list = custs | tojson_parse if custs != '[]' and custs else [] %}
+            {% if cust_list %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Custom Audiences</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">{{ cust_list | map(attribute='name') | join(', ') }}</td>
+            </tr>
+            {% endif %}
+            {% set excls = adset.targeting_exclusions | default('[]') %}
+            {% set excl_list = excls | tojson_parse if excls != '[]' and excls else [] %}
+            {% if excl_list %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Exclude Interests</td>
+              <td style="padding:4px 16px; font-size:13px; color:#c53030;">{{ excl_list | map(attribute='name') | join(', ') }}</td>
+            </tr>
+            {% endif %}
+            {% set excl_custs = adset.targeting_excl_custom_audiences | default('[]') %}
+            {% set excl_cust_list = excl_custs | tojson_parse if excl_custs != '[]' and excl_custs else [] %}
+            {% if excl_cust_list %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px;">Exclude Audiences</td>
+              <td style="padding:4px 16px; font-size:13px; color:#c53030;">{{ excl_cust_list | map(attribute='name') | join(', ') }}</td>
+            </tr>
+            {% endif %}
+            {% endif %}
+            {# Full ad copy #}
+            <tr>
+              <td colspan="2" style="padding:10px 16px 4px; font-size:11px; font-weight:600; color:#65676B; text-transform:uppercase; letter-spacing:0.5px; border-top:1px solid #e4e6eb;">Full Ad Copy</td>
+            </tr>
+            {% if ad.primary_text %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B;">Primary Text</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505; line-height:1.5;">{{ ad.primary_text }}</td>
+            </tr>
+            {% endif %}
+            {% if ad.headline %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B;">Headline</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">{{ ad.headline }}</td>
+            </tr>
+            {% endif %}
+            {% if ad.description %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B;">Description</td>
+              <td style="padding:4px 16px; font-size:13px; color:#050505;">{{ ad.description }}</td>
+            </tr>
+            {% endif %}
+            {% if ad.link_url %}
+            <tr>
+              <td style="padding:4px 16px; font-size:11px; font-weight:600; color:#65676B;">Link URL</td>
+              <td style="padding:4px 16px; font-size:13px; color:#1877F2;"><a href="{{ ad.link_url }}" style="color:#1877F2;">{{ ad.link_url[:60] }}{{ '...' if ad.link_url|length > 60 }}</a></td>
+            </tr>
+            {% endif %}
+            <tr>
+              <td style="padding:4px 16px 10px; font-size:11px; font-weight:600; color:#65676B;">CTA</td>
+              <td style="padding:4px 16px 10px; font-size:13px; color:#050505;">{{ cta_label }}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+
+      <tr>
+        <td style="background:#ffffff; padding:8px 36px 36px; text-align:center;">
+          <table cellpadding="0" cellspacing="0" border="0" align="center">
+            <tr>
+              <td style="padding:4px;">
+                <a href="{{ approve_url }}" style="display:inline-block; background:#22c55e; color:#ffffff; text-decoration:none; font-size:15px; font-weight:700; padding:14px 40px; border-radius:8px; letter-spacing:0.2px;">✓ &nbsp;Approve</a>
+              </td>
+              <td width="16"></td>
+              <td style="padding:4px;">
+                <a href="{{ reject_url }}" style="display:inline-block; background:#ef4444; color:#ffffff; text-decoration:none; font-size:15px; font-weight:700; padding:14px 40px; border-radius:8px; letter-spacing:0.2px;">✕ &nbsp;Reject</a>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:16px 0 0; font-size:12px; color:#8b95a5;">Clicking a button will take you to a confirmation page where you can add comments.</p>
+        </td>
+      </tr>
+
+      <!-- ── Footer ── -->
+      <tr>
+        <td style="background:#f8f9fc; border-top:1px solid #e8ebf0; border-radius:0 0 12px 12px; padding:20px 36px; text-align:center;">
+          <p style="margin:0; font-size:12px; color:#8b95a5;">Sent via Politika NYC Ad Approval System</p>
+        </td>
+      </tr>
+
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>

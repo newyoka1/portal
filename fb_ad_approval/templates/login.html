@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Login — Politika Ad Manager</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #1a1a2e;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.login-card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 40px;
+    width: 400px;
+    max-width: 90vw;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+}
+.login-logo {
+    text-align: center;
+    margin-bottom: 8px;
+}
+.login-logo img {
+    height: 40px;
+    filter: none;
+}
+.login-subtitle {
+    text-align: center;
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 30px;
+}
+.login-title {
+    font-size: 22px;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 24px;
+    color: #1a1a2e;
+}
+.form-group { margin-bottom: 16px; }
+.form-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 6px;
+    color: #333;
+}
+.form-input {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 14px;
+    transition: border-color 0.2s;
+}
+.form-input:focus {
+    outline: none;
+    border-color: #1877F2;
+    box-shadow: 0 0 0 3px rgba(24,119,242,0.1);
+}
+.btn-login {
+    width: 100%;
+    padding: 12px;
+    background: #1877F2;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.btn-login:hover { background: #1565C0; }
+.flash-msg {
+    padding: 10px 14px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+    font-size: 13px;
+}
+.flash-danger { background: #ffeaea; color: #c62828; }
+.flash-info { background: #e3f2fd; color: #1565C0; }
+.flash-success { background: #e8f5e9; color: #2e7d32; }
+</style>
+</head>
+<body>
+<div class="login-card">
+    <div class="login-logo">
+        <img src="/static/logo-dark.png" alt="Politika" onerror="this.style.display='none'; this.nextElementSibling.style.display='';">
+        <div style="display:none; font-size:28px; font-weight:800; color:#1a1a2e;">politika</div>
+    </div>
+    <div class="login-subtitle">Client Ad & Email Manager</div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="flash-msg flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('login') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group">
+            <label class="form-label">Email</label>
+            <input type="email" name="email" class="form-input" placeholder="you@company.com" required autofocus>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" name="password" class="form-input" placeholder="Enter password" required>
+        </div>
+        <button type="submit" class="btn-login">Sign In</button>
+    </form>
+</div>
+</body>
+</html>

@@ -1,0 +1,221 @@
+# MySQL Server Instance Configuration File
+# ----------------------------------------------------------------------
+# Optimized for: 16 cores / 24 threads, 64GB RAM, MySQL 8.0.42
+# Generated: 2025-02-03
+# Updated: 2026-02-09 - Optimized for 16-core system
+# ----------------------------------------------------------------------
+
+# CLIENT SECTION
+# ----------------------------------------------------------------------
+[client]
+port=3306
+
+[mysql]
+no-beep
+local_infile = 1
+
+# SERVER SECTION
+# ----------------------------------------------------------------------
+[mysqld]
+
+# ============================================
+# BASIC SERVER SETTINGS
+# ============================================
+port=3306
+datadir=D:\Data
+
+# Server identification for replication
+server-id=1
+
+# Table name handling (1 = case-insensitive, required for Windows)
+lower_case_table_names=1
+
+# Default storage engine
+default-storage-engine=INNODB
+
+# SQL mode
+sql-mode="ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+
+# Authentication
+authentication_policy=*,,
+
+# ============================================
+# MEMORY SETTINGS (64GB RAM available)
+# ============================================
+# CRITICAL: Set to 40GB (62.5% of your 64GB RAM)
+innodb_buffer_pool_size = 40G
+innodb_buffer_pool_instances = 16
+
+# Temporary tables (increased for your RAM)
+tmp_table_size = 2G
+max_heap_table_size = 2G
+temptable_max_ram = 2G
+internal_tmp_mem_storage_engine = TempTable
+
+# Sort and join buffers
+sort_buffer_size = 64M
+join_buffer_size = 128M
+read_buffer_size = 2M
+read_rnd_buffer_size = 8M
+
+# ============================================
+# BULK LOADING OPTIMIZATIONS
+# ============================================
+# CRITICAL: Enable for LOAD DATA LOCAL INFILE
+local_infile = 1
+
+# Bulk insert buffer (increased for your hardware)
+bulk_insert_buffer_size = 512M
+
+# ============================================
+# INNODB PERFORMANCE (16 CPU cores / 24 threads)
+# ============================================
+# Parallel I/O threads (match your 16 cores)
+innodb_read_io_threads = 16
+innodb_write_io_threads = 16
+innodb_parallel_read_threads = 16
+innodb_page_cleaners = 16
+
+# Thread concurrency (16 cores × 4 = 64)
+innodb_thread_concurrency = 64
+innodb_concurrency_tickets = 5000
+
+# Log settings for bulk operations
+innodb_log_buffer_size = 256M
+innodb_redo_log_capacity = 2G
+
+# Flush settings (2 = write to log, flush every second - fast & safe)
+innodb_flush_log_at_trx_commit = 2
+# innodb_flush_method = O_DIRECT  # LINUX ONLY - Not supported on Windows
+# Windows default (no setting) is optimal
+
+# CRITICAL: Required for partitioning
+innodb_file_per_table = 1
+
+# Change buffering for faster inserts
+innodb_change_buffering = all
+innodb_change_buffer_max_size = 50
+
+# Other InnoDB optimizations
+innodb_adaptive_hash_index = ON
+innodb_stats_on_metadata = 0
+innodb_old_blocks_time = 1000
+innodb_autoextend_increment = 64
+innodb_checksum_algorithm = crc32
+
+# Parallel DDL operations (MySQL 8.0+)
+innodb_ddl_threads = 4
+innodb_parallel_doublewrite_buffers = 16
+
+# Statistics for better query optimization
+innodb_stats_persistent = ON
+innodb_stats_auto_recalc = ON
+innodb_stats_persistent_sample_pages = 64
+
+# ============================================
+# CONNECTION SETTINGS
+# ============================================
+max_connections = 300
+thread_cache_size = 100
+
+# Timeouts (increased for long-running operations)
+wait_timeout = 28800
+net_read_timeout = 600
+net_write_timeout = 600
+innodb_lock_wait_timeout = 120
+net_retry_count = 100
+
+# Reduce lock contention
+max_write_lock_count = 16
+
+# ============================================
+# TABLE CACHE
+# ============================================
+table_open_cache = 4000
+open_files_limit = 10000
+
+# ============================================
+# MYISAM SETTINGS (minimal, since you use InnoDB)
+# ============================================
+key_buffer_size = 32M
+myisam_sort_buffer_size = 128M
+myisam_max_sort_file_size = 2G
+
+# ============================================
+# QUERY OPTIMIZATION
+# ============================================
+max_allowed_packet = 256M
+max_connect_errors = 100
+
+# Optimizer settings for better query plans
+optimizer_search_depth = 5
+optimizer_switch = 'mrr=on,mrr_cost_based=on,batched_key_access=on'
+
+# ============================================
+# BINARY LOGGING & REPLICATION
+# ============================================
+log-bin="GEORGEPC-bin"
+binlog_row_event_max_size = 8K
+sync_source_info = 10000
+sync_relay_log = 10000
+
+# ============================================
+# ERROR & SLOW QUERY LOGGING
+# ============================================
+log-output = FILE
+log-error = "GEORGEPC.err"
+
+# General log (disabled for performance)
+general-log = 0
+general_log_file = "GEORGEPC.log"
+
+# Slow query log (enabled, 2 seconds threshold)
+slow-query-log = 1
+slow_query_log_file = "GEORGEPC-slow.log"
+long_query_time = 2
+
+# ============================================
+# PERFORMANCE SCHEMA (for detailed monitoring)
+# ============================================
+performance_schema = ON
+performance_schema_max_table_instances = 12500
+
+# ============================================
+# SECURITY
+# ============================================
+secure-file-priv = "C:/ProgramData/MySQL/MySQL Server 8.0/Uploads"
+
+# ============================================
+# MYSQL X PROTOCOL
+# ============================================
+mysqlx_port = 33060
+
+# ============================================
+# WINDOWS-SPECIFIC
+# ============================================
+# Use native Windows async I/O
+innodb_use_native_aio = 1
+
+# Disable symbolic links (not used on Windows)
+symbolic_links = 0
+
+# ============================================
+# CHANGES FROM PREVIOUS VERSION
+# ============================================
+# 1. Updated CPU core count: 12 → 16 cores
+# 2. innodb_read_io_threads: 12 → 16
+# 3. innodb_write_io_threads: 12 → 16
+# 4. innodb_parallel_read_threads: 12 → 16
+# 5. innodb_page_cleaners: 8 → 16
+# 6. innodb_thread_concurrency: 49 → 64
+# 7. max_connections: 200 → 300
+# 8. thread_cache_size: 50 → 100
+# 9. NEW: innodb_ddl_threads = 4
+# 10. NEW: innodb_parallel_doublewrite_buffers = 16
+# 11. NEW: innodb_stats_persistent settings
+# 12. NEW: optimizer_switch settings
+# 13. NEW: max_write_lock_count = 16
+# 14. NEW: performance_schema = ON
+#
+# Expected improvement: 10-15% better performance on multi-threaded workloads
+# ============================================

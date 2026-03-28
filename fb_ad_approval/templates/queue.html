@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+{% block title %}Approval Queue{% endblock %}
+
+{% block extra_head %}
+<style>
+.queue-layout { max-width: 1000px; margin: 0 auto; }
+.queue-card {
+    background: var(--bg-card); border: 1px solid var(--border-light);
+    border-radius: var(--radius); margin-bottom: 12px; overflow: hidden;
+}
+.queue-card-header {
+    display: flex; align-items: center; gap: 12px; padding: 14px 16px;
+    border-bottom: 1px solid var(--border-light);
+}
+.queue-card-body { padding: 14px 16px; }
+.queue-badge {
+    font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+.queue-badge.pending { background: #fff3cd; color: #856404; }
+.queue-badge.approved { background: #d4edda; color: #155724; }
+.queue-badge.rejected { background: #f8d7da; color: #721c24; }
+.queue-preview {
+    display: flex; gap: 16px; align-items: flex-start;
+}
+.queue-preview-img {
+    width: 120px; height: 120px; border-radius: var(--radius-sm);
+    object-fit: cover; background: var(--bg-raised); flex-shrink: 0;
+}
+.queue-preview-text { flex: 1; min-width: 0; }
+.queue-preview-text h4 { margin: 0 0 4px; font-size: 14px; }
+.queue-preview-text p { margin: 0; font-size: 12px; color: var(--text-muted); }
+.queue-approvers {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;
+}
+.approver-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 11px; padding: 3px 10px; border-radius: 20px;
+    border: 1px solid var(--border);
+}
+.approver-chip.waiting { background: var(--bg-raised); color: var(--text-muted); }
+.approver-chip.approved { background: #d4edda; color: #155724; border-color: #c3e6cb; }
+.approver-chip.rejected { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+.queue-actions { display: flex; gap: 8px; margin-top: 12px; }
+.queue-empty {
+    text-align: center; padding: 60px 20px; color: var(--text-muted);
+}
+.queue-empty-icon { font-size: 48px; margin-bottom: 12px; }
+.queue-tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.queue-tab {
+    padding: 8px 16px; border-radius: var(--radius-sm); cursor: pointer;
+    font-size: 13px; font-weight: 600; border: 1px solid var(--border);
+    background: var(--bg-card); color: var(--text-muted); transition: all 0.12s;
+}
+.queue-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.queue-tab .count {
+    background: rgba(255,255,255,0.2); padding: 1px 6px; border-radius: 10px;
+    font-size: 10px; margin-left: 4px;
+}
+.queue-tab.active .count { background: rgba(255,255,255,0.3); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header" style="margin-bottom:16px;">
+    <div>
+        <h2 style="margin:0; font-size:20px;">Approval Queue</h2>
+        <p style="margin:4px 0 0; color:var(--text-muted); font-size:13px;">
+            Track ads sent for approval. Approved ads can be published to Facebook.
+        </p>
+    </div>
+</div>
+
+{% if not active_client %}
+<div style="text-align:center; padding:60px 20px; color:var(--text-muted);">
+    <div style="font-size:48px; margin-bottom:12px;">📋</div>
+    <p>Select a client to view the approval queue.</p>
+    <a href="{{ url_for('manage_clients') }}" class="btn btn-primary" style="margin-top:12px;">Go to Clients</a>
+</div>
+{% else %}
+
+<div class="queue-layout">
+    <div class="queue-tabs">
+        <div class="queue-tab active" data-tab="pending" onclick="qSwitchTab(this)">
+            ⏳ Pending <span class="count" id="q-pending-count">0</span>
+        </div>
+        <div class="queue-tab" data-tab="approved" onclick="qSwitchTab(this)">
+            ✅ Approved <span class="count" id="q-approved-count">0</span>
+        </div>
+        <div class="queue-tab" data-tab="rejected" onclick="qSwitchTab(this)">
+            ❌ Rejected <span class="count" id="q-rejected-count">0</span>
+        </div>
+    </div>
+
+    <!-- Bulk action bar -->
+    <div id="q-bulk-bar" style="display:none; background:var(--bg-card); border:1px solid var(--border-light);
+         border-radius:var(--radius); padding:8px 14px; margin-bottom:12px;
+         display:none; align-items:center; gap:10px; font-size:13px;">
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+            <input type="checkbox" id="q-select-all" onchange="qToggleAll(this.checked)" style="width:16px; height:16px;">
+            Select All
+        </label>
+        <span id="q-selected-count" style="color:var(--text-muted);">0 selected</span>
+        <button class="btn btn-ghost btn-sm" style="color:var(--red); margin-left:auto;" onclick="qDeleteSelected()">🗑 Delete Selected</button>
+    </div>
+
+    <div id="q-pending-list"></div>
+    <div id="q-approved-list" style="display:none;"></div>
+    <div id="q-rejected-list" style="display:none;"></div>
+</div>
+
+<script>
+let queueData = { pending: [], approved: [], rejected: [] };
+
+function qSwitchTab(el) {
+    document.querySelectorAll('.queue-tab').forEach(t => t.classList.remove('active'));
+    el.classList.add('active');
+    const tab = el.dataset.tab;
+    ['pending', 'approved', 'rejected'].forEach(t => {
+        document.getElementById(`q-${t}-list`).style.display = t === tab ? '' : 'none';
+    });
+}
+
+function qLoad() {
+    fetch('/api/approval-queue').then(r => r.json()).then(data => {
+        queueData = data;
+        document.getElementById('q-pending-count').textContent = data.pending.length;
+        document.getElementById('q-approved-count').textContent = data.approved.length;
+        document.getElementById('q-rejected-count').textContent = data.rejected.length;
+        qRender('pending', data.pending);
+        qRender('approved', data.approved);
+        qRender('rejected', data.rejected);
+        // Reset bulk bar
+        document.getElementById('q-bulk-bar').style.display = 'none';
+        document.getElementById('q-select-all').checked = false;
+    }).catch(() => {});
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+function sanitizeImgUrl(url) {
+    if (!url) return '';
+    const s = String(url).trim();
+    if (s.startsWith('http://') || s.startsWith('https://') || s.startsWith('/static/')) return s;
+    return '';
+}
+
+function qRender(type, campaigns) {
+    const el = document.getElementById(`q-${type}-list`);
+    if (!campaigns.length) {
+        const icons = { pending: '📭', approved: '🎉', rejected: '📋' };
+        const msgs = {
+            pending: 'No campaigns waiting for approval',
+            approved: 'No approved campaigns yet',
+            rejected: 'No rejected campaigns'
+        };
+        el.innerHTML = `<div class="queue-empty">
+            <div class="queue-empty-icon">${icons[type]}</div>
+            <p>${msgs[type]}</p>
+        </div>`;
+        return;
+    }
+    el.innerHTML = campaigns.map(camp => {
+        const adsets = camp._adsets || [];
+        const ads = camp._ads || [];
+        const primaryAd = camp._primary_ad || {};
+
+        // Campaign image from primary ad
+        const img = sanitizeImgUrl(primaryAd.image_square || primaryAd.image_landscape || '');
+        const imgHtml = img
+            ? `<img class="queue-preview-img" src="${escapeHtml(img)}" alt="Ad preview" style="width:120px; height:120px; object-fit:cover; border-radius:var(--radius-sm);">`
+            : `<div class="queue-preview-img" style="width:120px;height:120px;display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--text-muted);background:var(--bg-raised);border-radius:var(--radius-sm);">🖼</div>`;
+
+        // Approvals
+        const approvalChips = (camp._approvals || []).map(ap => {
+            const s = (ap.status || 'pending').toLowerCase();
+            const icon = s === 'approved' ? '✓' : s === 'rejected' ? '✗' : '…';
+            const date = ap.responded_at ? ` (${escapeHtml(ap.responded_at)})` : '';
+            return `<span class="approver-chip ${s === 'approved' ? 'approved' : s === 'rejected' ? 'rejected' : 'waiting'}" title="${escapeHtml(ap.comments||'')}">${icon} ${escapeHtml(ap.approver_name || ap.approver_email || 'Unknown')}${s !== 'pending' ? date : ''}</span>`;
+        }).join('');
+
+        // Rejection reasons
+        const rejections = (camp._approvals || []).filter(ap => (ap.status||'').toLowerCase() === 'rejected' && ap.comments);
+        let rejectionHtml = '';
+        if (rejections.length) {
+            rejectionHtml = `<div style="margin-top:10px; padding:10px 12px; background:#fff5f5; border:1px solid #fed7d7; border-radius:var(--radius-sm);">
+                <div style="font-size:11px; font-weight:600; color:#c53030; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Rejection Reason${rejections.length > 1 ? 's' : ''}</div>
+                ${rejections.map(ap => `<div style="font-size:13px; color:#742a2a; margin-bottom:4px;">
+                    <strong>${escapeHtml(ap.approver_name || ap.approver_email)}:</strong> "${escapeHtml(ap.comments)}"
+                </div>`).join('')}
+            </div>`;
+        }
+
+        // Approval notes
+        const approvedWithComments = (camp._approvals || []).filter(ap => (ap.status||'').toLowerCase() === 'approved' && ap.comments);
+        let notesHtml = '';
+        if (approvedWithComments.length) {
+            notesHtml = `<div style="margin-top:10px; padding:10px 12px; background:#f0fff4; border:1px solid #c6f6d5; border-radius:var(--radius-sm);">
+                <div style="font-size:11px; font-weight:600; color:#276749; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px;">Approver Notes</div>
+                ${approvedWithComments.map(ap => `<div style="font-size:13px; color:#22543d; margin-bottom:4px;">
+                    <strong>${escapeHtml(ap.approver_name || ap.approver_email)}:</strong> "${escapeHtml(ap.comments)}"
+                </div>`).join('')}
+            </div>`;
+        }
+
+        // Ad sets + ads tree
+        let treeHtml = '';
+        adsets.forEach(s => {
+            const sAds = ads.filter(a => a.adset_id === s.id);
+            treeHtml += `<div style="margin-top:8px; padding:8px 12px; background:var(--bg-raised); border-radius:var(--radius-sm); border-left:3px solid var(--accent);">
+                <div style="font-size:12px; font-weight:600; color:var(--text-primary);">📋 ${escapeHtml(s.adset_name || 'Ad Set')}</div>
+                <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">
+                    ${s.daily_budget ? '$'+s.daily_budget+'/day' : ''}${s.lifetime_budget ? '$'+s.lifetime_budget+' lifetime' : ''}
+                    ${s.optimization_goal ? ' · ' + escapeHtml(s.optimization_goal.replace(/_/g,' ')) : ''}
+                </div>`;
+            sAds.forEach(a => {
+                const aImg = sanitizeImgUrl(a.image_square || a.image_landscape || '');
+                treeHtml += `<div style="margin-top:6px; padding:6px 10px; background:#fff; border-radius:var(--radius-sm); display:flex; gap:10px; align-items:flex-start;">
+                    ${aImg ? `<img src="${escapeHtml(aImg)}" style="width:60px; height:60px; object-fit:cover; border-radius:4px; flex-shrink:0;">` : ''}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:12px; font-weight:600;">🎨 ${escapeHtml(a.ad_name || 'Ad')}</div>
+                        ${a.page_name ? `<div style="font-size:11px; color:var(--text-muted);">Page: ${escapeHtml(a.page_name)}</div>` : ''}
+                        ${a.headline ? `<div style="font-size:11px; font-weight:600; margin-top:2px;">${escapeHtml(a.headline)}</div>` : ''}
+                        ${a.primary_text ? `<div style="font-size:11px; color:var(--text-muted); margin-top:1px;">${escapeHtml(a.primary_text).substring(0,100)}${a.primary_text.length>100?'…':''}</div>` : ''}
+                        ${a.lead_form_id ? `<div style="font-size:10px; color:var(--accent); margin-top:2px;">📋 Lead form attached</div>` : ''}
+                    </div>
+                </div>`;
+            });
+            treeHtml += `</div>`;
+        });
+
+        // Meta status
+        const metaCampId = camp.meta_campaign_id || '';
+        let metaStatusHtml = '';
+        if (metaCampId) {
+            metaStatusHtml = `<span style="font-size:11px; color:var(--green);">✓ Meta ID: ${escapeHtml(metaCampId)}</span>`;
+        }
+
+        // Actions
+        let actions = `<div class="queue-actions">`;
+        if (type === 'pending') {
+            actions += `<button class="btn btn-ghost btn-sm" onclick="qResend('${camp.id}')">📧 Resend</button>`;
+        } else if (type === 'approved') {
+            actions += `<button class="btn btn-primary btn-sm" onclick="qPublish('${camp.id}')">🚀 Publish to Facebook</button>`;
+            actions += ` <button class="btn btn-ghost btn-sm" style="color:var(--orange);" onclick="qUnapprove('${camp.id}')">↩ Unapprove</button>`;
+        } else if (type === 'rejected') {
+            actions += `<button class="btn btn-ghost btn-sm" onclick="window.location='/campaigns'">✏️ Edit Campaign</button>`;
+            actions += `<button class="btn btn-ghost btn-sm" onclick="qResubmit('${camp.id}')">📧 Resubmit for Approval</button>`;
+        }
+        actions += `<button class="btn btn-ghost btn-sm" style="color:var(--red); margin-left:auto;" onclick="qRemove('${camp.id}')">🗑 Remove from Queue</button>`;
+        actions += `</div>`;
+
+        const createdAt = escapeHtml(camp.created_at || '');
+
+        return `<div class="queue-card">
+            <div class="queue-card-header">
+                <input type="checkbox" class="q-check" data-id="${camp.id}" onchange="qUpdateBulk()" style="width:16px; height:16px; cursor:pointer; flex-shrink:0;">
+                <strong style="flex:1; font-size:15px;">📁 ${escapeHtml(camp.campaign_name || 'Unnamed Campaign')}</strong>
+                <span style="font-size:11px; color:var(--text-muted); margin-right:8px;">${escapeHtml((camp.objective||'').replace('OUTCOME_',''))}</span>
+                <span class="queue-badge ${type}">${type}</span>
+                ${createdAt ? `<span style="font-size:11px; color:var(--text-muted);">${createdAt}</span>` : ''}
+            </div>
+            <div class="queue-card-body">
+                <div style="display:flex; gap:16px; align-items:flex-start;">
+                    ${imgHtml}
+                    <div style="flex:1; min-width:0;">
+                        <div style="font-size:13px; color:var(--text-muted);">
+                            ${adsets.length} ad set${adsets.length !== 1 ? 's' : ''} · ${ads.length} ad${ads.length !== 1 ? 's' : ''}
+                        </div>
+                        ${primaryAd.headline ? `<div style="font-size:14px; font-weight:600; margin-top:4px;">${escapeHtml(primaryAd.headline)}</div>` : ''}
+                        ${primaryAd.primary_text ? `<div style="font-size:12px; color:var(--text-muted); margin-top:2px;">${escapeHtml(primaryAd.primary_text).substring(0,120)}${(primaryAd.primary_text||'').length>120?'…':''}</div>` : ''}
+                        ${metaStatusHtml}
+                    </div>
+                </div>
+                <!-- Campaign children tree -->
+                ${treeHtml}
+                ${approvalChips ? `<div style="margin-top:12px;"><span style="font-size:11px; color:var(--text-muted); font-weight:600;">APPROVERS:</span><div class="queue-approvers">${approvalChips}</div></div>` : ''}
+                ${rejectionHtml}
+                ${notesHtml}
+                ${actions}
+            </div>
+        </div>`;
+    }).join('');
+}
+
+function qUpdateBulk() {
+    const checks = document.querySelectorAll('.q-check:checked');
+    const bar = document.getElementById('q-bulk-bar');
+    const count = document.getElementById('q-selected-count');
+    const total = document.querySelectorAll('.q-check').length;
+    bar.style.display = checks.length > 0 ? 'flex' : 'none';
+    count.textContent = `${checks.length} selected`;
+    document.getElementById('q-select-all').checked = checks.length === total && total > 0;
+}
+
+function qToggleAll(checked) {
+    // Only toggle visible tab's checkboxes
+    const activeTab = document.querySelector('.queue-tab.active');
+    const tab = activeTab ? activeTab.dataset.tab : 'pending';
+    const list = document.getElementById(`q-${tab}-list`);
+    list.querySelectorAll('.q-check').forEach(c => c.checked = checked);
+    qUpdateBulk();
+}
+
+function qRemove(id) {
+    if (!id) return;
+    if (!confirm('Remove from approval queue?\nThe campaign moves back to Drafts.')) return;
+    // Try campaign endpoint first, fall back to ad endpoint
+    fetch(`/api/campaigns/${id}/remove-from-queue`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) { qLoad(); return; }
+            return fetch(`/api/meta-ads/${id}/remove-from-queue`, { method: 'POST' })
+                .then(r => r.json()).then(d2 => { if (d2.ok) qLoad(); else alert('Error: ' + (d2.error||'Failed')); });
+        }).catch(e => alert('Network error: ' + e.message));
+}
+
+function qDeleteSelected() {
+    const ids = Array.from(document.querySelectorAll('.q-check:checked')).map(c => c.dataset.id);
+    if (!ids.length) return;
+    if (!confirm(`Remove ${ids.length} ad(s) from the approval queue?\n(Ads will still exist in Manage.)`)  ) return;
+    Promise.all(ids.map(id =>
+        fetch('/api/meta-ads/' + id + '/remove-from-queue', { method: 'POST' }).then(r => r.json())
+    )).then(results => {
+        const failed = results.filter(r => !r.ok).length;
+        if (failed) alert(failed + ' removal(s) failed');
+        qLoad();
+    }).catch(() => alert('Network error'));
+}
+
+function qResubmit(adId) {
+    if (!confirm('Clear previous rejections and resubmit for approval?')) return;
+    fetch('/api/meta-ads/' + adId + '/send-for-approval', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}'
+    }).then(r => r.json()).then(d => {
+        if (d.ok) { alert('Resubmitted! ' + d.sent + ' approval email(s) sent.'); qLoad(); }
+        else alert('Error: ' + (d.error || 'Failed'));
+    }).catch(() => alert('Network error'));
+}
+
+function qResend(adId) {
+    if (!confirm('Resend approval emails?')) return;
+    fetch(`/api/meta-ads/${adId}/send-for-approval`, { method: 'POST' })
+        .then(r => r.json())
+        .then(d => { if (d.ok) { alert('Approval emails resent!'); qLoad(); } else alert('Error: ' + (d.error || 'Failed')); })
+        .catch(() => alert('Network error'));
+}
+
+function qPublish(adId) {
+    if (!confirm('Publish this approved ad to Facebook?\nThis will auto-create the campaign & ad set on Meta if needed.')) return;
+    const btn = event.target;
+    btn.textContent = '⏳ Publishing…';
+    btn.disabled = true;
+    fetch(`/api/meta-ads/${adId}/publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'PAUSED' })
+    }).then(r => r.json()).then(d => {
+        if (d.ok) { alert('Published! Meta Ad ID: ' + d.meta_ad_id); qLoad(); }
+        else { alert('Error: ' + (d.error || 'Unknown')); btn.textContent = '🚀 Publish to Facebook'; btn.disabled = false; }
+    }).catch(() => { alert('Network error'); btn.textContent = '🚀 Publish to Facebook'; btn.disabled = false; });
+}
+
+function qUnapprove(id) {
+    if (!confirm('Unapprove this campaign? It will move back to Pending.')) return;
+    fetch(`/api/campaigns/${id}/unapprove`, { method: 'POST', headers: {'Content-Type':'application/json'} })
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) qLoad();
+            else alert('Error: ' + (d.error || 'Unknown'));
+        }).catch(() => alert('Network error'));
+}
+
+qLoad();
+</script>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,586 @@
+{% extends "base.html" %}
+{% block title %}Clients{% endblock %}
+
+{% block extra_head %}
+<style>
+.color-swatch {
+    width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+    border: 2px solid transparent; transition: all 0.12s; flex-shrink: 0;
+}
+.color-swatch.selected, .color-swatch:hover { border-color: var(--text); transform: scale(1.15); }
+.color-picker-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.client-card {
+    background: var(--bg-card); border: 1px solid var(--border-light);
+    border-radius: var(--radius-lg); box-shadow: var(--shadow-card);
+    overflow: hidden;
+}
+.client-card-header {
+    padding: 16px 20px; display: flex; align-items: center; gap: 14px;
+    border-bottom: 1px solid var(--border-light);
+}
+/* Side panel tabs */
+.panel-tabs { display: flex; border-bottom: 1px solid var(--border-light); }
+.panel-tab {
+    flex: 1; padding: 12px 16px; font-size: 13px; font-weight: 600;
+    color: var(--text-dim); cursor: pointer; border: none;
+    background: none; font-family: var(--font);
+    border-bottom: 2px solid transparent; transition: all 0.12s;
+    text-align: center;
+}
+.panel-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.panel-pane { display: none; padding: 20px; }
+.panel-pane.active { display: block; }
+/* Sync account rows */
+.sync-account-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 12px; border: 1px solid var(--border-light);
+    border-radius: var(--radius); margin-bottom: 8px; background: var(--bg-card);
+    transition: border-color 0.12s;
+}
+.sync-account-row:hover { border-color: var(--accent); }
+.sync-acct-avatar {
+    width: 36px; height: 36px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 800; color: #fff;
+}
+.sync-acct-name { font-size: 13px; font-weight: 600; flex: 1; }
+.sync-acct-meta { font-size: 11px; color: var(--text-dim); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; margin-right: 4px; }
+.status-active { background: var(--green); }
+.status-inactive { background: var(--text-muted); }
+.client-color-bar { width: 5px; border-radius: 3px; align-self: stretch; flex-shrink: 0; }
+.client-logo {
+    width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 800; color: #fff;
+}
+.client-name-label { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+.client-meta-row { font-size: 12px; color: var(--text-dim); margin-top: 2px; display: flex; gap: 12px; flex-wrap: wrap; }
+.client-meta-row span { display: flex; align-items: center; gap: 4px; }
+.edit-form { display: none; padding: 16px 20px; border-bottom: 1px solid var(--border-light); background: var(--bg-raised); }
+.edit-form.open { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Clients</h1>
+        <p>Each client has its own ad account, approvers, and ad campaigns.</p>
+    </div>
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 380px; gap:24px; align-items:start;">
+
+    <!-- ── Client list ── -->
+    <div style="display:flex; flex-direction:column; gap:16px;">
+        {% if clients %}
+            {% for client in clients %}
+            <div class="client-card">
+                <div class="client-card-header">
+                    <div class="client-color-bar" style="background:{{ client.brand_color or '#1877F2' }};"></div>
+                    <div class="client-logo" style="background:{{ client.brand_color or '#1877F2' }};">
+                        {{ client.name[:1].upper() }}
+                    </div>
+                    <div style="flex:1; min-width:0;">
+                        <div class="client-name-label">{{ client.name }}</div>
+                        <div class="client-meta-row">
+                            {% if client.fb_page_name %}<span>📘 {{ client.fb_page_name }}</span>{% endif %}
+                            {% if client.meta_ad_account_id %}<span>🔑 act_{{ client.meta_ad_account_id }}</span>{% endif %}
+                            {% if client.meta_business_id %}<span>🏢 {{ client.meta_business_id }}</span>{% endif %}
+                        </div>
+                    </div>
+                    <div class="flex gap-2">
+                        {% if active_client and active_client.id == client.id %}
+                        <span class="badge badge-approved">Active</span>
+                        {% else %}
+                        <a href="{{ url_for('select_client', client_id=client.id) }}" class="btn btn-ghost btn-sm">Switch</a>
+                        {% endif %}
+                        <button type="button" class="btn btn-ghost btn-sm"
+                                onclick="toggleEdit('edit-{{ client.id }}')">✏ Edit</button>
+                        <form method="POST" action="/clients/{{ client.id }}/delete"
+                              onsubmit="return confirm('Remove ' + {{ client.name|tojson }} + '? This won\'t delete their ads.')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--red);">Remove</button>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Inline edit form -->
+                <div class="edit-form" id="edit-{{ client.id }}">
+                    <form method="POST" action="/clients/{{ client.id }}/edit">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <div class="form-row" style="margin-bottom:12px;">
+                            <div class="form-group" style="margin:0;">
+                                <label class="form-label">Client Name</label>
+                                <input type="text" name="name" class="form-input" value="{{ client.name }}" required>
+                            </div>
+                            <div class="form-group" style="margin:0;">
+                                <label class="form-label">Facebook Page Name</label>
+                                <input type="text" name="fb_page_name" class="form-input" value="{{ client.fb_page_name|default('', true) }}">
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-bottom:12px;">
+                            <div class="form-group" style="margin:0;">
+                                <label class="form-label">Facebook Page ID
+                                    <span class="form-label-hint">pin a page that doesn't auto-load from API</span>
+                                </label>
+                                <input type="text" name="fb_page_id" class="form-input"
+                                       placeholder="e.g. 123456789012345"
+                                       value="{{ client.fb_page_id or '' }}">
+                                <div class="form-hint">
+                                    Find it at <strong>facebook.com/&lt;pagename&gt;/about</strong> → Page Transparency → Page ID
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-row" style="margin-bottom:12px;">
+                            <div class="form-group" style="margin:0;">
+                                <label class="form-label">Meta Business ID</label>
+                                <input type="text" name="meta_business_id" class="form-input"
+                                       placeholder="e.g. 122633556510973"
+                                       value="{{ client.meta_business_id|default('', true) }}">
+                            </div>
+                            <div class="form-group" style="margin:0;">
+                                <label class="form-label">Ad Account ID <span class="form-label-hint">(without act_)</span></label>
+                                <input type="text" name="meta_ad_account_id" class="form-input"
+                                       placeholder="e.g. 1437020200990817"
+                                       value="{{ client.meta_ad_account_id|default('', true) }}">
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom:12px;">
+                            <label class="form-label">Default Pixel <span class="form-label-hint">(optional — auto-fills on new ads)</span></label>
+                            <div style="display:flex; gap:6px; align-items:center;">
+                                <select name="default_pixel_id" class="form-input pixel-select"
+                                        data-acct="{{ client.meta_ad_account_id }}"
+                                        data-current="{{ client.default_pixel_id or '' }}"
+                                        onfocus="loadPixelDropdown(this)" style="flex:1;">
+                                    <option value="">None</option>
+                                    {% if client.default_pixel_id %}
+                                    <option value="{{ client.default_pixel_id }}" selected>{{ client.default_pixel_id }} (saved)</option>
+                                    {% endif %}
+                                </select>
+                                <button type="button" onclick="loadPixelDropdown(this.previousElementSibling, true)"
+                                        title="Refresh pixels from Meta"
+                                        style="background:none; border:1px solid var(--border); border-radius:var(--radius-sm);
+                                               padding:3px 6px; cursor:pointer; font-size:12px; flex-shrink:0;">↻</button>
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom:12px;">
+                            <label class="form-label">Default URL Parameters <span class="form-label-hint">(optional — auto-fills on new ads)</span></label>
+                            <input type="text" name="default_url_tags" class="form-input"
+                                   placeholder="utm_source=facebook&utm_medium=cpc&utm_campaign={campaign_name}"
+                                   value="{{ client.default_url_tags or '' }}">
+                            <div style="font-size:10px; color:var(--text-muted); margin-top:2px;">
+                                Dynamic: {campaign_name}, {adset_name}, {ad_name}
+                            </div>
+                        </div>
+                        <div class="form-group" style="margin-bottom:12px;">
+                            <label class="form-label">Brand Color</label>
+                            <div class="color-picker-row" id="editColors-{{ client.id }}">
+                                {% for color in color_palette %}
+                                <div class="color-swatch {{ 'selected' if color == client.brand_color }}"
+                                     style="background:{{ color }};"
+                                     onclick="pickColor('{{ client.id }}', '{{ color }}', this)"
+                                     title="{{ color }}"></div>
+                                {% endfor %}
+                            </div>
+                            <input type="hidden" name="brand_color" id="editColorInput-{{ client.id }}" value="{{ client.brand_color }}">
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="submit" class="btn btn-primary btn-sm">Save</button>
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="toggleEdit('edit-{{ client.id }}')">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Footer stats -->
+                <div style="padding:10px 20px 10px 20px; display:flex; gap:20px;">
+                    <a href="{{ url_for('dashboard') }}?client={{ client.id }}"
+                       onclick="selectAndGo(event, '{{ client.id }}')"
+                       style="font-size:13px; color:var(--accent); text-decoration:none; font-weight:500;">
+                        View Ads →
+                    </a>
+                    <a href="{{ url_for('manage_approvers') }}"
+                       onclick="selectAndGo(event, '{{ client.id }}')"
+                       style="font-size:13px; color:var(--text-dim); text-decoration:none;">
+                        Approvers
+                    </a>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div class="card">
+            <div class="empty">
+                <div class="empty-icon">🏢</div>
+                <h3>No clients yet</h3>
+                <p>Add your first client to start creating ads.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ── Right panel: Sync from Meta / Manual add ── -->
+    <div class="card" style="position:sticky; top:calc(56px + 44px + 24px); overflow:hidden;">
+
+        <!-- Personal Facebook token connect -->
+        <div style="padding:14px 16px; border-bottom:1px solid var(--border-light); background:var(--bg-raised);">
+            {% if fb_connected %}
+            <div style="display:flex; align-items:center; gap:10px;">
+                <span style="width:9px;height:9px;background:var(--green);border-radius:50%;flex-shrink:0;"></span>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:13px; font-weight:600;">{{ fb_connected_name }}</div>
+                    <div style="font-size:11px; color:var(--text-dim);">Personal account connected · pages auto-loaded</div>
+                </div>
+                <button onclick="fbDisconnectFromClients()" class="btn btn-ghost btn-sm" style="color:var(--red); font-size:11px;">Disconnect</button>
+            </div>
+            {% else %}
+            <div style="font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.4px;">Connect Your Facebook Account</div>
+            <p style="font-size:12px; color:var(--text-muted); margin-bottom:10px; line-height:1.5;">
+                Paste your personal User Token so we can load <strong>all pages you have access to</strong>.
+            </p>
+            <div style="display:flex; gap:8px;">
+                <input type="text" id="fbTokenInput" class="form-input" style="font-size:12px;"
+                       placeholder="Paste User Access Token…">
+                <button onclick="connectFbToken()" class="btn btn-primary btn-sm" id="fbTokenBtn">Connect</button>
+            </div>
+            <div id="fbTokenMsg" style="font-size:12px; margin-top:6px; display:none;"></div>
+            <div style="margin-top:8px; font-size:11px; color:var(--text-muted);">
+                Get your token:
+                <a href="https://developers.facebook.com/tools/explorer" target="_blank" style="color:var(--accent);">
+                    Graph API Explorer
+                </a>
+                → click <strong>Generate Access Token</strong> → select permissions:
+                <code style="font-size:10px; background:var(--bg-raised); padding:1px 4px; border-radius:3px;">pages_show_list</code>
+                <code style="font-size:10px; background:var(--bg-raised); padding:1px 4px; border-radius:3px;">business_management</code>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- API status bar -->
+        <div id="apiStatusBar" style="padding:8px 16px; font-size:12px; font-weight:600;
+             background:var(--bg-raised); border-bottom:1px solid var(--border-light);
+             display:flex; align-items:center; gap:8px; color:var(--text-dim);">
+            <span id="apiStatusDot" style="width:8px;height:8px;border-radius:50%;background:var(--text-muted);flex-shrink:0;"></span>
+            <span id="apiStatusText">Checking Meta API connection…</span>
+        </div>
+
+        <!-- Tabs -->
+        <div class="panel-tabs">
+            <button class="panel-tab active" onclick="switchTab('sync', event)">🔄 Sync from Meta</button>
+            <button class="panel-tab" onclick="switchTab('manual', event)">＋ Add Manually</button>
+        </div>
+
+        <!-- ── SYNC PANE ── -->
+        <div class="panel-pane active" id="pane-sync">
+            <p style="font-size:13px; color:var(--text-dim); margin-bottom:14px;">
+                Pull your ad accounts directly from Meta Business Manager.
+            </p>
+            <button type="button" class="btn btn-primary" style="width:100%; margin-bottom:16px;"
+                    onclick="syncAccounts()" id="syncBtn">
+                🔄 Load Ad Accounts from Meta
+            </button>
+
+            <div id="syncResults" style="display:none;">
+                <div style="font-size:11px; font-weight:600; text-transform:uppercase;
+                     letter-spacing:0.5px; color:var(--text-muted); margin-bottom:8px;">
+                    Ad Accounts found
+                </div>
+                <div id="syncAccountList"></div>
+            </div>
+
+            <div id="syncError" style="display:none; padding:12px; background:#FEE2E2;
+                 border-radius:var(--radius-sm); font-size:13px; color:#7F1D1D; margin-top:8px;"></div>
+        </div>
+
+        <!-- ── MANUAL PANE ── -->
+        <div class="panel-pane" id="pane-manual">
+            <form method="POST" action="/clients/add" id="addClientForm">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group">
+                    <label class="form-label">Client / Brand Name <span style="color:var(--red);">*</span></label>
+                    <input type="text" name="name" id="manualName" class="form-input"
+                           placeholder="e.g. Politika NYC" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Facebook Page Name</label>
+                    <input type="text" name="fb_page_name" class="form-input"
+                           placeholder="As it appears on Facebook">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Meta Ad Account ID <span class="form-label-hint">(without act_)</span></label>
+                    <input type="text" name="meta_ad_account_id" class="form-input"
+                           placeholder="e.g. 1437020200990817">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Meta Business ID <span class="form-label-hint">(optional)</span></label>
+                    <input type="text" name="meta_business_id" class="form-input"
+                           placeholder="e.g. 122633556510973">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Facebook Page ID <span class="form-label-hint">(optional — pin a specific page)</span></label>
+                    <input type="text" name="fb_page_id" class="form-input"
+                           placeholder="e.g. 123456789012345">
+                    <div class="form-hint">Find on facebook.com/&lt;page&gt;/about → Page Transparency → Page ID</div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Brand Color</label>
+                    <div class="color-picker-row" id="addColorSwatches">
+                        {% for color in color_palette %}
+                        <div class="color-swatch {{ 'selected' if loop.first }}"
+                             style="background:{{ color }};"
+                             onclick="pickColor('add', '{{ color }}', this)"
+                             title="{{ color }}"></div>
+                        {% endfor %}
+                    </div>
+                    <input type="hidden" name="brand_color" id="addColorInput"
+                           value="{{ color_palette[0] }}">
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;">
+                    ＋ Add Client
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Hidden form used by "Add from Meta" buttons -->
+    <form method="POST" action="/clients/add" id="metaImportForm" style="display:none;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="name"                id="mif_name">
+        <input type="hidden" name="meta_ad_account_id"  id="mif_account_id">
+        <input type="hidden" name="meta_business_id"    id="mif_business_id">
+        <input type="hidden" name="fb_page_name"        id="mif_page_name">
+        <input type="hidden" name="brand_color"         id="mif_color">
+    </form>
+
+</div>
+
+<script>
+function toggleEdit(id) {
+    document.getElementById(id).classList.toggle('open');
+}
+
+function pickColor(scope, color, el) {
+    // Deselect all swatches in this scope
+    const container = scope === 'add'
+        ? document.getElementById('addColorSwatches')
+        : document.getElementById('editColors-' + scope);
+    container.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+    el.classList.add('selected');
+    const input = scope === 'add'
+        ? document.getElementById('addColorInput')
+        : document.getElementById('editColorInput-' + scope);
+    input.value = color;
+}
+
+function selectAndGo(e, clientId) {
+    e.preventDefault();
+    const href = e.currentTarget.getAttribute('href');
+    fetch('/clients/' + clientId + '/select').then(() => { window.location = href; });
+}
+
+/* ── Tab switcher ── */
+function switchTab(tab, e) {
+    document.querySelectorAll('.panel-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel-pane').forEach(p => p.classList.remove('active'));
+    document.getElementById('pane-' + tab).classList.add('active');
+    if (e && e.currentTarget) e.currentTarget.classList.add('active');
+}
+
+/* ── Colour palette ── */
+const PALETTE = [
+    '#1877F2','#E41E3F','#FF6900','#FFBA00','#36A420',
+    '#00B8D9','#6554C0','#FF5630','#00875A','#253858'
+];
+
+/* ── API status check on load ── */
+(function checkApiStatus() {
+    const dot  = document.getElementById('apiStatusDot');
+    const text = document.getElementById('apiStatusText');
+    fetch('/api/meta/status')
+        .then(r => r.json())
+        .then(d => {
+            if (d.ok) {
+                dot.style.background = 'var(--green)';
+                text.textContent = 'Meta API connected — ' + (d.name || 'token valid');
+                text.style.color = 'var(--green)';
+            } else {
+                dot.style.background = 'var(--red)';
+                text.textContent = 'Meta API error: ' + (d.error || 'check token');
+                text.style.color = 'var(--red)';
+            }
+        })
+        .catch(() => {
+            dot.style.background = 'var(--red)';
+            text.textContent = 'Could not reach Meta API';
+            text.style.color = 'var(--red)';
+        });
+})();
+
+/* ── Sync ad accounts from Meta ── */
+function syncAccounts() {
+    const btn  = document.getElementById('syncBtn');
+    const res  = document.getElementById('syncResults');
+    const list = document.getElementById('syncAccountList');
+    const err  = document.getElementById('syncError');
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Loading…';
+    res.style.display = 'none';
+    err.style.display = 'none';
+
+    fetch('/api/meta/adaccounts')
+        .then(r => r.json())
+        .then(d => {
+            btn.disabled = false;
+            btn.textContent = '🔄 Load Ad Accounts from Meta';
+
+            if (d.error) {
+                err.textContent = d.error;
+                err.style.display = 'block';
+                return;
+            }
+
+            const accounts = d.accounts || [];
+            if (!accounts.length) {
+                err.textContent = 'No ad accounts found for this token.';
+                err.style.display = 'block';
+                return;
+            }
+
+            list.innerHTML = '';
+            accounts.forEach((acct, i) => {
+                const color = PALETTE[i % PALETTE.length];
+                const initial = (acct.name || '?')[0].toUpperCase();
+                const statusClass = acct.account_status === 1 ? 'status-active' : 'status-inactive';
+                const statusLabel = acct.account_status === 1 ? 'Active' : 'Inactive';
+                const safeName = acct.name.replace(/'/g, "\\'");
+
+                const row = document.createElement('div');
+                row.className = 'sync-account-row';
+                row.innerHTML = `
+                    <div class="sync-acct-avatar" style="background:${color}">${initial}</div>
+                    <div style="flex:1; min-width:0;">
+                        <div class="sync-acct-name">${acct.name}</div>
+                        <div class="sync-acct-meta">
+                            <span class="status-dot ${statusClass}"></span>${statusLabel}
+                            &nbsp;·&nbsp; act_${acct.id}
+                        </div>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm"
+                            onclick="addFromMeta('${acct.id}','${safeName}','${acct.business_id || ''}','${color}')">
+                        Add
+                    </button>`;
+                list.appendChild(row);
+            });
+
+            res.style.display = 'block';
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.textContent = '🔄 Load Ad Accounts from Meta';
+            err.textContent = 'Network error: ' + e.message;
+            err.style.display = 'block';
+        });
+}
+
+function addFromMeta(accountId, name, businessId, color) {
+    document.getElementById('mif_name').value        = name;
+    document.getElementById('mif_account_id').value  = accountId;
+    document.getElementById('mif_business_id').value = businessId;
+    document.getElementById('mif_page_name').value   = '';
+    document.getElementById('mif_color').value       = color;
+    document.getElementById('metaImportForm').submit();
+}
+
+/* ── Personal token connect ── */
+function connectFbToken() {
+    const token = (document.getElementById('fbTokenInput').value || '').trim();
+    const btn   = document.getElementById('fbTokenBtn');
+    const msg   = document.getElementById('fbTokenMsg');
+    if (!token) return;
+
+    btn.disabled    = true;
+    btn.textContent = 'Verifying…';
+    msg.style.display = 'none';
+
+    fetch('/auth/fb/token', {
+        method:  'POST',
+        headers: {'Content-Type': 'application/json'},
+        body:    JSON.stringify({ token })
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.ok) {
+            location.reload();
+        } else {
+            msg.textContent      = '✗ ' + (d.error || 'Invalid token');
+            msg.style.color      = 'var(--red)';
+            msg.style.display    = 'block';
+            btn.disabled         = false;
+            btn.textContent      = 'Connect';
+        }
+    })
+    .catch(() => {
+        msg.textContent   = '✗ Network error';
+        msg.style.color   = 'var(--red)';
+        msg.style.display = 'block';
+        btn.disabled      = false;
+        btn.textContent   = 'Connect';
+    });
+}
+
+function fbDisconnectFromClients() {
+    fetch('/auth/fb/disconnect', { method: 'POST' }).then(() => location.reload());
+}
+
+/* Allow pressing Enter in token field */
+document.getElementById('fbTokenInput')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') connectFbToken();
+});
+
+/* ── Pixel dropdown loader ─────────────────────────────────────── */
+const _pixelCache = {};
+function loadPixelDropdown(sel, force) {
+    const acct = sel.dataset.acct;
+    if (!acct) { return; }
+    const current = sel.dataset.current || '';
+
+    // Use cache unless forced
+    if (!force && _pixelCache[acct]) {
+        _fillPixelOpts(sel, _pixelCache[acct], current);
+        return;
+    }
+
+    // Show loading
+    sel.innerHTML = '<option value="">Loading pixels…</option>';
+    fetch('/api/meta/pixels?acct=' + acct)
+        .then(r => r.json())
+        .then(d => {
+            const pixels = d.data || [];
+            _pixelCache[acct] = pixels;
+            _fillPixelOpts(sel, pixels, current);
+        })
+        .catch(() => {
+            sel.innerHTML = '<option value="">Failed to load</option>';
+        });
+}
+function _fillPixelOpts(sel, pixels, current) {
+    sel.innerHTML = '<option value="">None</option>';
+    pixels.forEach(p => {
+        const o = document.createElement('option');
+        o.value = p.id;
+        o.textContent = p.name + ' (' + p.id + ')';
+        if (p.id === current) o.selected = true;
+        sel.appendChild(o);
+    });
+    // If current value wasn't in the list, add it
+    if (current && !sel.value) {
+        const o = document.createElement('option');
+        o.value = current;
+        o.textContent = current + ' (not found)';
+        o.selected = true;
+        sel.appendChild(o);
+    }
+}
+</script>
+{% endblock %}

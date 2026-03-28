@@ -1,0 +1,5 @@
+pymysql
+python-dotenv
+requests
+openpyxl
+playwright

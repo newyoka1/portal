@@ -1,0 +1,13 @@
+{% extends "queue.html" %}
+{% block title %}Rejected Ads{% endblock %}
+
+{% block extra_head %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-switch to Rejected tab
+    const rejectedTab = document.querySelector('.queue-tab[data-tab="rejected"]');
+    if (rejectedTab) rejectedTab.click();
+});
+</script>
+{% endblock %}

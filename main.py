@@ -1,5 +1,5 @@
 """
-Email Approval — FastAPI entry point.
+Politika Portal — FastAPI entry point.
 Run with: uvicorn main:app --reload
 """
 import logging
@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from starlette.middleware.wsgi import WSGIMiddleware
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -38,6 +39,16 @@ app.include_router(comments.router)
 app.include_router(integrations.router)
 app.include_router(fb_receipts.router)
 app.include_router(voter_pipeline.router)
+
+# ---------------------------------------------------------------------------
+# Mount FB Ad Approval Flask app at /fb/
+# ---------------------------------------------------------------------------
+try:
+    from fb_ad_approval.app import app as flask_app
+    app.mount("/fb", WSGIMiddleware(flask_app))
+    logging.info("FB Ad Approval Flask app mounted at /fb/")
+except Exception as exc:
+    logging.warning("Could not mount FB Ad Approval: %s", exc)
 
 
 # ---------------------------------------------------------------------------

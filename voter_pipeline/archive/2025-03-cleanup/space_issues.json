@@ -1,0 +1,1363 @@
+[
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "First Name",
+    "new_name": "First_Name"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "Last Name",
+    "new_name": "Last_Name"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "Street Address",
+    "new_name": "Street_Address"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "Postal Code",
+    "new_name": "Postal_Code"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "IP State/Region",
+    "new_name": "IP_State/Region"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "IP City",
+    "new_name": "IP_City"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "voter countyName",
+    "new_name": "voter_countyName"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "voter rcity",
+    "new_name": "voter_rcity"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "voter rstate",
+    "new_name": "voter_rstate"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "voter rstreet",
+    "new_name": "voter_rstreet"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "voter rzip5",
+    "new_name": "voter_rzip5"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "voter townName",
+    "new_name": "voter_townName"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts",
+    "column": "County Match by Zip Code",
+    "new_name": "County_Match_by_Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "First Name",
+    "new_name": "First_Name"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "Last Name",
+    "new_name": "Last_Name"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "Street Address",
+    "new_name": "Street_Address"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "Postal Code",
+    "new_name": "Postal_Code"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "IP State/Region",
+    "new_name": "IP_State/Region"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "IP City",
+    "new_name": "IP_City"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "voter countyName",
+    "new_name": "voter_countyName"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "voter rcity",
+    "new_name": "voter_rcity"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "voter rstate",
+    "new_name": "voter_rstate"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "voter rstreet",
+    "new_name": "voter_rstreet"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "voter rzip5",
+    "new_name": "voter_rzip5"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "voter townName",
+    "new_name": "voter_townName"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "County Match by Zip Code",
+    "new_name": "County_Match_by_Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "City to County Match",
+    "new_name": "City_to_County_Match"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "hubspot_contacts_copy",
+    "column": "Unified County",
+    "new_name": "Unified_County"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "SWIS Code",
+    "new_name": "SWIS_Code"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "Type Code",
+    "new_name": "Type_Code"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "County Name",
+    "new_name": "County_Name"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "City Name",
+    "new_name": "City_Name"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "Town Name",
+    "new_name": "Town_Name"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "Village Name",
+    "new_name": "Village_Name"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "2nd County",
+    "new_name": "2nd_County"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "GNIS ID",
+    "new_name": "GNIS_ID"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "State FIPS",
+    "new_name": "State_FIPS"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "County Code",
+    "new_name": "County_Code"
+  },
+  {
+    "type": "column",
+    "database": "county_matching_new",
+    "table": "nys_county_local",
+    "column": "County FIPS",
+    "new_name": "County_FIPS"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "nm_housefile",
+    "column": "First Name",
+    "new_name": "First_Name"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "nm_housefile",
+    "column": "Middle Name",
+    "new_name": "Middle_Name"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "nm_housefile",
+    "column": "Phone (Mobile)",
+    "new_name": "Phone_(Mobile)"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "nm_housefile",
+    "column": "Phone (Office)",
+    "new_name": "Phone_(Office)"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "nm_housefile",
+    "column": "Street Address 1",
+    "new_name": "Street_Address_1"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "nm_housefile",
+    "column": "Street Address 2",
+    "new_name": "Street_Address_2"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "nm_housefile",
+    "column": "Zip Code",
+    "new_name": "Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "nm_housefile",
+    "column": "Donor Tags",
+    "new_name": "Donor_Tags"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "nm_housefile",
+    "column": "IP Address",
+    "new_name": "IP_Address"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "nm_housefile",
+    "column": "Phone Number",
+    "new_name": "Phone_Number"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "optimize",
+    "column": "Donor Tags",
+    "new_name": "Donor_Tags"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "optimize",
+    "column": "IP Address",
+    "new_name": "IP_Address"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "text_targets_nm_housefile",
+    "column": "First Name",
+    "new_name": "First_Name"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "text_targets_nm_housefile",
+    "column": "Middle Name",
+    "new_name": "Middle_Name"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "text_targets_nm_housefile",
+    "column": "Phone (Mobile)",
+    "new_name": "Phone_(Mobile)"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "text_targets_nm_housefile",
+    "column": "Phone (Office)",
+    "new_name": "Phone_(Office)"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "text_targets_nm_housefile",
+    "column": "Street Address 1",
+    "new_name": "Street_Address_1"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "text_targets_nm_housefile",
+    "column": "Street Address 2",
+    "new_name": "Street_Address_2"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "text_targets_nm_housefile",
+    "column": "Zip Code",
+    "new_name": "Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "text_targets_nm_housefile",
+    "column": "Donor Tags",
+    "new_name": "Donor_Tags"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "text_targets_nm_housefile",
+    "column": "IP Address",
+    "new_name": "IP_Address"
+  },
+  {
+    "type": "column",
+    "database": "housefilenm",
+    "table": "text_targets_nm_housefile",
+    "column": "Phone Number",
+    "new_name": "Phone_Number"
+  },
+  {
+    "type": "table",
+    "database": "politik1_fec",
+    "table": "committees all",
+    "new_name": "committees_all"
+  },
+  {
+    "type": "table",
+    "database": "politik1_fec",
+    "table": "county codes",
+    "new_name": "county_codes"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "all_diminutives",
+    "column": "Main Mane",
+    "new_name": "Main_Mane"
+  },
+  {
+    "type": "table",
+    "database": "politik1_nydata",
+    "table": "county codes",
+    "new_name": "county_codes"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Record ID",
+    "new_name": "Record_ID"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "First Name",
+    "new_name": "First_Name"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Last Name",
+    "new_name": "Last_Name"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Email Domain",
+    "new_name": "Email_Domain"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Marketing emails bounced",
+    "new_name": "Marketing_emails_bounced"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Email hard bounce reason",
+    "new_name": "Email_hard_bounce_reason"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Phone Number",
+    "new_name": "Phone_Number"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Marketing contact status",
+    "new_name": "Marketing_contact_status"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Create Date",
+    "new_name": "Create_Date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Unsubscribed from all email",
+    "new_name": "Unsubscribed_from_all_email"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Postal Code",
+    "new_name": "Postal_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "IP State Code/Region Code",
+    "new_name": "IP_State_Code/Region_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "IP State/Region",
+    "new_name": "IP_State/Region"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Mobile Phone Number",
+    "new_name": "Mobile_Phone_Number"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Phone - Other",
+    "new_name": "Phone_-_Other"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Phone - Work",
+    "new_name": "Phone_-_Work"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Member email",
+    "new_name": "Member_email"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Street Address",
+    "new_name": "Street_Address"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Legacy Lists",
+    "new_name": "Legacy_Lists"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Last Activity Date",
+    "new_name": "Last_Activity_Date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Last Engagement Date",
+    "new_name": "Last_Engagement_Date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Marketing emails delivered",
+    "new_name": "Marketing_emails_delivered"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Opted out of email: Marketing Information",
+    "new_name": "Opted_out_of_email:_Marketing_Information"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Number of Associated Deals",
+    "new_name": "Number_of_Associated_Deals"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Invalid email address",
+    "new_name": "Invalid_email_address"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Marketing emails opened",
+    "new_name": "Marketing_emails_opened"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Last marketing email open date",
+    "new_name": "Last_marketing_email_open_date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "voter sboeid",
+    "new_name": "voter_sboeid"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Sends Since Last Engagement",
+    "new_name": "Sends_Since_Last_Engagement"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Marketing emails clicked",
+    "new_name": "Marketing_emails_clicked"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Marketing emails replied",
+    "new_name": "Marketing_emails_replied"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Marketing email confirmation status",
+    "new_name": "Marketing_email_confirmation_status"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Last marketing email click date",
+    "new_name": "Last_marketing_email_click_date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Last marketing email name",
+    "new_name": "Last_marketing_email_name"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Last marketing email reply date",
+    "new_name": "Last_marketing_email_reply_date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Last marketing email send date",
+    "new_name": "Last_marketing_email_send_date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "IP City",
+    "new_name": "IP_City"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "IP Country",
+    "new_name": "IP_Country"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "IP Country Code",
+    "new_name": "IP_Country_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "IP Timezone",
+    "new_name": "IP_Timezone"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Number of Form Submissions",
+    "new_name": "Number_of_Form_Submissions"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Facebook click id",
+    "new_name": "Facebook_click_id"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Original Traffic Source",
+    "new_name": "Original_Traffic_Source"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Original Traffic Source Drill-Down 1",
+    "new_name": "Original_Traffic_Source_Drill-Down_1"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Original Traffic Source Drill-Down 2",
+    "new_name": "Original_Traffic_Source_Drill-Down_2"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Latest Traffic Source",
+    "new_name": "Latest_Traffic_Source"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Latest Traffic Source Date",
+    "new_name": "Latest_Traffic_Source_Date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Latest Traffic Source Drill-Down 1",
+    "new_name": "Latest_Traffic_Source_Drill-Down_1"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Latest Traffic Source Drill-Down 2",
+    "new_name": "Latest_Traffic_Source_Drill-Down_2"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "First Referring Site",
+    "new_name": "First_Referring_Site"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "First Page Seen",
+    "new_name": "First_Page_Seen"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Average Pageviews",
+    "new_name": "Average_Pageviews"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Total Donated to Date",
+    "new_name": "Total_Donated_to_Date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "SD Match by Zip Code",
+    "new_name": "SD_Match_by_Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "County Match by City",
+    "new_name": "County_Match_by_City"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "County Match by Zip Code",
+    "new_name": "County_Match_by_Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "CD Match by Zip Code",
+    "new_name": "CD_Match_by_Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "AD Match by Zip Code",
+    "new_name": "AD_Match_by_Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Address Line 2",
+    "new_name": "Address_Line_2"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Total Revenue",
+    "new_name": "Total_Revenue"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Petition Signed",
+    "new_name": "Petition_Signed"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Additional email addresses",
+    "new_name": "Additional_email_addresses"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Associated Email IDs",
+    "new_name": "Associated_Email_IDs"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "hubspot_contacts",
+    "column": "Associated Deal IDs",
+    "new_name": "Associated_Deal_IDs"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "name_short_list",
+    "column": "Main Mane",
+    "new_name": "Main_Mane"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Record ID",
+    "new_name": "Record_ID"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "First Name",
+    "new_name": "First_Name"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Last Name",
+    "new_name": "Last_Name"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Email Domain",
+    "new_name": "Email_Domain"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Marketing emails bounced",
+    "new_name": "Marketing_emails_bounced"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Email hard bounce reason",
+    "new_name": "Email_hard_bounce_reason"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Phone Number",
+    "new_name": "Phone_Number"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Marketing contact status",
+    "new_name": "Marketing_contact_status"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Create Date",
+    "new_name": "Create_Date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Unsubscribed from all email",
+    "new_name": "Unsubscribed_from_all_email"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Postal Code",
+    "new_name": "Postal_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "IP State Code/Region Code",
+    "new_name": "IP_State_Code/Region_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "IP State/Region",
+    "new_name": "IP_State/Region"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Mobile Phone Number",
+    "new_name": "Mobile_Phone_Number"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Phone - Other",
+    "new_name": "Phone_-_Other"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Phone - Work",
+    "new_name": "Phone_-_Work"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Associated Email IDs",
+    "new_name": "Associated_Email_IDs"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Member email",
+    "new_name": "Member_email"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Street Address",
+    "new_name": "Street_Address"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Legacy Lists",
+    "new_name": "Legacy_Lists"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Last Activity Date",
+    "new_name": "Last_Activity_Date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Last Engagement Date",
+    "new_name": "Last_Engagement_Date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Marketing emails delivered",
+    "new_name": "Marketing_emails_delivered"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Opted out of email: Marketing Information",
+    "new_name": "Opted_out_of_email:_Marketing_Information"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Number of Associated Deals",
+    "new_name": "Number_of_Associated_Deals"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Invalid email address",
+    "new_name": "Invalid_email_address"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Marketing emails opened",
+    "new_name": "Marketing_emails_opened"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Last marketing email open date",
+    "new_name": "Last_marketing_email_open_date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "voter sboeid",
+    "new_name": "voter_sboeid"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Sends Since Last Engagement",
+    "new_name": "Sends_Since_Last_Engagement"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Marketing emails clicked",
+    "new_name": "Marketing_emails_clicked"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Marketing emails replied",
+    "new_name": "Marketing_emails_replied"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Marketing email confirmation status",
+    "new_name": "Marketing_email_confirmation_status"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Last marketing email click date",
+    "new_name": "Last_marketing_email_click_date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Last marketing email name",
+    "new_name": "Last_marketing_email_name"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Last marketing email reply date",
+    "new_name": "Last_marketing_email_reply_date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Last marketing email send date",
+    "new_name": "Last_marketing_email_send_date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "IP City",
+    "new_name": "IP_City"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "IP Country",
+    "new_name": "IP_Country"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "IP Country Code",
+    "new_name": "IP_Country_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "IP Timezone",
+    "new_name": "IP_Timezone"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Number of Form Submissions",
+    "new_name": "Number_of_Form_Submissions"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Facebook click id",
+    "new_name": "Facebook_click_id"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Original Traffic Source",
+    "new_name": "Original_Traffic_Source"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Original Traffic Source Drill-Down 1",
+    "new_name": "Original_Traffic_Source_Drill-Down_1"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Original Traffic Source Drill-Down 2",
+    "new_name": "Original_Traffic_Source_Drill-Down_2"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Latest Traffic Source",
+    "new_name": "Latest_Traffic_Source"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Latest Traffic Source Date",
+    "new_name": "Latest_Traffic_Source_Date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Latest Traffic Source Drill-Down 1",
+    "new_name": "Latest_Traffic_Source_Drill-Down_1"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Latest Traffic Source Drill-Down 2",
+    "new_name": "Latest_Traffic_Source_Drill-Down_2"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "First Referring Site",
+    "new_name": "First_Referring_Site"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "First Page Seen",
+    "new_name": "First_Page_Seen"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Average Pageviews",
+    "new_name": "Average_Pageviews"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Total Donated to Date",
+    "new_name": "Total_Donated_to_Date"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "SD Match by Zip Code",
+    "new_name": "SD_Match_by_Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "County Match by City",
+    "new_name": "County_Match_by_City"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "County Match by Zip Code",
+    "new_name": "County_Match_by_Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "CD Match by Zip Code",
+    "new_name": "CD_Match_by_Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "AD Match by Zip Code",
+    "new_name": "AD_Match_by_Zip_Code"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Address Line 2",
+    "new_name": "Address_Line_2"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Total Revenue",
+    "new_name": "Total_Revenue"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Petition Signed",
+    "new_name": "Petition_Signed"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Associated Deal IDs",
+    "new_name": "Associated_Deal_IDs"
+  },
+  {
+    "type": "column",
+    "database": "politik1_nydata",
+    "table": "staging_for_export_to_mysql_text",
+    "column": "Additional email addresses",
+    "new_name": "Additional_email_addresses"
+  },
+  {
+    "type": "table",
+    "database": "politik1_nydata",
+    "table": "town + fips",
+    "new_name": "town_+_fips"
+  }
+]
