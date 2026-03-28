@@ -1,12 +1,13 @@
 """
 Gmail email service for sending receipts to clients.
 
-Supports two auth modes:
-1. Gmail App Password (simpler — works with any Gmail/Google Workspace account)
-2. Google Service Account with domain-wide delegation (for Google Workspace orgs)
+Uses the Gmail API with service account domain-wide delegation.
+Falls back to SMTP if Gmail API credentials are not available.
 """
 
+import base64
 import logging
+import os
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -18,6 +19,29 @@ from src.config import GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD, NOTIFY_EMAIL
 
 logger = logging.getLogger(__name__)
 
+GMAIL_API_SCOPES = ["https://mail.google.com/"]
+
+
+def _get_gmail_api_service():
+    """Build a Gmail API service using the portal's GCP credentials."""
+    try:
+        from src.config import GOOGLE_SERVICE_ACCOUNT_FILE
+        from google.oauth2 import service_account
+        from googleapiclient.discovery import build
+
+        sender = GMAIL_SENDER_EMAIL
+        if not sender:
+            return None
+
+        creds = service_account.Credentials.from_service_account_file(
+            GOOGLE_SERVICE_ACCOUNT_FILE, scopes=GMAIL_API_SCOPES
+        ).with_subject(sender)
+
+        return build("gmail", "v1", credentials=creds, cache_discovery=False)
+    except Exception as e:
+        logger.debug("Gmail API not available: %s", e)
+        return None
+
 
 class EmailService:
     def __init__(
@@ -27,6 +51,13 @@ class EmailService:
     ):
         self.sender_email = sender_email
         self.app_password = app_password
+        self._gmail_service = None
+
+    def _get_service(self):
+        """Lazy-load Gmail API service."""
+        if self._gmail_service is None:
+            self._gmail_service = _get_gmail_api_service()
+        return self._gmail_service
 
     def _build_message(
         self,
@@ -43,17 +74,16 @@ class EmailService:
         if bcc:
             msg["Bcc"] = bcc
 
-        # Collect PDF attachments first so we know what we're sending
+        # Collect PDF attachments
         pdf_attachments: list[Path] = []
         for r in receipts:
             pdf_path = r.get("pdf_path")
             if pdf_path and Path(pdf_path).exists():
                 pdf_attachments.append(Path(pdf_path))
 
-        # Build subject using first PDF date or fallback to spend date
+        # Build subject
         if subject is None:
             if pdf_attachments:
-                # e.g. "2026-03-13T15-52 Transaction #..." -> grab date part
                 first_name = pdf_attachments[0].name
                 date_part = first_name.split("T")[0] if "T" in first_name else \
                     receipts[0].get("date", "recent") if receipts else "recent"
@@ -62,11 +92,10 @@ class EmailService:
             subject = f"Facebook Ads Receipt — {client_name} ({date_part})"
         msg["Subject"] = subject
 
-        # ── Email body ────────────────────────────────────────────────────
+        # ── Email body ──
         lines = [f"Hi {client_name},\n"]
 
         if pdf_attachments:
-            # Real Facebook PDFs attached — list them cleanly
             lines.append(
                 f"Please find your Facebook Ads receipt(s) attached "
                 f"({len(pdf_attachments)} PDF{'s' if len(pdf_attachments) > 1 else ''}).\n"
@@ -74,10 +103,9 @@ class EmailService:
             lines.append("Attached receipts:")
             lines.append("-" * 40)
             for p in pdf_attachments:
-                lines.append(f"  • {p.name}")
+                lines.append(f"  - {p.name}")
             lines.append("-" * 40)
         else:
-            # No real PDFs — show spend summary from Insights API
             lines.append("Please find your Facebook Ads spend summary below.\n")
             lines.append("Spend summary:")
             lines.append("-" * 40)
@@ -89,15 +117,10 @@ class EmailService:
                 impressions = r.get("impressions", "")
                 clicks = r.get("clicks", "")
                 extra = f"  |  Impr: {impressions}  Clicks: {clicks}" if impressions else ""
-                lines.append(f"  • {date}  |  ${amount:.2f} USD{extra}")
+                lines.append(f"  - {date}  |  ${amount:.2f} USD{extra}")
             lines.append("-" * 40)
             lines.append(f"  Total spend: ${total:.2f} USD")
-            lines.append(
-                "\nNote: Billing receipts were not available for download. "
-                "The summary above reflects daily spend data from Meta Ads Manager."
-            )
 
-        # Ad images section
         if ad_images:
             lines.append(f"\nAd creatives ({len(ad_images)} image(s) attached below):")
 
@@ -127,6 +150,37 @@ class EmailService:
 
         return msg
 
+    def _send_via_gmail_api(self, msg: MIMEMultipart) -> bool:
+        """Send email using Gmail API (works on Railway — no SMTP needed)."""
+        service = self._get_service()
+        if not service:
+            return False
+
+        try:
+            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+            service.users().messages().send(
+                userId="me", body={"raw": raw}
+            ).execute()
+            return True
+        except Exception as e:
+            logger.error("Gmail API send failed: %s", e)
+            return False
+
+    def _send_via_smtp(self, msg: MIMEMultipart) -> bool:
+        """Send email using SMTP (local dev fallback)."""
+        if not self.app_password:
+            logger.error("No GMAIL_APP_PASSWORD set — cannot send via SMTP")
+            return False
+        try:
+            with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
+                server.starttls()
+                server.login(self.sender_email, self.app_password)
+                server.send_message(msg)
+            return True
+        except Exception as e:
+            logger.error("SMTP send failed: %s", e)
+            return False
+
     def send_receipt(
         self,
         to_email: str,
@@ -136,39 +190,32 @@ class EmailService:
         ad_images: list[Path] | None = None,
         bcc: str | None = None,
     ) -> bool:
-        """Send receipt email with optional PDF attachments and ad images."""
+        """Send receipt email — tries Gmail API first, falls back to SMTP."""
         if not receipts:
             logger.info("No receipts to send for %s (%s)", client_name, to_email)
             return False
 
         msg = self._build_message(to_email, client_name, receipts, subject, ad_images, bcc)
 
-        try:
-            logger.info("Connecting to smtp.gmail.com:587...")
-            with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
-                server.starttls()
-                logger.info("Logging in as %s...", self.sender_email)
-                server.login(self.sender_email, self.app_password)
-                logger.info("Sending email to %s...", to_email)
-                server.send_message(msg)
-
-            logger.info(
-                "Sent %d receipt(s) to %s <%s>",
-                len(receipts),
-                client_name,
-                to_email,
-            )
+        # Try Gmail API first (works on Railway)
+        logger.info("Sending email to %s via Gmail API...", to_email)
+        if self._send_via_gmail_api(msg):
+            logger.info("Sent %d receipt(s) to %s <%s> via Gmail API",
+                        len(receipts), client_name, to_email)
             return True
 
-        except smtplib.SMTPAuthenticationError as e:
-            logger.error("SMTP auth failed for %s: %s — check GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD", self.sender_email, e)
-            return False
-        except Exception as e:
-            logger.error("Failed to send email to %s: %s", to_email, e)
-            return False
+        # Fall back to SMTP (works locally)
+        logger.info("Gmail API unavailable, trying SMTP for %s...", to_email)
+        if self._send_via_smtp(msg):
+            logger.info("Sent %d receipt(s) to %s <%s> via SMTP",
+                        len(receipts), client_name, to_email)
+            return True
+
+        logger.error("All send methods failed for %s <%s>", client_name, to_email)
+        return False
 
     def send_failure_notification(self, client_name: str, ad_account_id: str, reason: str, notify_email: str | None = None) -> None:
-        """Notify the admin that a receipt could not be sent for a client."""
+        """Notify the admin that a receipt could not be sent."""
         to = notify_email or NOTIFY_EMAIL
         msg = MIMEMultipart()
         msg["From"] = self.sender_email
@@ -180,11 +227,10 @@ class EmailService:
             "No email was sent to the client. Please download and send the receipt manually."
         )
         msg.attach(MIMEText(body, "plain"))
-        try:
-            with smtplib.SMTP("smtp.gmail.com", 587) as server:
-                server.starttls()
-                server.login(self.sender_email, self.app_password)
-                server.send_message(msg)
+
+        if self._send_via_gmail_api(msg):
             logger.info("Sent failure notification to %s for %s", to, client_name)
-        except Exception as e:
-            logger.error("Could not send failure notification: %s", e)
+        elif self._send_via_smtp(msg):
+            logger.info("Sent failure notification to %s for %s (SMTP)", to, client_name)
+        else:
+            logger.error("Could not send failure notification for %s", client_name)
