@@ -45,10 +45,6 @@
               <input class="form-check-input" type="checkbox" name="resend" value="1" id="resend">
               <label class="form-check-label" for="resend">Resend (ignore sent log)</label>
             </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="no_fb_pdfs" value="1" id="noFbPdfs" checked>
-              <label class="form-check-label" for="noFbPdfs">Skip Facebook PDF download</label>
-            </div>
           </div>
           <div class="d-flex gap-2">
             <button type="submit" class="btn btn-primary" id="runBtn">
@@ -111,7 +107,6 @@
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-play-fill me-1"></i>Run for Client
           </button>
-          <input type="hidden" name="no_fb_pdfs" value="1">
           {% else %}
           <div class="alert alert-info mb-0">No clients loaded. Check the Clients tab or Google Sheets configuration.</div>
           {% endif %}

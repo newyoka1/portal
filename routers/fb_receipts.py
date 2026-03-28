@@ -94,7 +94,6 @@ async def fb_run_stream(
     end_date:   str  = Form(...),
     dry_run:    str  = Form(""),
     resend:     str  = Form(""),
-    no_fb_pdfs: str  = Form(""),
     account_id: str  = Form(""),
     current_user: User = Depends(require_user),
 ):
@@ -107,7 +106,6 @@ async def fb_run_stream(
     ]
     if dry_run:    args.append("--dry-run")
     if resend:     args.append("--resend")
-    if no_fb_pdfs: args.append("--no-fb-pdfs")
     if account_id: args += ["--account-id", account_id]
 
     return StreamingResponse(
@@ -232,7 +230,7 @@ def _run_scheduled_receipts():
             result = subprocess.run(
                 [sys.executable, str(FB_DIR / "main.py"),
                  "--start-date", start, "--end-date", end,
-                 "--account-id", account_id, "--no-fb-pdfs"],
+                 "--account-id", account_id],
                 cwd=str(FB_DIR),
                 capture_output=True, text=True, timeout=300,
             )

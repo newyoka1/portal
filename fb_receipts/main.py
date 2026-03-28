@@ -2,13 +2,12 @@
 Entry point: run once or start the scheduler.
 
 Usage:
-    python main.py                          # Run once (last 35 days, with real FB PDFs)
+    python main.py                          # Run once (last 7 days)
     python main.py --since-last-send        # Run for period since last successful send
     python main.py --start-date 2026-03-01  # Explicit start date
     python main.py --end-date   2026-03-17  # Explicit end date (default: today)
     python main.py --dry-run                # Fetch + log but don't send emails
-    python main.py --no-fb-pdfs             # Skip FB browser download, use generated PDFs
-    python main.py --login                  # Save Facebook session (run before first use)
+    python main.py --resend                 # Resend even if already sent for this period
     python main.py --schedule               # Start weekly scheduler (runs in foreground)
     python main.py --list-accounts          # List all ad accounts across your businesses
 """
@@ -72,29 +71,8 @@ def _save_last_run(start_date: datetime, end_date: datetime) -> None:
 
 # ── Core runner ───────────────────────────────────────────────────────────────
 
-def fb_login():
-    """Open a browser for the user to log in and save the session."""
-    from playwright.sync_api import sync_playwright
-    from src.facebook_downloader import SESSION_FILE
-
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False, slow_mo=50)
-        ctx = browser.new_context()
-        page = ctx.new_page()
-        page.goto("https://www.facebook.com/login")
-        print("\n" + "=" * 60)
-        print("  Log into Facebook in the browser window that just opened.")
-        print("  Once fully logged in, come back here and press ENTER.")
-        print("=" * 60 + "\n")
-        input("Press ENTER after logging in > ")
-        ctx.storage_state(path=str(SESSION_FILE))
-        browser.close()
-    print(f"Session saved to {SESSION_FILE}. You can now run the script normally.")
-
-
 def run_once(
     dry_run: bool = False,
-    use_fb_pdfs: bool = True,
     start_date: datetime | None = None,
     end_date: datetime | None = None,
     since_last_send: bool = False,
@@ -142,7 +120,6 @@ def run_once(
         start_date=start_date,
         end_date=end_date,
         dry_run=dry_run,
-        use_fb_pdfs=use_fb_pdfs,
         resend=resend,
         account_id=account_id,
         activity=activity,
@@ -527,16 +504,6 @@ Examples:
         help="Show the last-run record (last_run.json)",
     )
     parser.add_argument(
-        "--login",
-        action="store_true",
-        help="Open browser to log into Facebook and save session",
-    )
-    parser.add_argument(
-        "--no-fb-pdfs",
-        action="store_true",
-        help="Skip real Facebook PDF download; use generated PDFs instead",
-    )
-    parser.add_argument(
         "--resend",
         action="store_true",
         help="Ignore sent_log.json and resend receipts even if already sent",
@@ -610,8 +577,6 @@ Examples:
         setup_local_server()
     elif args.register_protocol:
         register_protocol()
-    elif args.login:
-        fb_login()
     elif args.list_accounts:
         list_accounts()
     elif args.last_run:
@@ -627,7 +592,6 @@ Examples:
     else:
         run_once(
             dry_run=args.dry_run,
-            use_fb_pdfs=not args.no_fb_pdfs,
             start_date=start_date,
             end_date=end_date,
             since_last_send=args.since_last_send,

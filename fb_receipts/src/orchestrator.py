@@ -17,7 +17,6 @@ from src.meta_client import MetaClient
 from src.db_client import DbClient
 from src.email_service import EmailService
 from src.pdf_generator import generate_receipt_pdf
-from src.facebook_downloader import download_receipts_for_account
 from src.config import get_run_dir, NOTIFY_EMAIL
 from src.activity_logger import ActivityRun
 
@@ -94,7 +93,6 @@ class Orchestrator:
         start_date: datetime | None = None,
         end_date: datetime | None = None,
         dry_run: bool = False,
-        use_fb_pdfs: bool = True,
         resend: bool = False,
         account_id: str | None = None,
         activity: ActivityRun | None = None,
@@ -193,26 +191,8 @@ class Orchestrator:
 
             logger.info("Found %d receipt(s) for %s", len(receipts), client_name)
 
-            # 3. Get PDFs — try real FB download, fall back to generated receipts
+            # 3. Generate Meta-style receipt PDFs
             pdf_paths: list = []
-
-            if use_fb_pdfs:
-                try:
-                    from src.config import META_BUSINESS_IDS
-                    business_id = META_BUSINESS_IDS[0] if META_BUSINESS_IDS else ""
-                    pdf_paths = download_receipts_for_account(
-                        ad_account_id, business_id, start_date, end_date,
-                        base_dir=run_dir,
-                    )
-                    if pdf_paths:
-                        logger.info(
-                            "Downloaded %d real Facebook PDF(s) for %s",
-                            len(pdf_paths), client_name,
-                        )
-                except Exception as e:
-                    logger.warning("FB PDF download failed for %s: %s", client_name, e)
-
-            # Generate Meta-style receipt PDFs (per billing transaction if available)
             campaigns = self.meta.get_campaign_spend(ad_account_id, start_date, end_date)
             receipt_pdf = generate_receipt_pdf(
                 client_name=client_name,
