@@ -17,6 +17,7 @@ from src.meta_client import MetaClient
 from src.db_client import DbClient
 from src.email_service import EmailService
 from src.pdf_generator import generate_receipt_pdf, generate_transaction_pdf
+from src.gmail_receipt_fetcher import fetch_meta_receipts
 from src.config import get_run_dir, NOTIFY_EMAIL
 from src.activity_logger import ActivityRun
 
@@ -192,28 +193,33 @@ class Orchestrator:
 
             logger.info("Found %d receipt(s) for %s", len(receipts), client_name)
 
-            # 3. Generate one PDF per billing transaction (matches real Meta invoices)
+            # 3. Get real Meta receipt PDFs from Gmail inbox
             pdf_paths: list = []
-            transactions = self.meta.get_transactions(ad_account_id, start_date, end_date)
-            campaigns = self.meta.get_campaign_spend(ad_account_id, start_date, end_date)
-            adsets = self.meta.get_adset_spend(ad_account_id, start_date, end_date)
+            safe_acct = ad_account_id.replace("act_", "")
 
-            if transactions:
-                logger.info("Generating %d invoice PDF(s) for %s", len(transactions), client_name)
-                for txn in transactions:
-                    pdf = generate_transaction_pdf(
-                        client_name=client_name,
-                        ad_account_id=ad_account_id,
-                        transaction=txn,
-                        campaigns=campaigns,
-                        adsets=adsets,
-                        base_dir=run_dir,
+            try:
+                gmail_receipts = fetch_meta_receipts(
+                    start_date=start_date,
+                    end_date=end_date,
+                    account_id=safe_acct,
+                    base_dir=run_dir,
+                )
+                for gr in gmail_receipts:
+                    if gr.get("pdf_path"):
+                        pdf_paths.append(Path(gr["pdf_path"]))
+                if pdf_paths:
+                    logger.info(
+                        "Found %d real Meta receipt PDF(s) in Gmail for %s",
+                        len(pdf_paths), client_name,
                     )
-                    if pdf:
-                        pdf_paths.append(pdf)
-            else:
-                # Fallback: no transactions endpoint — use single summary PDF
-                logger.info("No transactions found, generating summary PDF for %s", client_name)
+            except Exception as e:
+                logger.warning("Gmail receipt fetch failed for %s: %s", client_name, e)
+
+            # Fallback: generate PDFs if no real ones found in Gmail
+            if not pdf_paths:
+                logger.info("No Gmail receipts found for %s — generating from API data", client_name)
+                campaigns = self.meta.get_campaign_spend(ad_account_id, start_date, end_date)
+                adsets = self.meta.get_adset_spend(ad_account_id, start_date, end_date)
                 pdf = generate_receipt_pdf(
                     client_name=client_name,
                     ad_account_id=ad_account_id,
