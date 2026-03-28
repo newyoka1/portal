@@ -150,16 +150,47 @@ def load_raw_table(cur, table_name, tmp_path):
         {COL_DEFS}
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci""")
     infile = Path(tmp_path).as_posix()
-    cur.execute(
-        f"LOAD DATA LOCAL INFILE '{infile}'"
-        f" INTO TABLE {table_name}"
-        f" CHARACTER SET latin1"
-        f" FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'"
-        f" LINES TERMINATED BY '\\r\\n'"
-        f" ({COL_LIST})"
-    )
+    try:
+        cur.execute(
+            f"LOAD DATA LOCAL INFILE '{infile}'"
+            f" INTO TABLE {table_name}"
+            f" CHARACTER SET latin1"
+            f" FIELDS TERMINATED BY ',' OPTIONALLY ENCLOSED BY '\"'"
+            f" LINES TERMINATED BY '\\r\\n'"
+            f" ({COL_LIST})"
+        )
+    except Exception as e:
+        if "local_infile" in str(e).lower() or "1148" in str(e):
+            print(f"    LOAD DATA not available — using batch INSERT fallback...")
+            _batch_insert_csv(cur, table_name, tmp_path)
+        else:
+            raise
     cur.execute(f"SELECT COUNT(*) FROM {table_name}")
     return cur.fetchone()[0]
+
+
+def _batch_insert_csv(cur, table_name, csv_path, batch_size=5000):
+    """Fallback loader using batch INSERT when LOAD DATA LOCAL INFILE is disabled."""
+    import csv
+    placeholders = ", ".join(["%s"] * 58)
+    sql = f"INSERT INTO {table_name} ({COL_LIST}) VALUES ({placeholders})"
+    batch = []
+    total = 0
+    with open(csv_path, "r", encoding="latin1") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            # Pad/truncate to exactly 58 columns
+            row = (row + [""] * 58)[:58]
+            batch.append(row)
+            if len(batch) >= batch_size:
+                cur.executemany(sql, batch)
+                total += len(batch)
+                print(f"\r    Inserted {total:,} rows...", end="", flush=True)
+                batch = []
+        if batch:
+            cur.executemany(sql, batch)
+            total += len(batch)
+    print(f"\r    Inserted {total:,} rows.      ")
 
 
 def build_contributions_from(cur, raw_table, source_code):

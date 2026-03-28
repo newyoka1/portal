@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime
 
 FEC_BASE_URL = "https://www.fec.gov/files/bulk-downloads"
-DATA_DIR = Path(r"D:\git\nys-voter-pipeline\data\fec_downloads")
+DATA_DIR = Path(__file__).parent / "data" / "fec_downloads"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # 10-year window: 6 even-year cycles ending at current/next cycle

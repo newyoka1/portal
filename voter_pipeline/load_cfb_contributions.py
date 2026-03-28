@@ -264,6 +264,42 @@ def bootstrap(conn):
     cur.close()
 
 
+def _batch_insert_cfb(cur, csv_path, batch_size=5000):
+    """Fallback loader using batch INSERT when LOAD DATA LOCAL INFILE is disabled."""
+    import csv as csv_mod
+    CFB_COLS = (
+        "ELECTION, OFFICECD, RECIPID, CANCLASS, RECIPNAME, COMMITTEE, "
+        "FILING, SCHEDULE, PAGENO, SEQUENCENO, REFNO, CONT_DATE, REFUNDDATE, "
+        "NAME, C_CODE, STRNO, STRNAME, APARTMENT, BOROUGHCD, CITY, STATE, "
+        "ZIP, OCCUPATION, EMPNAME, EMPSTRNO, EMPSTRNAME, EMPCITY, EMPSTATE, "
+        "AMNT, MATCHAMNT, PREVAMNT, PAY_METHOD, INTERMNO, INTERMNAME, "
+        "INTSTRNO, INTSTRNM, INTAPTNO, INTCITY, INTST, INTZIP, INTEMPNAME, "
+        "INTEMPSTNO, INTEMPSTNM, INTEMPCITY, INTEMPST, INTOCCUPA, PURPOSECD, "
+        "EXEMPTCD, ADJTYPECD, RR_IND, SEG_IND, INT_C_CODE"
+    )
+    n_cols = len(CFB_COLS.split(","))
+    placeholders = ", ".join(["%s"] * n_cols)
+    sql = f"INSERT INTO {DB}.cfb_raw_contributions ({CFB_COLS}) VALUES ({placeholders})"
+    batch = []
+    total = 0
+    with open(csv_path, "r", encoding="utf-8") as f:
+        reader = csv_mod.reader(f)
+        next(reader, None)  # skip header
+        for row in reader:
+            row = (row + [""] * n_cols)[:n_cols]
+            batch.append(row)
+            if len(batch) >= batch_size:
+                cur.executemany(sql, batch)
+                total += len(batch)
+                print(f"\r    Inserted {total:,} rows...", end="", flush=True)
+                batch = []
+        if batch:
+            cur.executemany(sql, batch)
+            total += len(batch)
+    print(f"\r    Inserted {total:,} rows.      ")
+    return total
+
+
 # ---------------------------------------------------------------------------
 # Load raw CSVs
 # ---------------------------------------------------------------------------
@@ -298,35 +334,40 @@ def load_raw(conn, force: bool = False) -> bool:
         print(f"  Loading {csv_path.name} ({size_mb:.1f} MB)...")
         t0 = time.time()
 
-        # Use LOAD DATA LOCAL INFILE for speed
-        # Need local_infile connection
-        conn_li = connect(DB, local_infile=True)
-        cur_li  = conn_li.cursor()
-
-        csv_path_escaped = str(csv_path).replace("\\", "/")
-        cur_li.execute(f"""
-            LOAD DATA LOCAL INFILE '{csv_path_escaped}'
-            INTO TABLE {DB}.cfb_raw_contributions
-            CHARACTER SET utf8mb4
-            FIELDS TERMINATED BY ','
-            OPTIONALLY ENCLOSED BY '"'
-            LINES TERMINATED BY '\\r\\n'
-            IGNORE 1 LINES
-            (ELECTION, OFFICECD, RECIPID, CANCLASS, RECIPNAME, COMMITTEE,
-             FILING, SCHEDULE, PAGENO, SEQUENCENO, REFNO, @dt, REFUNDDATE,
-             NAME, C_CODE, STRNO, STRNAME, APARTMENT, BOROUGHCD, CITY, STATE,
-             ZIP, OCCUPATION, EMPNAME, EMPSTRNO, EMPSTRNAME, EMPCITY, EMPSTATE,
-             AMNT, MATCHAMNT, PREVAMNT, PAY_METHOD, INTERMNO, INTERMNAME,
-             INTSTRNO, INTSTRNM, INTAPTNO, INTCITY, INTST, INTZIP, INTEMPNAME,
-             INTEMPSTNO, INTEMPSTNM, INTEMPCITY, INTEMPST, INTOCCUPA, PURPOSECD,
-             EXEMPTCD, ADJTYPECD, RR_IND, SEG_IND, INT_C_CODE)
-            SET CONT_DATE = @dt
-        """)
-        rows = cur_li.rowcount
+        # Try LOAD DATA LOCAL INFILE (fast), fall back to batch INSERT
+        try:
+            conn_li = connect(DB, local_infile=True)
+            cur_li  = conn_li.cursor()
+            csv_path_escaped = str(csv_path).replace("\\", "/")
+            cur_li.execute(f"""
+                LOAD DATA LOCAL INFILE '{csv_path_escaped}'
+                INTO TABLE {DB}.cfb_raw_contributions
+                CHARACTER SET utf8mb4
+                FIELDS TERMINATED BY ','
+                OPTIONALLY ENCLOSED BY '"'
+                LINES TERMINATED BY '\\r\\n'
+                IGNORE 1 LINES
+                (ELECTION, OFFICECD, RECIPID, CANCLASS, RECIPNAME, COMMITTEE,
+                 FILING, SCHEDULE, PAGENO, SEQUENCENO, REFNO, @dt, REFUNDDATE,
+                 NAME, C_CODE, STRNO, STRNAME, APARTMENT, BOROUGHCD, CITY, STATE,
+                 ZIP, OCCUPATION, EMPNAME, EMPSTRNO, EMPSTRNAME, EMPCITY, EMPSTATE,
+                 AMNT, MATCHAMNT, PREVAMNT, PAY_METHOD, INTERMNO, INTERMNAME,
+                 INTSTRNO, INTSTRNM, INTAPTNO, INTCITY, INTST, INTZIP, INTEMPNAME,
+                 INTEMPSTNO, INTEMPSTNM, INTEMPCITY, INTEMPST, INTOCCUPA, PURPOSECD,
+                 EXEMPTCD, ADJTYPECD, RR_IND, SEG_IND, INT_C_CODE)
+                SET CONT_DATE = @dt
+            """)
+            rows = cur_li.rowcount
+            cur_li.close()
+            conn_li.close()
+        except Exception as e:
+            if "local_infile" in str(e).lower() or "1148" in str(e):
+                print(f"    LOAD DATA not available — using batch INSERT fallback...")
+                rows = _batch_insert_cfb(cur, csv_path)
+            else:
+                raise
         total_rows += rows
         print(f"    {rows:,} rows in {time.time()-t0:.1f}s")
-        cur_li.close()
-        conn_li.close()
 
     # Store hash
     cur.execute(
