@@ -61,9 +61,8 @@
     <a href="/fb-receipts" class="nav-link {% if request.url.path.startswith('/fb-receipts') %}active{% endif %}">
       <i class="bi bi-receipt me-2"></i>Ad Receipts
     </a>
-    <a href="https://connect.politikanyc.com" class="nav-link" target="_blank">
+    <a href="/fb/" class="nav-link {% if request.url.path.startswith('/fb') and not request.url.path.startswith('/fb-receipts') %}active{% endif %}">
       <i class="bi bi-megaphone me-2"></i>Ad Approval
-      <i class="bi bi-box-arrow-up-right ms-1" style="font-size:.7rem;"></i>
     </a>
 
     <div class="nav-section mt-2">Voter & Research</div>
