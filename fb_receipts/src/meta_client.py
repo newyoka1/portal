@@ -413,14 +413,12 @@ class MetaClient:
         """
         Fetch billing transactions (individual charges/payments) for an ad account.
         Returns one record per billing event — matches Facebook's Payment Activity view.
-
-        Each transaction has: id, time, amount, status (paid/failed), payment method info.
         """
         if not ad_account_id.startswith("act_"):
             ad_account_id = f"act_{ad_account_id}"
 
         params = {
-            "fields": "id,time,amount,currency,status,payment_option",
+            "fields": "id,time,amount,currency,status,account_id,billing_period",
         }
         if start_date and end_date:
             params["time_range"] = (
@@ -430,10 +428,44 @@ class MetaClient:
 
         try:
             results = self._get_paginated(f"{ad_account_id}/transactions", params)
-            logger.info("Ad account %s: found %d transactions", ad_account_id, len(results))
+            # Filter to charges only (positive amounts)
+            results = [r for r in results if float(r.get("amount", 0)) > 0]
+            logger.info("Ad account %s: found %d billing transactions", ad_account_id, len(results))
             return results
         except requests.HTTPError as e:
             logger.warning("Could not fetch transactions for %s: %s", ad_account_id, e)
+            return []
+
+    def get_adset_spend(
+        self,
+        ad_account_id: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> list[dict]:
+        """
+        Fetch ad-set level spend breakdown — used for campaign detail on invoices.
+        Returns one record per ad set with spend > 0.
+        """
+        if not ad_account_id.startswith("act_"):
+            ad_account_id = f"act_{ad_account_id}"
+
+        params = {
+            "fields": "campaign_name,campaign_id,adset_name,adset_id,spend,impressions,clicks,date_start,date_stop",
+            "level": "adset",
+        }
+        if start_date and end_date:
+            params["time_range"] = (
+                f'{{"since":"{start_date.strftime("%Y-%m-%d")}",'
+                f'"until":"{end_date.strftime("%Y-%m-%d")}"}}'
+            )
+
+        try:
+            results = self._get_paginated(f"{ad_account_id}/insights", params)
+            results = [r for r in results if float(r.get("spend", 0)) > 0]
+            logger.info("Ad account %s: %d ad sets with spend", ad_account_id, len(results))
+            return results
+        except requests.HTTPError as e:
+            logger.warning("Could not fetch adset insights for %s: %s", ad_account_id, e)
             return []
 
     def get_campaign_spend(

@@ -16,7 +16,7 @@ from pathlib import Path
 from src.meta_client import MetaClient
 from src.db_client import DbClient
 from src.email_service import EmailService
-from src.pdf_generator import generate_receipt_pdf
+from src.pdf_generator import generate_receipt_pdf, generate_transaction_pdf
 from src.config import get_run_dir, NOTIFY_EMAIL
 from src.activity_logger import ActivityRun
 
@@ -192,21 +192,39 @@ class Orchestrator:
 
             logger.info("Found %d receipt(s) for %s", len(receipts), client_name)
 
-            # 3. Generate Meta-style receipt PDFs
+            # 3. Generate one PDF per billing transaction (matches real Meta invoices)
             pdf_paths: list = []
+            transactions = self.meta.get_transactions(ad_account_id, start_date, end_date)
             campaigns = self.meta.get_campaign_spend(ad_account_id, start_date, end_date)
-            receipt_pdf = generate_receipt_pdf(
-                client_name=client_name,
-                ad_account_id=ad_account_id,
-                receipts=receipts,
-                start_date=start_date,
-                end_date=end_date,
-                base_dir=run_dir,
-                campaigns=campaigns,
-            )
-            if receipt_pdf:
-                pdf_paths.append(receipt_pdf)
-                logger.info("Generated receipt PDF: %s", receipt_pdf)
+            adsets = self.meta.get_adset_spend(ad_account_id, start_date, end_date)
+
+            if transactions:
+                logger.info("Generating %d invoice PDF(s) for %s", len(transactions), client_name)
+                for txn in transactions:
+                    pdf = generate_transaction_pdf(
+                        client_name=client_name,
+                        ad_account_id=ad_account_id,
+                        transaction=txn,
+                        campaigns=campaigns,
+                        adsets=adsets,
+                        base_dir=run_dir,
+                    )
+                    if pdf:
+                        pdf_paths.append(pdf)
+            else:
+                # Fallback: no transactions endpoint — use single summary PDF
+                logger.info("No transactions found, generating summary PDF for %s", client_name)
+                pdf = generate_receipt_pdf(
+                    client_name=client_name,
+                    ad_account_id=ad_account_id,
+                    receipts=receipts,
+                    start_date=start_date,
+                    end_date=end_date,
+                    base_dir=run_dir,
+                    campaigns=campaigns,
+                )
+                if pdf:
+                    pdf_paths.append(pdf)
 
             if not pdf_paths:
                 logger.warning("No PDFs generated for %s", client_name)
