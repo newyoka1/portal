@@ -141,41 +141,53 @@
             </a>
           </div>
         </div>
-        {% if clients %}
         <div class="table-responsive">
-          <table class="table table-sm table-hover">
+          <table class="table table-sm table-hover" id="clientsTable">
             <thead class="table-light">
               <tr>
                 <th>Client Name</th>
                 <th>Ad Account ID</th>
                 <th>Email(s)</th>
-                <th>Active</th>
-                <th>Schedule</th>
+                <th style="width:80px">Active</th>
+                <th style="width:150px">Schedule</th>
+                <th style="width:40px"></th>
               </tr>
             </thead>
-            <tbody>
+            <tbody id="clientsBody">
               {% for c in clients %}
               <tr>
-                <td>{{ c.client_name or '—' }}</td>
-                <td class="text-muted small">{{ c.ad_account_id or '—' }}</td>
-                <td class="small">{{ c.email or '—' }}</td>
+                <td><input type="text" class="form-control form-control-sm" name="client_name" value="{{ c.client_name or '' }}"></td>
+                <td><input type="text" class="form-control form-control-sm" name="ad_account_id" value="{{ c.ad_account_id or '' }}"></td>
+                <td><input type="text" class="form-control form-control-sm" name="email" value="{{ c.email or '' }}" placeholder="a@co.com, b@co.com"></td>
                 <td>
-                  {% if c.active == 'yes' %}
-                  <span class="badge bg-success">yes</span>
-                  {% else %}
-                  <span class="badge bg-secondary">no</span>
-                  {% endif %}
+                  <select class="form-select form-select-sm" name="active">
+                    <option value="yes" {{ 'selected' if c.active == 'yes' }}>yes</option>
+                    <option value="no" {{ 'selected' if c.active != 'yes' }}>no</option>
+                  </select>
                 </td>
-                <td class="small">{{ c.schedule or 'weekly_friday' }}</td>
+                <td>
+                  <select class="form-select form-select-sm" name="schedule">
+                    {% for s in ['weekly_monday','weekly_tuesday','weekly_wednesday','weekly_thursday','weekly_friday','weekly_saturday','weekly_sunday','monthly_1','monthly_7','monthly_14','monthly_15','monthly_28'] %}
+                    <option value="{{ s }}" {{ 'selected' if (c.schedule or 'weekly_friday') == s }}>{{ s }}</option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()" title="Remove">&times;</button></td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
         </div>
-        <p class="text-muted small mb-0">{{ clients|length }} clients — edit in <a href="https://docs.google.com/spreadsheets/d/{{ settings.get('sheet_id', '') or '1ts_ncuvSz-7Gs6aw6JC98VOB87WMVuyNEinHFs5F-3A' }}" target="_blank">Google Sheets</a></p>
-        {% else %}
-        <div class="alert alert-info mb-0">No clients found. Import from Meta or check Google Sheets.</div>
-        {% endif %}
+        <div class="d-flex gap-2 mt-2">
+          <button class="btn btn-sm btn-outline-secondary" onclick="addClientRow()">
+            <i class="bi bi-plus me-1"></i>Add Row
+          </button>
+          <button class="btn btn-sm btn-primary" onclick="saveClients()">
+            <i class="bi bi-floppy me-1"></i>Save Clients
+          </button>
+          <span id="clientsSaved" class="ms-2 text-success d-none align-self-center">Saved!</span>
+        </div>
+        <p class="text-muted small mt-2 mb-0">{{ clients|length }} client(s)</p>
         <div id="logImport" class="mt-3"></div>
       </div>
     </div>
@@ -307,6 +319,58 @@ document.getElementById('customRunForm')?.addEventListener('submit', async funct
   e.preventDefault();
   await streamRun('/fb-receipts/run', new FormData(this), 'logCustom', 'customOutput', 'customStatus', null);
 });
+
+// ── Add client row ──
+function addClientRow() {
+  const tbody = document.getElementById('clientsBody');
+  const schedOpts = ['weekly_monday','weekly_tuesday','weekly_wednesday','weekly_thursday','weekly_friday','weekly_saturday','weekly_sunday','monthly_1','monthly_7','monthly_14','monthly_15','monthly_28']
+    .map(s => `<option value="${s}" ${s==='weekly_friday'?'selected':''}>${s}</option>`).join('');
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td><input type="text" class="form-control form-control-sm" name="client_name" value=""></td>
+    <td><input type="text" class="form-control form-control-sm" name="ad_account_id" value=""></td>
+    <td><input type="text" class="form-control form-control-sm" name="email" value="" placeholder="a@co.com, b@co.com"></td>
+    <td><select class="form-select form-select-sm" name="active"><option value="yes">yes</option><option value="no" selected>no</option></select></td>
+    <td><select class="form-select form-select-sm" name="schedule">${schedOpts}</select></td>
+    <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()" title="Remove">&times;</button></td>`;
+  tbody.appendChild(tr);
+}
+
+// ── Save clients ──
+async function saveClients() {
+  const rows = document.querySelectorAll('#clientsBody tr');
+  const clients = [];
+  rows.forEach(tr => {
+    const get = name => tr.querySelector(`[name="${name}"]`)?.value || '';
+    const acct = get('ad_account_id').trim();
+    if (!acct) return; // skip empty rows
+    clients.push({
+      client_name: get('client_name'),
+      ad_account_id: acct,
+      email: get('email'),
+      active: get('active'),
+      schedule: get('schedule'),
+    });
+  });
+  try {
+    const resp = await fetch('/fb-receipts/api/clients', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({clients}),
+    });
+    const data = await resp.json();
+    const badge = document.getElementById('clientsSaved');
+    if (data.ok) {
+      badge.textContent = `Saved ${data.count} client(s)!`;
+      badge.classList.remove('d-none');
+      setTimeout(() => badge.classList.add('d-none'), 3000);
+    } else {
+      alert('Save failed: ' + (data.error || 'unknown'));
+    }
+  } catch (err) {
+    alert('Save failed: ' + err.message);
+  }
+}
 
 // ── Setup DB ──
 async function setupDb() {

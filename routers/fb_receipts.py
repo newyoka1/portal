@@ -139,6 +139,22 @@ def api_clients(current_user: User = Depends(require_user)):
     return _load_clients()
 
 
+@router.post("/api/clients")
+async def api_save_clients(
+    request: Request,
+    current_user: User = Depends(require_user),
+):
+    """Save the full client list from the editable table."""
+    try:
+        body = await request.json()
+        clients = body.get("clients", [])
+        db = _get_db_client()
+        db.save_clients(clients)
+        return JSONResponse({"ok": True, "count": len(clients)})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 @router.get("/api/settings", response_class=JSONResponse)
 def api_settings(current_user: User = Depends(require_user)):
     return _load_settings()
