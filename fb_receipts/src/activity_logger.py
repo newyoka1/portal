@@ -119,6 +119,7 @@ class ActivityRun:
         failed_recipients: list[str],
         pdf_count: int,
         receipt_count: int,
+        pdf_paths: list[str] | None = None,
     ) -> None:
         self._clients.append({
             "client_name": client_name,
@@ -129,6 +130,7 @@ class ActivityRun:
             "failed_recipients": failed_recipients,
             "pdf_count": pdf_count,
             "receipt_count": receipt_count,
+            "pdf_paths": pdf_paths or [],
             "sent_at": datetime.now().isoformat(),
             "error": None,
         })

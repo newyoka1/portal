@@ -16,7 +16,7 @@
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-custom">Custom Run</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-clients">Clients</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-settings">Settings</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-activity">Activity Log</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-activity">Sent Log</a></li>
 </ul>
 
 <div class="tab-content">
@@ -237,12 +237,12 @@
     </div>
   </div>
 
-  <!-- ── ACTIVITY LOG ──────────────────────────────────────────────────── -->
+  <!-- ── SENT LOG ──────────────────────────────────────────────────────── -->
   <div class="tab-pane fade" id="tab-activity">
     <div class="card shadow-sm">
       <div class="card-body p-0">
         {% if not activity %}
-        <p class="text-muted text-center py-5">No activity recorded yet.</p>
+        <p class="text-muted text-center py-5">No receipts sent yet.</p>
         {% else %}
         <div class="accordion accordion-flush" id="actAccordion">
           {% for run in activity %}
@@ -268,7 +268,7 @@
                 {% if run.clients %}
                 <table class="table table-sm mb-0">
                   <thead class="table-light">
-                    <tr><th>Client</th><th>Account</th><th>Status</th><th>Recipients</th><th>Sent</th></tr>
+                    <tr><th>Client</th><th>Account</th><th>Status</th><th>Recipients</th><th>Sent</th><th>PDF</th></tr>
                   </thead>
                   <tbody>
                     {% for c in run.clients %}
@@ -282,6 +282,16 @@
                       </td>
                       <td class="small">{{ (c.recipients or [])|join(', ') }}</td>
                       <td class="small text-muted">{{ (c.sent_at or '')[:19].replace('T',' ') }}</td>
+                      <td>
+                        {% for p in (c.pdf_paths or []) %}
+                        {% set fname = p.split('/')[-1].split('\\')[-1] %}
+                        {% if fname.endswith('.pdf') %}
+                        <a href="/fb-receipts/download/{{ p.replace('\\', '/') }}" class="btn btn-sm btn-outline-primary py-0 px-1 me-1" title="{{ fname }}">
+                          <i class="bi bi-download"></i>
+                        </a>
+                        {% endif %}
+                        {% endfor %}
+                      </td>
                     </tr>
                     {% endfor %}
                   </tbody>

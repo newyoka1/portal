@@ -285,6 +285,7 @@ class Orchestrator:
                         emails, failed_recipients,
                         pdf_count=len(pdf_paths),
                         receipt_count=len(receipts),
+                        pdf_paths=[str(p) for p in pdf_paths],
                     )
 
         logger.info("Run complete: %s", results)

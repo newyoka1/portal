@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from auth import require_user
@@ -32,9 +32,11 @@ def _get_db_client():
 
 
 def _load_clients():
-    """Load all clients (active + inactive) from DB."""
+    """Load all clients (active + inactive) from DB, sorted active-first then alpha."""
     try:
-        return _get_db_client().get_all_clients_raw()
+        clients = _get_db_client().get_all_clients_raw()
+        clients.sort(key=lambda c: (c.get("active") != "yes", (c.get("client_name") or "").lower()))
+        return clients
     except Exception as e:
         logger.warning("Could not load clients: %s", e)
         return []
@@ -132,6 +134,20 @@ async def fb_import_meta(current_user: User = Depends(require_user)):
     """Import ad accounts from Meta API into fb_receipts.clients DB table."""
     args = [sys.executable, str(FB_DIR / "populate_db.py")]
     return StreamingResponse(_stream(args, str(FB_DIR)), media_type="text/plain")
+
+
+@router.get("/download/{path:path}")
+def download_pdf(path: str, current_user: User = Depends(require_user)):
+    """Download a generated receipt PDF from the INVOICES directory."""
+    full_path = FB_DIR / path
+    if not full_path.exists() or not full_path.is_file():
+        return JSONResponse({"error": "File not found"}, status_code=404)
+    # Security: ensure path stays within FB_DIR
+    try:
+        full_path.resolve().relative_to(FB_DIR.resolve())
+    except ValueError:
+        return JSONResponse({"error": "Access denied"}, status_code=403)
+    return FileResponse(str(full_path), filename=full_path.name, media_type="application/pdf")
 
 
 @router.get("/api/clients", response_class=JSONResponse)
