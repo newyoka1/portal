@@ -14,10 +14,23 @@ META_BUSINESS_IDS = [
 META_API_VERSION = os.getenv("META_API_VERSION", "v21.0")
 META_BASE_URL = f"https://graph.facebook.com/{META_API_VERSION}"
 
-# Google
-GOOGLE_SERVICE_ACCOUNT_FILE = os.getenv(
-    "GOOGLE_SERVICE_ACCOUNT_FILE", "credentials/service_account.json"
-)
+# Google — resolve credentials from env var (Railway) or local file (dev)
+import base64, json, tempfile
+
+_sa_b64  = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON_B64")
+_sa_raw  = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+_sa_file = os.getenv("GOOGLE_SERVICE_ACCOUNT_FILE", "credentials/service_account.json")
+
+if _sa_b64 or _sa_raw:
+    # Write the env-var credentials to a temp file so gspread/google-auth can read it
+    _data = base64.b64decode(_sa_b64) if _sa_b64 else _sa_raw.encode()
+    _tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json", mode="wb")
+    _tmp.write(_data)
+    _tmp.close()
+    GOOGLE_SERVICE_ACCOUNT_FILE = _tmp.name
+else:
+    GOOGLE_SERVICE_ACCOUNT_FILE = _sa_file
+
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
 
 # Gmail
