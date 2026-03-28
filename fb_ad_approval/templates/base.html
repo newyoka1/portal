@@ -420,6 +420,8 @@
             <div class="nav-logo-sub">Client Ad & Email Manager</div>
         </a>
         <div class="nav-links" style="padding-left:16px;">
+            <!-- Portal link (absolute path — must NOT be prefixed by the /fb JS patch) -->
+            <a href="/" class="portal-home-link" style="color:#90949C; border-right:1px solid #3A3B3C; padding-right:12px; margin-right:4px;">← Portal</a>
             <!-- Campaigns dropdown -->
             <div class="nav-dd-wrap" onmouseenter="this.querySelector('.nav-dd-menu').classList.add('open')" onmouseleave="this.querySelector('.nav-dd-menu').classList.remove('open')">
                 <span class="nav-dropdown-toggle {{ 'active' if request.endpoint in ('campaigns_page','approval_queue','approved_ads','rejected_ads','drafts_page') }}">
