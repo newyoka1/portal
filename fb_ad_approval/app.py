@@ -4,7 +4,7 @@ Facebook Ad Approval Workflow
 Clients → Draft ads → Send for approval → Track responses → Push to Facebook
 """
 
-import os, json, uuid, smtplib, secrets, time
+import logging, os, json, uuid, smtplib, secrets, time
 from datetime import timedelta
 from werkzeug.utils import secure_filename
 from datetime import datetime, timezone
@@ -1842,6 +1842,53 @@ def get_active_client():
     clients = get_all_clients()
     return next((c for c in clients if c["id"] == client_id), None)
 
+# ── SSO bridge: auto-login from FastAPI portal session ────────────────────
+def _try_portal_sso():
+    """If the user is logged into the FastAPI portal, auto-login to Flask."""
+    if current_user.is_authenticated:
+        return  # already logged in
+    ea_token = request.cookies.get("ea_session")
+    if not ea_token:
+        return
+    # Import the portal's session store and DB
+    try:
+        from auth import _resolve_token as _portal_resolve
+        from database import SessionLocal
+        from models import User as PortalUser
+        user_id = _portal_resolve(ea_token)
+        if not user_id:
+            return
+        db = SessionLocal()
+        try:
+            portal_user = db.query(PortalUser).filter(PortalUser.id == user_id).first()
+            if not portal_user:
+                return
+            # Find or create matching user in fb_ad_management by email
+            fb_users = _db_list("users", {"email": portal_user.email})
+            if fb_users:
+                login_user(AppUser(fb_users[0]))
+            else:
+                # Auto-create user in fb_ad_management from portal user
+                conn = get_db()
+                try:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "INSERT INTO users (email, name, password_hash, role, is_active) "
+                        "VALUES (%s, %s, %s, %s, 1)",
+                        (portal_user.email, portal_user.name,
+                         portal_user.password_hash, portal_user.role),
+                    )
+                    conn.commit()
+                    new_users = _db_list("users", {"email": portal_user.email})
+                    if new_users:
+                        login_user(AppUser(new_users[0]))
+                finally:
+                    conn.close()
+        finally:
+            db.close()
+    except Exception as e:
+        logging.warning("Portal SSO bridge failed: %s", e)
+
 # ── Auth guard — protect all routes except whitelist ──────────────────────
 @app.before_request
 def require_login():
@@ -1849,6 +1896,8 @@ def require_login():
     allowed_prefixes = ("/login", "/static/", "/respond/")
     if any(request.path.startswith(p) for p in allowed_prefixes):
         return
+    # Try auto-login from FastAPI portal session
+    _try_portal_sso()
     if not current_user.is_authenticated:
         return redirect(url_for("login", next=request.path))
 
