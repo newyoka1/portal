@@ -1,0 +1,317 @@
+{% extends "base.html" %}
+{% block title %}{{ email.subject }}{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <a href="/" class="text-decoration-none text-muted small">
+    <i class="bi bi-arrow-left me-1"></i>Back to queue
+  </a>
+</div>
+
+<div class="row g-4">
+
+  <!-- ── Left: Email preview ──────────────────────────────────────── -->
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <!-- Email meta header -->
+      <div class="card-header bg-white py-3">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h5 class="mb-1 fw-bold">{{ email.subject }}</h5>
+            <div class="text-muted small">
+              <span class="me-3">
+                <i class="bi bi-person me-1"></i>
+                {{ email.from_name or '' }}
+                &lt;{{ email.from_address }}&gt;
+              </span>
+              <span class="me-3">
+                <i class="bi bi-clock me-1"></i>
+                {{ email.received_at.strftime('%B %d, %Y at %I:%M %p') }}
+              </span>
+              <span class="badge badge-origin-{{ email.origin_system|lower|replace(' ','-') }}">
+                {{ email.origin_system }}
+              </span>
+            </div>
+          </div>
+          <span class="badge fs-6 status-{{ email.status }}">
+            {{ email.status|replace('_',' ')|title }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Sandboxed HTML email renderer -->
+      <iframe
+        id="email-frame"
+        sandbox="allow-same-origin allow-popups"
+        srcdoc="{{ email.html_body | e }}"
+        onload="autoHeight(this)"
+      ></iframe>
+    </div>
+
+    <!-- ── Comments ─────────────────────────────────────────────── -->
+    <div class="card shadow-sm mt-4">
+      <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-chat-left-text me-2"></i>Comments
+        <span class="badge bg-secondary ms-1">{{ comments|length }}</span>
+      </div>
+      <div class="card-body">
+
+        {% for c in comments if not c.parent_id %}
+          <div class="comment-card card mb-3 border-0 bg-light">
+            <div class="card-body py-2 px-3">
+              <div class="d-flex justify-content-between">
+                <strong>{{ c.user.name }}</strong>
+                <span class="text-muted small">{{ c.created_at.strftime('%b %d %I:%M %p') }}</span>
+              </div>
+              <p class="mb-1 mt-1">{{ c.body }}</p>
+              <button class="btn btn-link btn-sm p-0 text-muted"
+                      onclick="showReply({{ c.id }})">
+                <i class="bi bi-reply me-1"></i>Reply
+              </button>
+            </div>
+          </div>
+
+          <!-- Inline reply form (hidden by default) -->
+          <form id="reply-{{ c.id }}" method="post" action="/emails/{{ email.id }}/comments"
+                class="ms-4 mb-3 d-none">
+            <input type="hidden" name="parent_id" value="{{ c.id }}">
+            <div class="input-group input-group-sm">
+              <input type="text" name="body" class="form-control" placeholder="Write a reply…" required>
+              <button class="btn btn-outline-primary" type="submit">Reply</button>
+              <button type="button" class="btn btn-outline-secondary"
+                      onclick="hideReply({{ c.id }})">Cancel</button>
+            </div>
+          </form>
+
+          <!-- Nested replies -->
+          {% for r in comments if r.parent_id == c.id %}
+            <div class="comment-card reply card mb-2 border-0 bg-white ms-4">
+              <div class="card-body py-2 px-3">
+                <div class="d-flex justify-content-between">
+                  <strong>{{ r.user.name }}</strong>
+                  <span class="text-muted small">{{ r.created_at.strftime('%b %d %I:%M %p') }}</span>
+                </div>
+                <p class="mb-0 mt-1">{{ r.body }}</p>
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-muted fst-italic mb-3">No comments yet.</p>
+        {% endfor %}
+
+        <!-- New top-level comment / approval note -->
+        {% set my_pending = approvals | selectattr('user_id','eq',current_user.id) | selectattr('decision','eq','pending') | list | first %}
+        {% if my_pending %}
+        {# Combined form: note goes to /approve, also stored as comment via hidden input #}
+        <form method="post" action="/emails/{{ email.id }}/approve" class="mt-3">
+          <input type="hidden" name="approval_id" value="{{ my_pending.id }}">
+          <div class="mb-2">
+            <input type="text" name="note" class="form-control"
+                   placeholder="Add a note (optional) then approve or reject…">
+          </div>
+          <div class="d-flex gap-2">
+            <button name="decision" value="approved"
+                    class="btn btn-success flex-fill">
+              <i class="bi bi-check-lg me-1"></i>Approve
+            </button>
+            <button name="decision" value="rejected"
+                    class="btn btn-danger flex-fill">
+              <i class="bi bi-x-lg me-1"></i>Reject
+            </button>
+          </div>
+          <div class="mt-2 text-center">
+            <a href="#" class="small text-muted" id="toggleCommentLink"
+               onclick="toggleCommentOnly(event)">Just leave a comment instead</a>
+          </div>
+        </form>
+        <form method="post" action="/emails/{{ email.id }}/comments"
+              class="mt-2 d-none" id="commentOnlyForm">
+          <input type="hidden" name="parent_id" value="">
+          <div class="input-group">
+            <input type="text" name="body" class="form-control"
+                   placeholder="Add a comment…" required>
+            <button class="btn btn-primary" type="submit">
+              <i class="bi bi-send me-1"></i>Send
+            </button>
+          </div>
+        </form>
+        {% else %}
+        <form method="post" action="/emails/{{ email.id }}/comments" class="mt-3">
+          <input type="hidden" name="parent_id" value="">
+          <div class="input-group">
+            <input type="text" name="body" class="form-control"
+                   placeholder="Add a comment…" required>
+            <button class="btn btn-primary" type="submit">
+              <i class="bi bi-send me-1"></i>Send
+            </button>
+          </div>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Right: Actions & Approvals ───────────────────────────────── -->
+  <div class="col-lg-4">
+
+    <!-- Assign to client -->
+    {% if current_user.is_admin %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-person-badge me-2"></i>Assign to Client
+      </div>
+      <div class="card-body">
+        <form method="post" action="/emails/{{ email.id }}/assign">
+          <select name="client_id" class="form-select mb-2">
+            <option value="">— Unassigned —</option>
+            {% for client in clients %}
+              <option value="{{ client.id }}"
+                {% if email.client_id == client.id %}selected{% endif %}>
+                {{ client.name }}
+              </option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-outline-primary btn-sm w-100">Save Assignment</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Send for Approval -->
+    {% if email.client_id and email.status == 'in_review' %}
+    <div class="card shadow-sm mb-4 border-primary">
+      <div class="card-body text-center py-3">
+        <form method="post" action="/emails/{{ email.id }}/send-for-approval">
+          <button class="btn btn-primary w-100">
+            <i class="bi bi-send-check me-2"></i>Send for Approval
+          </button>
+        </form>
+        {% if email.sent_for_approval_at %}
+        <div class="text-muted small mt-2">
+          <i class="bi bi-clock me-1"></i>
+          Last sent {{ email.sent_for_approval_at.strftime('%b %d at %I:%M %p') }}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    <!-- Approval panel -->
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-check2-circle me-2"></i>Approvals
+      </div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+          {% for approval in approvals %}
+          <li class="list-group-item approver-row {{ 'required' if approval.required else 'optional' }}">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <span class="fw-semibold">{{ approval.user.name }}</span>
+                <span class="badge ms-2 {{ 'bg-danger' if approval.required else 'bg-secondary' }}">
+                  {{ 'Required' if approval.required else 'Optional' }}
+                </span>
+                {% if approval.note %}
+                  <div class="text-muted small mt-1">{{ approval.note }}</div>
+                {% endif %}
+              </div>
+              <span class="decision-{{ approval.decision }}">
+                {% if approval.decision == 'approved' %}
+                  <i class="bi bi-check-circle-fill fs-5"></i>
+                {% elif approval.decision == 'rejected' %}
+                  <i class="bi bi-x-circle-fill fs-5"></i>
+                {% else %}
+                  <i class="bi bi-hourglass-split fs-5"></i>
+                {% endif %}
+              </span>
+            </div>
+
+            <!-- Vote buttons — only shown to the assigned approver if still pending -->
+            {% if approval.user_id == current_user.id and approval.decision == 'pending' %}
+            <form method="post" action="/emails/{{ email.id }}/approve" class="mt-2">
+              <input type="hidden" name="approval_id" value="{{ approval.id }}">
+              <div class="mb-2">
+                <input type="text" name="note" class="form-control form-control-sm"
+                       placeholder="Optional note…">
+              </div>
+              <div class="d-flex gap-2">
+                <button name="decision" value="approved"
+                        class="btn btn-success btn-sm flex-fill">
+                  <i class="bi bi-check-lg me-1"></i>Approve
+                </button>
+                <button name="decision" value="rejected"
+                        class="btn btn-danger btn-sm flex-fill">
+                  <i class="bi bi-x-lg me-1"></i>Reject
+                </button>
+              </div>
+            </form>
+            {% endif %}
+          </li>
+          {% else %}
+          <li class="list-group-item text-muted fst-italic">
+            No approvers configured for this client.
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Overall approval progress -->
+    {% set required_total    = approvals | selectattr('required') | list | length %}
+    {% set required_approved = approvals | selectattr('required') | selectattr('decision','eq','approved') | list | length %}
+    {% set required_rejected = approvals | selectattr('required') | selectattr('decision','eq','rejected') | list | length %}
+
+    {% if required_total > 0 %}
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between mb-1 small">
+          <span>Required approvals</span>
+          <span>{{ required_approved }}/{{ required_total }}</span>
+        </div>
+        <div class="progress mb-3" style="height:8px">
+          <div class="progress-bar bg-success"
+               style="width:{{ (required_approved / required_total * 100)|int }}%"></div>
+          <div class="progress-bar bg-danger"
+               style="width:{{ (required_rejected / required_total * 100)|int }}%"></div>
+        </div>
+        {% if required_rejected > 0 %}
+          <div class="alert alert-danger py-2 small mb-0">
+            <i class="bi bi-x-circle me-1"></i>
+            {{ required_rejected }} required approver(s) rejected.
+          </div>
+        {% elif required_approved == required_total %}
+          <div class="alert alert-success py-2 small mb-0">
+            <i class="bi bi-check-circle me-1"></i>
+            All required approvers signed off!
+          </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Auto-size iframe to its content height
+function autoHeight(frame) {
+  try {
+    frame.style.height = frame.contentDocument.body.scrollHeight + 32 + 'px';
+  } catch(e) { /* cross-origin content — leave min-height */ }
+}
+
+function toggleCommentOnly(e) {
+  e.preventDefault();
+  document.getElementById('commentOnlyForm').classList.toggle('d-none');
+}
+
+function showReply(id) {
+  document.getElementById('reply-' + id).classList.remove('d-none');
+}
+function hideReply(id) {
+  document.getElementById('reply-' + id).classList.add('d-none');
+}
+</script>
+{% endblock %}

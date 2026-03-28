@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Clients{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0 fw-bold"><i class="bi bi-people me-2"></i>Clients</h5>
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addClientModal">
+    <i class="bi bi-plus-lg me-1"></i>Add Client
+  </button>
+</div>
+
+<div class="row g-3">
+  {% for client in clients %}
+  <div class="col-md-6 col-lg-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="fw-bold mb-1">{{ client.name }}</h6>
+        <div class="text-muted small mb-3">{{ client.emails|length }} email(s)</div>
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="small text-uppercase text-muted mb-0">Approvers</h6>
+          <button class="btn btn-outline-primary btn-sm"
+                  data-bs-toggle="modal"
+                  data-bs-target="#approversModal-{{ client.id }}">
+            <i class="bi bi-person-plus me-1"></i>Manage
+          </button>
+        </div>
+        {% for ca in client.approvers %}
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <span class="small">{{ ca.user.name }}</span>
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge {{ 'bg-danger' if ca.required else 'bg-secondary' }}">
+              {{ 'Required' if ca.required else 'Optional' }}
+            </span>
+            <form method="post" action="/clients/{{ client.id }}/approvers/{{ ca.id }}/delete"
+                  class="d-inline">
+              <button class="btn btn-link btn-sm p-0 text-danger" title="Remove">
+                <i class="bi bi-trash"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+        {% else %}
+          <p class="text-muted small fst-italic">No approvers yet.</p>
+        {% endfor %}
+      </div>
+      <div class="card-footer bg-white d-flex justify-content-between">
+        <a href="/?client={{ client.id }}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-inbox me-1"></i>View emails
+        </a>
+        <a href="/clients/{{ client.id }}/integrations" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-plug me-1"></i>Integrations
+          {% if client.integrations %}
+            <span class="badge bg-primary ms-1">{{ client.integrations|length }}</span>
+          {% endif %}
+        </a>
+        <form method="post" action="/clients/{{ client.id }}/delete"
+              onsubmit="return confirm('Delete {{ client.name }}?')">
+          <button class="btn btn-sm btn-outline-danger">
+            <i class="bi bi-trash me-1"></i>Delete
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="col-12 text-center text-muted py-5">
+    <i class="bi bi-people fs-1 d-block mb-2"></i>No clients yet.
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Add Client Modal -->
+<div class="modal fade" id="addClientModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form method="post" action="/clients">
+        <div class="modal-header">
+          <h5 class="modal-title">Add Client</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <label class="form-label">Client Name</label>
+          <input type="text" name="name" class="form-control" required autofocus
+                 placeholder="e.g. Campaign for Jane Smith">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Per-client approver modals -->
+{% for client in clients %}
+{% set assigned_ids = client.approvers | map(attribute='user_id') | list %}
+<div class="modal fade" id="approversModal-{{ client.id }}" tabindex="-1">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-person-check me-2"></i>Approvers — {{ client.name }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="post" action="/clients/{{ client.id }}/approvers/batch">
+        <div class="modal-body p-0">
+
+          {% set available = users | rejectattr('id', 'in', assigned_ids) | list %}
+
+          {% if available %}
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th style="width:2rem;"></th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Role</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in available %}
+              <tr onclick="toggleRow(this)" style="cursor:pointer;">
+                <td>
+                  <input class="form-check-input row-check" type="checkbox"
+                         name="user_ids" value="{{ u.id }}"
+                         onclick="event.stopPropagation()">
+                </td>
+                <td class="fw-semibold">{{ u.name }}</td>
+                <td class="text-muted small">{{ u.email }}</td>
+                <td>
+                  <select name="required_{{ u.id }}" class="form-select form-select-sm"
+                          style="width:auto;" onclick="event.stopPropagation()">
+                    <option value="1">Required</option>
+                    <option value="0">Optional</option>
+                  </select>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <p class="text-muted fst-italic p-4 mb-0">All users are already approvers for this client.</p>
+          {% endif %}
+
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-plus-lg me-1"></i>Add Selected
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleRow(row) {
+  const cb = row.querySelector('.row-check');
+  cb.checked = !cb.checked;
+  row.classList.toggle('table-primary', cb.checked);
+}
+</script>
+{% endblock %}

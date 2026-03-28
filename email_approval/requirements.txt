@@ -1,0 +1,14 @@
+fastapi>=0.111.0
+uvicorn[standard]>=0.29.0
+jinja2>=3.1.4
+python-multipart>=0.0.9   # for form parsing (login, comments)
+sqlalchemy>=2.0.0
+pymysql>=1.1.0             # pure-Python MySQL driver, works with Aiven
+cryptography>=42.0.0       # pymysql needs this for mysql_native_password auth
+python-dotenv>=1.0.0
+bcrypt>=4.0.0              # password hashing — used directly (passlib 1.7.4 is incompatible with bcrypt 4.x)
+itsdangerous>=2.1.2        # signed session cookies
+apscheduler>=3.10.4        # background job to poll Gmail on a schedule
+requests>=2.31.0           # HTTP calls to HubSpot / Mailchimp / Campaign Monitor APIs
+google-auth>=2.29.0        # service account + domain-wide delegation
+google-api-python-client>=2.125.0  # Gmail API client
