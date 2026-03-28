@@ -96,6 +96,7 @@ class Orchestrator:
         resend: bool = False,
         account_id: str | None = None,
         activity: ActivityRun | None = None,
+        manual: bool = False,
     ) -> dict:
         """
         Main execution: fetch receipts and email them to clients.
@@ -154,8 +155,8 @@ class Orchestrator:
                 client_name, ad_account_id, ", ".join(emails), client_schedule,
             )
 
-            # Skip if today is not this client's send day (ignored for dry-run)
-            if not dry_run and not resend and not should_send_today(client_schedule):
+            # Skip if today is not this client's send day (ignored for manual/dry runs)
+            if not manual and not dry_run and not resend and not should_send_today(client_schedule):
                 logger.info(
                     "Skipping %s — not their send day (schedule: %s)",
                     client_name, client_schedule,
@@ -165,9 +166,9 @@ class Orchestrator:
                     activity.record_skipped(client_name, ad_account_id, "wrong_day", emails)
                 continue
 
-            # Skip if already sent for this period
+            # Skip if already sent for this period (ignored for manual/resend runs)
             prev = sent_log.get(ad_account_id, {})
-            if not dry_run and not resend and prev.get("period_end") is not None and prev.get("period_end") >= period_end_str:
+            if not manual and not dry_run and not resend and prev.get("period_end") is not None and prev.get("period_end") >= period_end_str:
                 logger.info(
                     "Skipping %s — already sent up to %s (use --resend to override)",
                     client_name, prev["period_end"],

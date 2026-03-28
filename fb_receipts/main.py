@@ -123,6 +123,7 @@ def run_once(
         resend=resend,
         account_id=account_id,
         activity=activity,
+        manual=True,  # bypass schedule/sent-log checks for manual runs
     )
 
     print(f"\nResults: {results}")
