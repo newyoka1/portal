@@ -159,3 +159,95 @@ class DbClient:
         """Combined save — settings + clients in one call."""
         self.save_settings(settings)
         self.save_clients(clients)
+
+    # ── Sent Receipts ───────────────────────────────────────────────────────
+
+    def is_receipt_sent(self, ad_account_id: str, transaction_id: str) -> bool:
+        """Check if a receipt has already been processed."""
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM sent_receipts "
+                    "WHERE ad_account_id = %s AND transaction_id = %s",
+                    (ad_account_id, transaction_id),
+                )
+                return cur.fetchone() is not None
+
+    def save_sent_receipt(self, receipt: dict, pdf_data: bytes, pdf_filename: str,
+                          sent_to: str, status: str = "sent", error: str = "") -> int:
+        """Store a sent receipt with its PDF binary for future resend."""
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO sent_receipts
+                        (ad_account_id, transaction_id, gmail_message_id, receipt_for,
+                         amount, currency, invoice_date, date_range_start, date_range_end,
+                         payment_method, reference_number, billing_reason, product_type,
+                         email_subject, pdf_data, pdf_filename, sent_to, sent_at, status, error)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),%s,%s)
+                    ON DUPLICATE KEY UPDATE
+                        pdf_data = VALUES(pdf_data),
+                        pdf_filename = VALUES(pdf_filename),
+                        sent_to = VALUES(sent_to),
+                        sent_at = NOW(),
+                        status = VALUES(status),
+                        error = VALUES(error)
+                    """,
+                    (
+                        receipt.get("account_id", ""),
+                        receipt.get("transaction_id", ""),
+                        receipt.get("gmail_message_id", ""),
+                        receipt.get("receipt_for", ""),
+                        receipt.get("amount", 0),
+                        receipt.get("currency", "USD"),
+                        receipt.get("email_date") or None,
+                        receipt.get("date_range_start", ""),
+                        receipt.get("date_range_end", ""),
+                        receipt.get("payment_method", ""),
+                        receipt.get("reference_number", ""),
+                        receipt.get("billing_reason", ""),
+                        receipt.get("product_type", "Meta ads"),
+                        receipt.get("email_subject", ""),
+                        pdf_data,
+                        pdf_filename,
+                        sent_to,
+                        status,
+                        error,
+                    ),
+                )
+            conn.commit()
+            return cur.lastrowid
+
+    def get_sent_receipts(self, ad_account_id: str | None = None,
+                          limit: int = 50) -> list[dict]:
+        """Get sent receipt history (without PDF binary for listing)."""
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                sql = (
+                    "SELECT id, ad_account_id, transaction_id, receipt_for, amount, "
+                    "currency, invoice_date, date_range_start, date_range_end, "
+                    "payment_method, pdf_filename, sent_to, sent_at, status, error "
+                    "FROM sent_receipts "
+                )
+                if ad_account_id:
+                    sql += "WHERE ad_account_id = %s "
+                    sql += "ORDER BY sent_at DESC LIMIT %s"
+                    cur.execute(sql, (ad_account_id, limit))
+                else:
+                    sql += "ORDER BY sent_at DESC LIMIT %s"
+                    cur.execute(sql, (limit,))
+                return [dict(r) for r in cur.fetchall()]
+
+    def get_receipt_pdf(self, receipt_id: int) -> tuple[bytes, str] | None:
+        """Get PDF binary + filename for a specific receipt (for resend/download)."""
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT pdf_data, pdf_filename FROM sent_receipts WHERE id = %s",
+                    (receipt_id,),
+                )
+                row = cur.fetchone()
+                if row and row.get("pdf_data"):
+                    return row["pdf_data"], row["pdf_filename"]
+                return None

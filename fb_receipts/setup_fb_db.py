@@ -61,6 +61,37 @@ with conn.cursor() as cur:
     """)
     print("Table settings: ready")
 
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS sent_receipts (
+            id              INT AUTO_INCREMENT PRIMARY KEY,
+            ad_account_id   VARCHAR(64)   NOT NULL,
+            transaction_id  VARCHAR(100)  NOT NULL DEFAULT '',
+            gmail_message_id VARCHAR(100) NOT NULL DEFAULT '',
+            receipt_for     VARCHAR(255)  NOT NULL DEFAULT '',
+            amount          DECIMAL(12,2) NOT NULL DEFAULT 0,
+            currency        VARCHAR(10)   NOT NULL DEFAULT 'USD',
+            invoice_date    DATETIME      NULL,
+            date_range_start VARCHAR(100) NOT NULL DEFAULT '',
+            date_range_end  VARCHAR(100)  NOT NULL DEFAULT '',
+            payment_method  VARCHAR(100)  NOT NULL DEFAULT '',
+            reference_number VARCHAR(100) NOT NULL DEFAULT '',
+            billing_reason  VARCHAR(255)  NOT NULL DEFAULT '',
+            product_type    VARCHAR(64)   NOT NULL DEFAULT 'Meta ads',
+            email_subject   VARCHAR(500)  NOT NULL DEFAULT '',
+            pdf_data        LONGBLOB      NULL,
+            pdf_filename    VARCHAR(255)  NOT NULL DEFAULT '',
+            sent_to         VARCHAR(500)  NOT NULL DEFAULT '',
+            sent_at         DATETIME      NULL,
+            status          ENUM('sent','failed','pending') NOT NULL DEFAULT 'pending',
+            error           VARCHAR(500)  NOT NULL DEFAULT '',
+            created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_txn (ad_account_id, transaction_id),
+            INDEX idx_account (ad_account_id),
+            INDEX idx_status (status)
+        )
+    """)
+    print("Table sent_receipts: ready")
+
 conn.commit()
 conn.close()
 print("\nDone. Run this once — it's safe to re-run (all statements are idempotent).")

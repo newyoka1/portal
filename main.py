@@ -88,19 +88,15 @@ def startup():
     scheduler = BackgroundScheduler()
     scheduler.add_job(fetch_and_store_emails, "interval", minutes=poll_interval)
 
-    # Schedule FB receipt runs — check daily at configured time
+    # Poll Gmail for new Meta receipt emails and auto-send (every 10 min)
     try:
-        from routers.fb_receipts import _run_scheduled_receipts
-        scheduler.add_job(
-            _run_scheduled_receipts,
-            "cron",
-            hour="*",       # check every hour
-            minute=5,       # at :05 past
-            id="fb_receipts_scheduler",
-        )
-        logging.info("FB receipts scheduler enabled (checks hourly).")
+        from fb_receipts.src.receipt_poller import poll_and_send
+        receipt_interval = int(os.getenv("RECEIPT_POLL_MINUTES", "10"))
+        scheduler.add_job(poll_and_send, "interval", minutes=receipt_interval,
+                          id="fb_receipt_poller")
+        logging.info("FB receipt poller scheduled every %d minute(s).", receipt_interval)
     except Exception as exc:
-        logging.warning("FB receipts scheduler not loaded: %s", exc)
+        logging.warning("FB receipt poller not loaded: %s", exc)
 
     scheduler.start()
     logging.info("Gmail poller scheduled every %d minute(s).", poll_interval)

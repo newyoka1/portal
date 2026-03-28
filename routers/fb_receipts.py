@@ -56,32 +56,22 @@ def fb_receipts_page(
     request: Request,
     current_user: User = Depends(require_user),
 ):
-    # Activity log
-    activity = []
-    if ACTIVITY_FILE.exists():
-        try:
-            activity = json.loads(ACTIVITY_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-
-    last_run = None
-    if LAST_RUN_FILE.exists():
-        try:
-            last_run = json.loads(LAST_RUN_FILE.read_text())
-        except Exception:
-            pass
-
     default_start = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
     default_end   = datetime.now().strftime("%Y-%m-%d")
 
-    # Load clients and settings from Google Sheets
     clients  = _load_clients()
     settings = _load_settings()
 
+    # Sent receipts from DB
+    sent_receipts = []
+    try:
+        sent_receipts = _get_db_client().get_sent_receipts(limit=100)
+    except Exception as e:
+        logger.warning("Could not load sent receipts: %s", e)
+
     return templates.TemplateResponse(request, "fb_receipts.html", {
         "current_user":  current_user,
-        "activity":      list(reversed(activity)),
-        "last_run":      last_run,
+        "sent_receipts": sent_receipts,
         "default_start": default_start,
         "default_end":   default_end,
         "fb_dir_exists": FB_DIR.exists(),
@@ -155,38 +145,72 @@ async def fb_resend(
     request: Request,
     current_user: User = Depends(require_user),
 ):
-    """Resend a receipt PDF to a custom email address via Gmail API."""
+    """Resend a receipt PDF from DB to a custom email address."""
     try:
         body = await request.json()
-        pdf_paths = body.get("pdf_paths", [])
+        receipt_id = body.get("receipt_id")
         to_email = body.get("to_email", "").strip()
-        client_name = body.get("client_name", "Client")
 
         if not to_email:
             return JSONResponse({"ok": False, "error": "No email address provided"}, status_code=400)
-        if not pdf_paths:
-            return JSONResponse({"ok": False, "error": "No PDFs to send"}, status_code=400)
+        if not receipt_id:
+            return JSONResponse({"ok": False, "error": "No receipt ID"}, status_code=400)
 
-        # Build receipts list with pdf_path entries for the email builder
-        receipts = [{"pdf_path": p, "type": "resend"} for p in pdf_paths if Path(FB_DIR / p).exists()]
-        if not receipts:
-            return JSONResponse({"ok": False, "error": "PDF files not found on server (may have been cleared on redeploy)"}, status_code=404)
+        db = _get_db_client()
+        result = db.get_receipt_pdf(int(receipt_id))
+        if not result:
+            return JSONResponse({"ok": False, "error": "Receipt PDF not found in database"}, status_code=404)
+
+        pdf_data, pdf_filename = result
+
+        # Write PDF to temp file for the email builder
+        import tempfile
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf", prefix="resend_")
+        tmp.write(pdf_data)
+        tmp.close()
+
+        receipts = [{"pdf_path": tmp.name, "type": "resend"}]
 
         sys.path.insert(0, str(FB_DIR))
         from src.email_service import EmailService
         svc = EmailService()
+
+        # Get client name from the receipt record
+        sent_list = db.get_sent_receipts()
+        client_name = next((r["receipt_for"] for r in sent_list if r["id"] == int(receipt_id)), "Client")
+
         ok = svc.send_receipt(
             to_email=to_email,
             client_name=client_name,
             receipts=receipts,
             subject=f"Facebook Ads Receipt — {client_name} (resent)",
         )
+
+        # Clean up temp file
+        Path(tmp.name).unlink(missing_ok=True)
+
         if ok:
             return JSONResponse({"ok": True})
         else:
-            return JSONResponse({"ok": False, "error": "Email send failed — check logs"}, status_code=500)
+            return JSONResponse({"ok": False, "error": "Email send failed"}, status_code=500)
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
+@router.get("/download-db/{receipt_id}")
+def download_db_pdf(receipt_id: int, current_user: User = Depends(require_user)):
+    """Download a receipt PDF from the database."""
+    db = _get_db_client()
+    result = db.get_receipt_pdf(receipt_id)
+    if not result:
+        return JSONResponse({"error": "Receipt not found"}, status_code=404)
+    pdf_data, pdf_filename = result
+    from starlette.responses import Response
+    return Response(
+        content=pdf_data,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{pdf_filename}"'},
+    )
 
 
 @router.get("/api/clients", response_class=JSONResponse)
@@ -235,83 +259,6 @@ def api_save_settings(
         return JSONResponse({"ok": True})
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
-
-
-def _run_scheduled_receipts():
-    """Called by APScheduler — checks which clients are due and runs receipts."""
-    import subprocess
-    from datetime import date
-
-    now = datetime.now()
-    weekday_name = now.strftime("%A").lower()   # monday, tuesday, ...
-    day_of_month = now.day
-
-    try:
-        settings = _load_settings()
-        clients  = _load_clients()
-    except Exception as e:
-        logger.warning("Receipt scheduler: could not load config: %s", e)
-        return
-
-    schedule_time = settings.get("schedule_time", "09:00")
-    try:
-        target_hour = int(schedule_time.split(":")[0])
-    except (ValueError, IndexError):
-        target_hour = 9
-
-    # Only run at the configured hour
-    if now.hour != target_hour:
-        return
-
-    # Determine date range: last 7 days for weekly, last 30 for monthly
-    for client in clients:
-        if client.get("active") != "yes":
-            continue
-
-        sched = client.get("schedule", "weekly_friday")
-        should_run = False
-
-        if sched.startswith("weekly_"):
-            sched_day = sched.replace("weekly_", "")
-            if sched_day == weekday_name:
-                should_run = True
-        elif sched.startswith("monthly_"):
-            try:
-                sched_dom = int(sched.replace("monthly_", ""))
-                if sched_dom == day_of_month:
-                    should_run = True
-            except ValueError:
-                pass
-
-        if not should_run:
-            continue
-
-        # Determine period
-        if "weekly" in sched:
-            start = (now - timedelta(days=7)).strftime("%Y-%m-%d")
-        else:
-            start = (now - timedelta(days=30)).strftime("%Y-%m-%d")
-        end = now.strftime("%Y-%m-%d")
-
-        account_id = client.get("ad_account_id", "")
-        client_name = client.get("client_name", account_id)
-        logger.info("Receipt scheduler: running for %s (%s → %s)", client_name, start, end)
-
-        try:
-            result = subprocess.run(
-                [sys.executable, str(FB_DIR / "main.py"),
-                 "--start-date", start, "--end-date", end,
-                 "--account-id", account_id],
-                cwd=str(FB_DIR),
-                capture_output=True, text=True, timeout=300,
-            )
-            if result.returncode == 0:
-                logger.info("Receipt scheduler: %s completed OK", client_name)
-            else:
-                logger.warning("Receipt scheduler: %s failed (exit %d): %s",
-                               client_name, result.returncode, result.stderr[:500])
-        except Exception as e:
-            logger.error("Receipt scheduler: %s error: %s", client_name, e)
 
 
 async def _stream(args: list[str], cwd: str):
