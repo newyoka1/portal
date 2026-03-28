@@ -193,9 +193,8 @@ class Orchestrator:
 
             logger.info("Found %d receipt(s) for %s", len(receipts), client_name)
 
-            # 3. Download real Facebook billing PDFs (required — no fallback substitution)
+            # 3. Get PDFs — try real FB download, fall back to generated receipts
             pdf_paths: list = []
-            fb_error: str | None = None
 
             if use_fb_pdfs:
                 try:
@@ -210,36 +209,35 @@ class Orchestrator:
                             "Downloaded %d real Facebook PDF(s) for %s",
                             len(pdf_paths), client_name,
                         )
-                    else:
-                        fb_error = "No receipt PDFs found on the Facebook billing page"
                 except Exception as e:
-                    fb_error = str(e)
+                    logger.warning("FB PDF download failed for %s: %s", client_name, e)
 
-            if not pdf_paths:
-                reason = fb_error or "Facebook PDF download skipped (--no-fb-pdfs)"
-                logger.warning(
-                    "No real Facebook PDFs for %s — skipping client. Reason: %s",
-                    client_name, reason,
-                )
-                if not dry_run:
-                    self.email.send_failure_notification(client_name, ad_account_id, reason, notify_email)
-                results["failed"] += 1
-                if activity:
-                    activity.record_failed(client_name, ad_account_id, emails, reason)
-                continue
-
-            # Also generate a spend-summary PDF as a companion (not a replacement)
-            summary_pdf = generate_receipt_pdf(
+            # Generate Meta-style receipt PDFs (per billing transaction if available)
+            campaigns = self.meta.get_campaign_spend(ad_account_id, start_date, end_date)
+            receipt_pdf = generate_receipt_pdf(
                 client_name=client_name,
                 ad_account_id=ad_account_id,
                 receipts=receipts,
                 start_date=start_date,
                 end_date=end_date,
                 base_dir=run_dir,
+                campaigns=campaigns,
             )
-            if summary_pdf:
-                pdf_paths.append(summary_pdf)
-                logger.info("Attached spend summary PDF alongside real receipts: %s", summary_pdf)
+            if receipt_pdf:
+                pdf_paths.append(receipt_pdf)
+                logger.info("Generated receipt PDF: %s", receipt_pdf)
+
+            if not pdf_paths:
+                logger.warning("No PDFs generated for %s", client_name)
+                results["failed"] += 1
+                if not dry_run:
+                    self.email.send_failure_notification(
+                        client_name, ad_account_id,
+                        "No spend data found for this period", notify_email,
+                    )
+                if activity:
+                    activity.record_failed(client_name, ad_account_id, emails, "no_pdfs")
+                continue
 
             # Attach PDF paths to receipts so email_service picks them up
             for i, pdf_path in enumerate(pdf_paths):

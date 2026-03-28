@@ -404,6 +404,70 @@ class MetaClient:
             logger.error("Failed to download invoice %s: %s", invoice_id, e)
             return None
 
+    def get_transactions(
+        self,
+        ad_account_id: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> list[dict]:
+        """
+        Fetch billing transactions (individual charges/payments) for an ad account.
+        Returns one record per billing event — matches Facebook's Payment Activity view.
+
+        Each transaction has: id, time, amount, status (paid/failed), payment method info.
+        """
+        if not ad_account_id.startswith("act_"):
+            ad_account_id = f"act_{ad_account_id}"
+
+        params = {
+            "fields": "id,time,amount,currency,status,payment_option",
+        }
+        if start_date and end_date:
+            params["time_range"] = (
+                f'{{"since":"{start_date.strftime("%Y-%m-%d")}",'
+                f'"until":"{end_date.strftime("%Y-%m-%d")}"}}'
+            )
+
+        try:
+            results = self._get_paginated(f"{ad_account_id}/transactions", params)
+            logger.info("Ad account %s: found %d transactions", ad_account_id, len(results))
+            return results
+        except requests.HTTPError as e:
+            logger.warning("Could not fetch transactions for %s: %s", ad_account_id, e)
+            return []
+
+    def get_campaign_spend(
+        self,
+        ad_account_id: str,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> list[dict]:
+        """
+        Fetch campaign-level spend breakdown for the period.
+        Returns one record per campaign with spend > 0.
+        """
+        if not ad_account_id.startswith("act_"):
+            ad_account_id = f"act_{ad_account_id}"
+
+        params = {
+            "fields": "campaign_name,campaign_id,spend,impressions,clicks,date_start,date_stop",
+            "level": "campaign",
+        }
+        if start_date and end_date:
+            params["time_range"] = (
+                f'{{"since":"{start_date.strftime("%Y-%m-%d")}",'
+                f'"until":"{end_date.strftime("%Y-%m-%d")}"}}'
+            )
+
+        try:
+            results = self._get_paginated(f"{ad_account_id}/insights", params)
+            results = [r for r in results if float(r.get("spend", 0)) > 0]
+            logger.info("Ad account %s: %d campaigns with spend", ad_account_id, len(results))
+            return results
+        except requests.HTTPError as e:
+            logger.warning("Could not fetch campaign insights for %s: %s", ad_account_id, e)
+            return []
+
     def fetch_receipts_for_account(
         self,
         ad_account_id: str,
@@ -412,8 +476,7 @@ class MetaClient:
     ) -> list[dict]:
         """
         Fetch all receipt data for an ad account.
-        Tries invoices first, falls back to transactions.
-        Returns a list of receipt dicts with downloaded PDF paths where available.
+        Returns daily spend rows + campaign breakdown + billing transactions.
         """
         if start_date is None:
             start_date = datetime.now() - timedelta(days=35)
@@ -421,6 +484,7 @@ class MetaClient:
             end_date = datetime.now()
 
         spend_rows = self.get_spend(ad_account_id, start_date, end_date)
+        campaigns = self.get_campaign_spend(ad_account_id, start_date, end_date)
 
         receipts = []
         for row in spend_rows:
