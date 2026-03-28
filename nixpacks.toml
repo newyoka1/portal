@@ -1,5 +1,0 @@
-[phases.setup]
-cmds = ["git submodule update --init --recursive"]
-
-[phases.install]
-cmds = ["pip install -r requirements.txt"]

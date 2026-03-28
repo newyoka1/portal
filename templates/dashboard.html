@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h5 class="fw-bold mb-4"><i class="bi bi-grid me-2"></i>Dashboard</h5>
+
+<!-- Email counts -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <a href="/emails?status=pending" class="card shadow-sm text-decoration-none text-dark">
+      <div class="card-body text-center py-3">
+        <div class="display-6 fw-bold text-warning">{{ counts.pending }}</div>
+        <div class="small text-muted">Pending</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="/emails?status=in_review" class="card shadow-sm text-decoration-none text-dark">
+      <div class="card-body text-center py-3">
+        <div class="display-6 fw-bold text-info">{{ counts.in_review }}</div>
+        <div class="small text-muted">In Review</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="/emails?status=approved" class="card shadow-sm text-decoration-none text-dark">
+      <div class="card-body text-center py-3">
+        <div class="display-6 fw-bold text-success">{{ counts.approved }}</div>
+        <div class="small text-muted">Approved</div>
+      </div>
+    </a>
+  </div>
+  <div class="col-6 col-md-3">
+    <a href="/emails?status=rejected" class="card shadow-sm text-decoration-none text-dark">
+      <div class="card-body text-center py-3">
+        <div class="display-6 fw-bold text-danger">{{ counts.rejected }}</div>
+        <div class="small text-muted">Rejected</div>
+      </div>
+    </a>
+  </div>
+</div>
+
+<!-- Section cards -->
+<div class="row g-3">
+  <div class="col-md-6 col-lg-3">
+    <a href="/emails" class="card shadow-sm text-decoration-none text-dark h-100">
+      <div class="card-body">
+        <i class="bi bi-inbox fs-2 text-primary mb-2 d-block"></i>
+        <h6 class="fw-bold">Email Queue</h6>
+        <p class="text-muted small mb-0">Review and approve outbound emails from HubSpot &amp; Campaign Monitor.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <a href="/fb-receipts" class="card shadow-sm text-decoration-none text-dark h-100">
+      <div class="card-body">
+        <i class="bi bi-receipt fs-2 text-warning mb-2 d-block"></i>
+        <h6 class="fw-bold">FB Ad Receipts</h6>
+        <p class="text-muted small mb-0">Download and email Facebook ad receipts to clients.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <a href="/voter-pipeline" class="card shadow-sm text-decoration-none text-dark h-100">
+      <div class="card-body">
+        <i class="bi bi-diagram-3 fs-2 text-success mb-2 d-block"></i>
+        <h6 class="fw-bold">Voter Pipeline</h6>
+        <p class="text-muted small mb-0">CRM sync, Aiven cloud sync, and voter data exports.</p>
+      </div>
+    </a>
+  </div>
+  <div class="col-md-6 col-lg-3">
+    <a href="/log" class="card shadow-sm text-decoration-none text-dark h-100">
+      <div class="card-body">
+        <i class="bi bi-journal-check fs-2 text-secondary mb-2 d-block"></i>
+        <h6 class="fw-bold">Approval Log</h6>
+        <p class="text-muted small mb-0">History of approved and rejected emails with approver details.</p>
+      </div>
+    </a>
+  </div>
+</div>
+{% endblock %}

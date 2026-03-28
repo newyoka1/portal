@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Approval Log{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h5 class="mb-0 fw-bold"><i class="bi bi-journal-check me-2"></i>Approval Log</h5>
+  <div class="d-flex gap-2">
+    <a href="/log?status=approved"
+       class="btn btn-sm {{ 'btn-success' if status_filter == 'approved' else 'btn-outline-success' }}">
+      <i class="bi bi-check-circle me-1"></i>Approved
+    </a>
+    <a href="/log?status=rejected"
+       class="btn btn-sm {{ 'btn-danger' if status_filter == 'rejected' else 'btn-outline-danger' }}">
+      <i class="bi bi-x-circle me-1"></i>Rejected
+    </a>
+    <a href="/log?status=all"
+       class="btn btn-sm {{ 'btn-secondary' if status_filter == 'all' else 'btn-outline-secondary' }}">
+      All
+    </a>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Subject</th>
+          <th>Client</th>
+          <th>Origin</th>
+          <th>Status</th>
+          <th>Received</th>
+          <th>Sent for Approval</th>
+          <th>Approvers</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for email in log_emails %}
+        <tr class="align-top">
+          <td>
+            <a href="/emails/{{ email.id }}" class="fw-semibold text-decoration-none text-dark">
+              {{ email.subject|truncate(55) }}
+            </a>
+            <div class="text-muted small">{{ email.from_name or email.from_address }}</div>
+          </td>
+          <td>
+            {% if email.client %}
+              {{ email.client.name }}
+            {% else %}
+              <span class="text-muted fst-italic">—</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge badge-origin-{{ email.origin_system|lower|replace(' ','-') }}">
+              {{ email.origin_system }}
+            </span>
+          </td>
+          <td>
+            <span class="badge status-{{ email.status }}">
+              {{ email.status|replace('_',' ')|title }}
+            </span>
+          </td>
+          <td class="text-muted small">{{ email.received_at.strftime('%b %d, %Y') }}</td>
+          <td class="text-muted small">
+            {% if email.sent_for_approval_at %}
+              {{ email.sent_for_approval_at.strftime('%b %d, %Y %I:%M %p') }}
+            {% else %}
+              <span class="fst-italic">—</span>
+            {% endif %}
+          </td>
+          <td>
+            {% for approval in email.approvals %}
+            <div class="d-flex align-items-start gap-2 mb-2">
+              <span class="mt-1">
+                {% if approval.decision == 'approved' %}
+                  <i class="bi bi-check-circle-fill text-success"></i>
+                {% elif approval.decision == 'rejected' %}
+                  <i class="bi bi-x-circle-fill text-danger"></i>
+                {% else %}
+                  <i class="bi bi-hourglass-split text-warning"></i>
+                {% endif %}
+              </span>
+              <div>
+                <span class="fw-semibold small">{{ approval.user.name }}</span>
+                {% if approval.required %}
+                  <span class="badge bg-danger ms-1" style="font-size:0.65rem;">Required</span>
+                {% else %}
+                  <span class="badge bg-secondary ms-1" style="font-size:0.65rem;">Optional</span>
+                {% endif %}
+                {% if approval.decided_at %}
+                  <div class="text-muted" style="font-size:0.72rem;">
+                    {{ approval.decided_at.strftime('%b %d at %I:%M %p') }}
+                  </div>
+                {% endif %}
+                {% if approval.note %}
+                  <div class="fst-italic text-muted" style="font-size:0.8rem;">
+                    "{{ approval.note }}"
+                  </div>
+                {% endif %}
+              </div>
+            </div>
+            {% else %}
+              <span class="text-muted fst-italic small">No approvers</span>
+            {% endfor %}
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center text-muted py-5">
+            <i class="bi bi-journal fs-1 d-block mb-2"></i>
+            No {{ status_filter if status_filter != 'all' else '' }} emails in the log yet.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
