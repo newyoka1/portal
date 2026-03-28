@@ -144,9 +144,12 @@ class EmailService:
         msg = self._build_message(to_email, client_name, receipts, subject, ad_images, bcc)
 
         try:
-            with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            logger.info("Connecting to smtp.gmail.com:587...")
+            with smtplib.SMTP("smtp.gmail.com", 587, timeout=30) as server:
                 server.starttls()
+                logger.info("Logging in as %s...", self.sender_email)
                 server.login(self.sender_email, self.app_password)
+                logger.info("Sending email to %s...", to_email)
                 server.send_message(msg)
 
             logger.info(
@@ -157,6 +160,9 @@ class EmailService:
             )
             return True
 
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error("SMTP auth failed for %s: %s — check GMAIL_SENDER_EMAIL and GMAIL_APP_PASSWORD", self.sender_email, e)
+            return False
         except Exception as e:
             logger.error("Failed to send email to %s: %s", to_email, e)
             return False

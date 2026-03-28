@@ -228,11 +228,12 @@ class Orchestrator:
                     # Add a placeholder receipt entry for any extra PDFs
                     receipts.append({"pdf_path": str(pdf_path), "type": "fb_receipt"})
 
-            # 4. Fetch ad creative images
+            # 4. Fetch ad creative images (max 4 to keep it fast)
             ad_images = []
             try:
                 ad_images = self.meta.get_ad_images(
-                    ad_account_id, start_date, end_date, base_dir=run_dir
+                    ad_account_id, start_date, end_date,
+                    max_images=4, base_dir=run_dir,
                 )
                 if ad_images:
                     logger.info(
