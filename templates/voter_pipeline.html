@@ -7,38 +7,25 @@
 {% if not voter_dir_exists %}
 <div class="alert alert-warning">
   <i class="bi bi-exclamation-triangle me-2"></i>
-  <strong>voter_pipeline submodule not found</strong> — expected at <code>../voter_pipeline/</code> relative to the portal root.
+  <strong>voter_pipeline directory not found.</strong>
 </div>
 {% else %}
 
 <ul class="nav nav-tabs mb-3" id="voterTabs">
-  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-status">Status</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-export">Export</a></li>
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-export">Export</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-crm">CRM Sync</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-sync">Aiven Sync</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-pipeline">Pipeline</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-donors">Donors</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-enrich">Enrich</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-status">Status</a></li>
 </ul>
 
 <div class="tab-content">
 
-  <!-- ── STATUS ──────────────────────────────────────────────────────────── -->
-  <div class="tab-pane fade show active" id="tab-status">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <p class="text-muted small mb-3">Shows age of source files and last pipeline run times.</p>
-        <button class="btn btn-primary" onclick="vpRun('status', '')">
-          <i class="bi bi-arrow-clockwise me-1"></i>Check Status
-        </button>
-        <div id="log-status"></div>
-      </div>
-    </div>
-  </div>
-
   <!-- ── EXPORT ──────────────────────────────────────────────────────────── -->
-  <div class="tab-pane fade" id="tab-export">
+  <div class="tab-pane fade show active" id="tab-export">
     <div class="card shadow-sm">
       <div class="card-body">
+        <p class="text-muted small mb-3">Generate Excel exports by district. Files are uploaded to the server for download.</p>
         <div class="row g-3 mb-3">
           <div class="col-md-4">
             <label class="form-label fw-semibold">District type</label>
@@ -82,64 +69,9 @@
           </button>
           <button class="btn btn-outline-secondary" onclick="vpRunFull('hubspot-sync')">HubSpot</button>
           <button class="btn btn-outline-secondary" onclick="vpRunFull('cm-sync')">Campaign Monitor</button>
-          <button class="btn btn-outline-secondary" onclick="vpRunFull('mailchimp-sync')">Mailchimp</button>
           <button class="btn btn-outline-secondary" onclick="vpRunFull('crm-enrich')">Enrich Contacts</button>
         </div>
         <div id="log-crm"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── AIVEN SYNC ─────────────────────────────────────────────────────── -->
-  <div class="tab-pane fade" id="tab-sync">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <p class="text-muted small mb-3">Pushes enriched local MySQL tables to the Aiven cloud replica.</p>
-        <div class="d-flex flex-wrap gap-2 mb-3">
-          <button class="btn btn-primary" onclick="vpRun('sync', '')">
-            <i class="bi bi-cloud-upload me-1"></i>Sync Voter Tables
-          </button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('sync', '--all-databases')">
-            Sync All Databases
-          </button>
-        </div>
-        <div class="mb-3">
-          <label class="form-label fw-semibold small">Sync specific databases</label>
-          <div class="d-flex flex-wrap gap-2">
-            {% for db in ['boe_donors', 'National_Donors', 'cfb_donors', 'crm_unified'] %}
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" value="{{ db }}" id="db_{{ db }}">
-              <label class="form-check-label small" for="db_{{ db }}">{{ db }}</label>
-            </div>
-            {% endfor %}
-          </div>
-          <button class="btn btn-sm btn-outline-primary mt-2" onclick="syncSelected()">
-            Sync Selected
-          </button>
-        </div>
-        <div id="log-sync"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── PIPELINE (heavy — local only) ──────────────────────────────────── -->
-  <div class="tab-pane fade" id="tab-pipeline">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <div class="alert alert-warning mb-3">
-          <i class="bi bi-exclamation-triangle me-2"></i>
-          These operations are slow (minutes to hours) and require the full 13M-row voter database.
-          They are intended for local use only — running on Railway may time out or fail.
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-          <button class="btn btn-primary" onclick="vpRun('pipeline', '')">
-            <i class="bi bi-play-fill me-1"></i>Load All Voters
-          </button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('ethnicity', '')">Build Ethnicity Model</button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('enrich-derived', '')">Enrich Derived</button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('party-snapshot', '')">Party Snapshot</button>
-        </div>
-        <div id="log-pipeline"></div>
       </div>
     </div>
   </div>
@@ -148,23 +80,56 @@
   <div class="tab-pane fade" id="tab-donors">
     <div class="card shadow-sm">
       <div class="card-body">
-        <div class="alert alert-warning mb-3">
-          <i class="bi bi-exclamation-triangle me-2"></i>
-          Donor pipelines require local MySQL. Not available on Railway.
-        </div>
+        <p class="text-muted small mb-3">Downloads donor data from government sources and enriches the voter file.</p>
         <div class="form-check mb-3">
           <input class="form-check-input" type="checkbox" id="donorRefresh">
-          <label class="form-check-label" for="donorRefresh">Download fresh data (re-download)</label>
+          <label class="form-check-label" for="donorRefresh">Download fresh data (re-download from source)</label>
         </div>
         <div class="d-flex flex-wrap gap-2">
           <button class="btn btn-primary" onclick="vpRun('donors', document.getElementById('donorRefresh').checked ? '--refresh' : '--no-refresh')">
-            All Donors
+            <i class="bi bi-currency-dollar me-1"></i>All Donors
           </button>
           <button class="btn btn-outline-secondary" onclick="vpRun('boe-enrich', '')">State (BOE)</button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('national-enrich', '')">National</button>
+          <button class="btn btn-outline-secondary" onclick="vpRun('national-enrich', '')">National (FEC)</button>
           <button class="btn btn-outline-secondary" onclick="vpRun('cfb-enrich', '')">NYC (CFB)</button>
         </div>
         <div id="log-donors"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── ENRICH ─────────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="tab-enrich">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <p class="text-muted small mb-3">Database enrichment operations — adds computed columns to the voter file.</p>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+          <button class="btn btn-primary" onclick="vpRun('ethnicity', '')">
+            <i class="bi bi-people me-1"></i>Build Ethnicity Model
+          </button>
+          <button class="btn btn-outline-secondary" onclick="vpRun('enrich-derived', '')">Enrich Derived</button>
+          <button class="btn btn-outline-secondary" onclick="vpRun('district-scores', '')">District Scores</button>
+          <button class="btn btn-outline-secondary" onclick="vpRun('party-snapshot', '')">Party Snapshot</button>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-secondary" onclick="vpRun('fb-audiences', '--list-audiences')">
+            <i class="bi bi-facebook me-1"></i>List FB Audiences
+          </button>
+        </div>
+        <div id="log-enrich"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STATUS ──────────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="tab-status">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <p class="text-muted small mb-3">Shows source file ages and last pipeline run times.</p>
+        <button class="btn btn-primary" onclick="vpRun('status', '')">
+          <i class="bi bi-arrow-clockwise me-1"></i>Check Status
+        </button>
+        <div id="log-status"></div>
       </div>
     </div>
   </div>
@@ -179,12 +144,12 @@ const CMD_TAB = {
   'status':'status',
   'export':'export', 'voter-contact':'export',
   'crm-sync':'crm', 'hubspot-sync':'crm', 'cm-sync':'crm',
-  'mailchimp-sync':'crm', 'crm-enrich':'crm',
-  'sync':'sync',
-  'pipeline':'pipeline', 'ethnicity':'pipeline',
-  'enrich-derived':'pipeline', 'party-snapshot':'pipeline',
+  'crm-enrich':'crm',
   'donors':'donors', 'boe-enrich':'donors',
   'national-enrich':'donors', 'cfb-enrich':'donors',
+  'ethnicity':'enrich', 'enrich-derived':'enrich',
+  'district-scores':'enrich', 'party-snapshot':'enrich',
+  'fb-audiences':'enrich',
 };
 
 function vpRun(cmd, extra) {
@@ -206,19 +171,9 @@ function runExport() {
   vpRun(cmd, extra);
 }
 
-function syncSelected() {
-  const dbs = ['boe_donors','National_Donors','cfb_donors','crm_unified']
-    .filter(db => document.getElementById('db_' + db)?.checked);
-  if (!dbs.length) return;
-  const extra = '--databases ' + dbs.join(' ');
-  vpRun('sync', extra);
-}
-
 function updateDistInput() {
   const type  = document.getElementById('distType').value;
-  const label = document.getElementById('distLabel');
   const wrap  = document.getElementById('distValue').parentElement;
-  label.textContent = type === 'county' ? 'County name' : 'District number';
   if (type === 'county') {
     wrap.innerHTML = '<label class="form-label fw-semibold" id="distLabel">County name</label>'
       + '<input type="text" class="form-control" id="distValue" value="Nassau">';
