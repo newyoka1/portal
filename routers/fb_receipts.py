@@ -261,15 +261,24 @@ def _run_scheduled_receipts():
 
 async def _stream(args: list[str], cwd: str):
     import asyncio
+    env = {**__import__("os").environ, "PYTHONUNBUFFERED": "1"}
     try:
         proc = await asyncio.create_subprocess_exec(
             *args,
             cwd=cwd,
+            env=env,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
-        async for line in proc.stdout:
-            yield line.decode("utf-8", errors="replace")
+        # Send keepalive dots if no output for 10s (Railway proxy times out at ~30s)
+        while True:
+            try:
+                line = await asyncio.wait_for(proc.stdout.readline(), timeout=10)
+                if not line:
+                    break
+                yield line.decode("utf-8", errors="replace")
+            except asyncio.TimeoutError:
+                yield ".\n"  # keepalive
         await proc.wait()
         yield f"\n[Exit code: {proc.returncode}]\n"
     except Exception as exc:
