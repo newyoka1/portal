@@ -748,6 +748,17 @@ def main():
         print(f"{'='*80}")
         print(f"\nFile saved to:")
         print(f"  {output_file}")
+
+        # Upload to SFTP if configured (Railway / production)
+        try:
+            sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+            from utils_sftp import sftp_upload
+            url = sftp_upload(str(output_file), remote_dir="exports")
+            if url:
+                print(f"\n  Download: {url}")
+        except Exception:
+            pass
+
         print(f"\nWorkbook contains:")
         print(f"  - Summary (row counts), BOE Donors, National Donor tabs")
         if has_cfb:

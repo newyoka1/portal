@@ -297,6 +297,18 @@ def main():
     print(f"\n  Saving workbook...")
     wb.save(out_path)
     print(f"\n  Done: {out_path}")
+
+    # Upload to SFTP if configured (Railway / production)
+    try:
+        import sys
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+        from utils_sftp import sftp_upload
+        url = sftp_upload(str(out_path), remote_dir="exports")
+        if url:
+            print(f"\n  Download: {url}")
+    except Exception:
+        pass
+
     print(f"  Sheets: Summary + {len(breakdowns)} breakdown tabs")
     print()
 
