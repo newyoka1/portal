@@ -14,7 +14,11 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+try:
+    from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+except ImportError:
+    sync_playwright = None
+    PWTimeout = TimeoutError
 
 from src.config import RECEIPT_DOWNLOAD_DIR, META_BUSINESS_IDS
 
@@ -300,6 +304,10 @@ def download_receipts_for_account(
     base_dir: root folder for this run (e.g. INVOICES/2026-03-10_2026-03-17/).
               Defaults to RECEIPT_DOWNLOAD_DIR if not supplied.
     """
+    if sync_playwright is None:
+        logger.error("Playwright not installed — cannot download Facebook PDFs")
+        return []
+
     # Give a 5-day buffer before start_date so billing events that cover
     # the period boundary are not missed
     from datetime import timedelta
