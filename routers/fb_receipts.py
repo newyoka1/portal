@@ -150,6 +150,45 @@ def download_pdf(path: str, current_user: User = Depends(require_user)):
     return FileResponse(str(full_path), filename=full_path.name, media_type="application/pdf")
 
 
+@router.post("/resend")
+async def fb_resend(
+    request: Request,
+    current_user: User = Depends(require_user),
+):
+    """Resend a receipt PDF to a custom email address via Gmail API."""
+    try:
+        body = await request.json()
+        pdf_paths = body.get("pdf_paths", [])
+        to_email = body.get("to_email", "").strip()
+        client_name = body.get("client_name", "Client")
+
+        if not to_email:
+            return JSONResponse({"ok": False, "error": "No email address provided"}, status_code=400)
+        if not pdf_paths:
+            return JSONResponse({"ok": False, "error": "No PDFs to send"}, status_code=400)
+
+        # Build receipts list with pdf_path entries for the email builder
+        receipts = [{"pdf_path": p, "type": "resend"} for p in pdf_paths if Path(FB_DIR / p).exists()]
+        if not receipts:
+            return JSONResponse({"ok": False, "error": "PDF files not found on server (may have been cleared on redeploy)"}, status_code=404)
+
+        sys.path.insert(0, str(FB_DIR))
+        from src.email_service import EmailService
+        svc = EmailService()
+        ok = svc.send_receipt(
+            to_email=to_email,
+            client_name=client_name,
+            receipts=receipts,
+            subject=f"Facebook Ads Receipt — {client_name} (resent)",
+        )
+        if ok:
+            return JSONResponse({"ok": True})
+        else:
+            return JSONResponse({"ok": False, "error": "Email send failed — check logs"}, status_code=500)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 @router.get("/api/clients", response_class=JSONResponse)
 def api_clients(current_user: User = Depends(require_user)):
     return _load_clients()
