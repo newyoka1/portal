@@ -61,13 +61,12 @@ def fetch_meta_receipts(
     """
     service = _get_gmail_service()
 
-    # Build Gmail search query
+    # Build Gmail search query — broad match on Meta/Facebook billing emails with attachments
     after = start_date.strftime("%Y/%m/%d")
     before = (end_date + timedelta(days=1)).strftime("%Y/%m/%d")
-    query = f"from:(facebookmail.com OR meta.com) subject:(receipt OR transaction OR payment) has:attachment after:{after} before:{before}"
+    query = f"from:(facebookmail.com OR meta.com OR facebook.com) has:attachment after:{after} before:{before}"
 
-    logger.info("Searching Gmail (%s) for Meta receipts: %s to %s",
-                RECEIPT_EMAIL, start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
+    logger.info("Searching Gmail (%s) with query: %s", RECEIPT_EMAIL, query)
 
     results = []
     page_token = None
@@ -82,7 +81,10 @@ def fetch_meta_receipts(
 
         messages = resp.get("messages", [])
         if not messages:
+            logger.info("No emails found matching query")
             break
+
+        logger.info("Found %d email(s) to check for PDFs", len(messages))
 
         for msg_ref in messages:
             receipt = _process_message(service, msg_ref["id"], account_id, base_dir)
@@ -110,6 +112,8 @@ def _process_message(
 
     headers = {h["name"].lower(): h["value"] for h in msg.get("payload", {}).get("headers", [])}
     subject = headers.get("subject", "")
+    from_addr = headers.get("from", "")
+    logger.info("  Email: '%s' from=%s", subject[:80], from_addr[:50])
     date_str = headers.get("date", "")
     msg_date = _parse_email_date(date_str)
 
