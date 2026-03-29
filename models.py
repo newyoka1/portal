@@ -148,6 +148,22 @@ class Approval(Base):
 # ---------------------------------------------------------------------------
 # Comments (flat thread per email)
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Portal Settings (key-value config, editable in /settings admin page)
+# ---------------------------------------------------------------------------
+class PortalSetting(Base):
+    __tablename__ = "portal_settings"
+
+    key       = Column(String(100), primary_key=True)
+    value     = Column(Text, default="")
+    label     = Column(String(200), default="")
+    category  = Column(String(50), default="general")
+    is_secret = Column(Boolean, default=False)
+
+
+# ---------------------------------------------------------------------------
+# Comments (flat thread per email)
+# ---------------------------------------------------------------------------
 class Comment(Base):
     __tablename__ = "comments"
 

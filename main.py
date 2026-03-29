@@ -18,8 +18,8 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from auth import get_current_user, require_user
 from database import Base, engine, get_db
 from gmail_poller import fetch_and_store_emails
-from models import Approval, Comment, Email, User   # noqa: F401 — ensure models are imported before create_all
-from routers import auth, clients, comments, emails, fb_receipts, integrations, users, voter_pipeline
+from models import Approval, Comment, Email, PortalSetting, User   # noqa: F401 — ensure models are imported before create_all
+from routers import auth, clients, comments, emails, fb_receipts, integrations, settings, users, voter_pipeline
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,6 +39,7 @@ app.include_router(comments.router)
 app.include_router(integrations.router)
 app.include_router(fb_receipts.router)
 app.include_router(voter_pipeline.router)
+app.include_router(settings.router)
 
 # ---------------------------------------------------------------------------
 # Mount FB Ad Approval Flask app at /fb/
@@ -64,6 +65,10 @@ def fb_redirect():
 def startup():
     # Create all tables if they don't exist yet
     Base.metadata.create_all(bind=engine)
+
+    # Seed default portal settings (reads env vars on first run)
+    from portal_config import seed_defaults
+    seed_defaults()
 
     # Safe column migrations — check INFORMATION_SCHEMA before altering (MySQL-safe)
     import sqlalchemy as sa

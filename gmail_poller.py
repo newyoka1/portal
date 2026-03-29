@@ -26,9 +26,10 @@ SCOPES = ["https://mail.google.com/"]
 
 def _gmail_service():
     """Build an authenticated Gmail API service impersonating GMAIL_ADDRESS."""
-    impersonate = os.getenv("GMAIL_ADDRESS")
+    from portal_config import get_setting
+    impersonate = get_setting("GMAIL_ADDRESS")
     if not impersonate:
-        raise RuntimeError("GMAIL_ADDRESS must be set in .env")
+        raise RuntimeError("GMAIL_ADDRESS must be set in Settings or .env")
     creds = build_credentials(SCOPES, impersonate)
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 

@@ -172,7 +172,8 @@ def send_for_approval(
         appr.token = secrets.token_urlsafe(32)
     db.flush()
 
-    app_url        = os.getenv("APP_URL", "http://localhost:8000").rstrip("/")
+    from portal_config import get_setting
+    app_url        = get_setting("APP_URL", "http://localhost:8000").rstrip("/")
     approval_pairs = [(a.user, a.token) for a in pending_approvals]
     sent           = send_approval_requests(email, approval_pairs, app_url)
 

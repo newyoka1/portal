@@ -15,9 +15,10 @@ SCOPES = ["https://mail.google.com/"]
 
 
 def _gmail_service():
-    impersonate = os.getenv("GMAIL_ADDRESS")
+    from portal_config import get_setting
+    impersonate = get_setting("GMAIL_ADDRESS")
     if not impersonate:
-        raise RuntimeError("GMAIL_ADDRESS must be set")
+        raise RuntimeError("GMAIL_ADDRESS must be set in Settings or .env")
     creds = build_credentials(SCOPES, impersonate)
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
@@ -28,7 +29,8 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> int:
     *approval_pairs* is a list of (User, token_str) tuples.
     Returns the count of messages successfully sent.
     """
-    sender = os.getenv("GMAIL_ADDRESS", "support@politikanyc.com")
+    from portal_config import get_setting
+    sender = get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
     try:
         service = _gmail_service()
     except Exception as exc:

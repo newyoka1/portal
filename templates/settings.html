@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Portal Settings{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="fw-bold mb-0"><i class="bi bi-gear me-2"></i>Portal Settings</h5>
+  <div>
+    <button class="btn btn-primary" onclick="saveAllSettings()">
+      <i class="bi bi-floppy me-1"></i>Save All
+    </button>
+    <span id="saveStatus" class="ms-2 d-none"></span>
+  </div>
+</div>
+
+{% for cat_key, cat_label in categories %}
+{% set settings = grouped.get(cat_key, []) %}
+{% if settings %}
+<div class="card shadow-sm mb-3">
+  <div class="card-header bg-white py-2">
+    <h6 class="fw-bold mb-0">
+      {% if cat_key == 'meta' %}<i class="bi bi-meta me-1"></i>
+      {% elif cat_key == 'email' %}<i class="bi bi-envelope me-1"></i>
+      {% elif cat_key == 'sftp' %}<i class="bi bi-cloud-upload me-1"></i>
+      {% elif cat_key == 'polling' %}<i class="bi bi-clock me-1"></i>
+      {% elif cat_key == 'fb_approval' %}<i class="bi bi-megaphone me-1"></i>
+      {% endif %}
+      {{ cat_label }}
+    </h6>
+  </div>
+  <div class="card-body">
+    {% for s in settings %}
+    <div class="row mb-3 align-items-center">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold mb-0" for="setting_{{ s.key }}">{{ s.label or s.key }}</label>
+        <div class="text-muted" style="font-size:.7rem">{{ s.key }}</div>
+      </div>
+      <div class="col-md-8">
+        {% if s.is_secret %}
+        <div class="input-group">
+          <input type="password" class="form-control" id="setting_{{ s.key }}"
+                 data-key="{{ s.key }}" value="{{ s.value or '' }}">
+          <button class="btn btn-outline-secondary" type="button"
+                  onclick="toggleSecret(this)">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
+        {% else %}
+        <input type="text" class="form-control" id="setting_{{ s.key }}"
+               data-key="{{ s.key }}" value="{{ s.value or '' }}">
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endfor %}
+
+<div class="text-muted small mt-3">
+  <i class="bi bi-info-circle me-1"></i>
+  Settings are stored in the database and take effect within 60 seconds.
+  Database credentials and the Google service account key remain as Railway environment variables for security.
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleSecret(btn) {
+  const input = btn.parentElement.querySelector('input');
+  if (input.type === 'password') {
+    input.type = 'text';
+    btn.innerHTML = '<i class="bi bi-eye-slash"></i>';
+  } else {
+    input.type = 'password';
+    btn.innerHTML = '<i class="bi bi-eye"></i>';
+  }
+}
+
+async function saveAllSettings() {
+  const inputs = document.querySelectorAll('[data-key]');
+  const data = {};
+  inputs.forEach(input => {
+    data[input.dataset.key] = input.value;
+  });
+
+  const status = document.getElementById('saveStatus');
+  status.className = 'ms-2 text-muted';
+  status.textContent = 'Saving...';
+  status.classList.remove('d-none');
+
+  try {
+    const resp = await fetch('/settings', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data),
+    });
+    const result = await resp.json();
+    if (result.ok) {
+      status.className = 'ms-2 text-success';
+      status.textContent = `Saved ${result.updated} setting(s)`;
+      setTimeout(() => status.classList.add('d-none'), 3000);
+    } else {
+      status.className = 'ms-2 text-danger';
+      status.textContent = 'Save failed: ' + (result.error || 'unknown');
+    }
+  } catch (err) {
+    status.className = 'ms-2 text-danger';
+    status.textContent = 'Save failed: ' + err.message;
+  }
+}
+</script>
+{% endblock %}
