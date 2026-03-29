@@ -162,6 +162,13 @@ class DbClient:
 
     # ── Sent Receipts ───────────────────────────────────────────────────────
 
+    def delete_receipt(self, receipt_id: int) -> None:
+        """Delete a receipt from the database."""
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM sent_receipts WHERE id = %s", (receipt_id,))
+            conn.commit()
+
     def is_receipt_sent(self, ad_account_id: str, transaction_id: str) -> bool:
         """Check if a receipt has already been processed."""
         with _get_conn() as conn:

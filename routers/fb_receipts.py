@@ -156,6 +156,17 @@ def download_pdf(path: str, current_user: User = Depends(require_user)):
     return FileResponse(str(full_path), filename=full_path.name, media_type="application/pdf")
 
 
+@router.post("/delete/{receipt_id}")
+def delete_receipt(receipt_id: int, current_user: User = Depends(require_user)):
+    """Delete a receipt from the database so it can be re-pulled."""
+    try:
+        db = _get_db_client()
+        db.delete_receipt(receipt_id)
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
+
+
 @router.post("/resend")
 async def fb_resend(
     request: Request,

@@ -125,6 +125,7 @@
                 <th>Sent At</th>
                 <th>PDF</th>
                 <th>Resend</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -173,6 +174,12 @@
                     </button>
                   </div>
                   {% endif %}
+                </td>
+                <td>
+                  <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                          onclick="deleteReceipt({{ r.id }}, this)" title="Delete">
+                    <i class="bi bi-trash"></i>
+                  </button>
                 </td>
               </tr>
               {% endfor %}
@@ -290,6 +297,25 @@ async function pullReceipts() {
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Pull Receipts Now';
+  }
+}
+
+// ── Delete receipt ──
+async function deleteReceipt(id, btn) {
+  if (!confirm('Delete this receipt from the database?')) return;
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/fb-receipts/delete/' + id, {method: 'POST'});
+    const data = await resp.json();
+    if (data.ok) {
+      btn.closest('tr').remove();
+    } else {
+      alert('Delete failed: ' + (data.error || 'unknown'));
+      btn.disabled = false;
+    }
+  } catch (err) {
+    alert('Delete failed: ' + err.message);
+    btn.disabled = false;
   }
 }
 
