@@ -72,6 +72,16 @@ DEFAULTS = [
     # FB Ad Approval
     ("BASE_URL", "https://connect.politikanyc.com/fb", "FB Ad Approval Base URL", "fb_approval", False),
 
+    # Voter Pipeline — HubSpot CRM
+    ("HUBSPOT_TOKEN_1", "", "HubSpot Token #1",            "voter", True),
+    ("HUBSPOT_TOKEN_2", "", "HubSpot Token #2 (optional)", "voter", True),
+    ("HUBSPOT_TOKEN_3", "", "HubSpot Token #3 (optional)", "voter", True),
+
+    # Voter Pipeline — Campaign Monitor
+    ("CM_API_KEY_1",    "", "Campaign Monitor API Key #1",            "voter", True),
+    ("CM_API_KEY_2",    "", "Campaign Monitor API Key #2 (optional)", "voter", True),
+    ("CM_API_KEY_3",    "", "Campaign Monitor API Key #3 (optional)", "voter", True),
+
 ]
 
 
