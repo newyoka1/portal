@@ -29,7 +29,15 @@ def _get_gmail_api_service():
         from google.oauth2 import service_account
         from googleapiclient.discovery import build
 
+        # Try portal settings first, then fb_receipts config
         sender = GMAIL_SENDER_EMAIL
+        try:
+            import sys
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+            from portal_config import get_setting
+            sender = get_setting("GMAIL_SENDER_EMAIL", sender)
+        except Exception:
+            pass
         if not sender:
             return None
 
