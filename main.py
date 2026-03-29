@@ -107,15 +107,28 @@ def startup():
 
     scheduler = BackgroundScheduler()
 
-    if _sched == "weekly":
-        scheduler.add_job(_poll_all, "cron", day_of_week="mon", hour=9, minute=5, id="poller")
-        logging.info("Poller scheduled: weekly (Mon 9:05 AM)")
-    elif _sched == "daily":
-        scheduler.add_job(_poll_all, "cron", hour=9, minute=5, id="poller")
-        logging.info("Poller scheduled: daily (9:05 AM)")
+    _DAY_MAP = {"mon": "mon", "tue": "tue", "wed": "wed", "thu": "thu",
+                "fri": "fri", "sat": "sat", "sun": "sun"}
+
+    if _sched == "every_15min":
+        scheduler.add_job(_poll_all, "interval", minutes=15, id="poller")
+    elif _sched == "every_30min":
+        scheduler.add_job(_poll_all, "interval", minutes=30, id="poller")
+    elif _sched == "every_4hours":
+        scheduler.add_job(_poll_all, "interval", hours=4, id="poller")
+    elif _sched.startswith("daily_"):
+        _hour = int(_sched.replace("daily_", "").replace("am", "").replace("pm", ""))
+        if "pm" in _sched and _hour != 12:
+            _hour += 12
+        scheduler.add_job(_poll_all, "cron", hour=_hour, minute=5, id="poller")
+    elif _sched.startswith("weekly_"):
+        _day = _sched.replace("weekly_", "")
+        scheduler.add_job(_poll_all, "cron", day_of_week=_DAY_MAP.get(_day, "mon"),
+                          hour=9, minute=5, id="poller")
     else:  # hourly (default)
         scheduler.add_job(_poll_all, "interval", hours=1, id="poller")
-        logging.info("Poller scheduled: hourly")
+
+    logging.info("Poller scheduled: %s", _sched)
 
     scheduler.start()
 

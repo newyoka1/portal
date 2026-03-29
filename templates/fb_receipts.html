@@ -220,9 +220,22 @@
             <div class="col-md-6">
               <label class="form-label fw-semibold">Poll schedule</label>
               <select name="poll_schedule" class="form-select">
-                <option value="hourly" {{ 'selected' if settings.get('poll_schedule', 'hourly') == 'hourly' }}>Hourly</option>
-                <option value="daily" {{ 'selected' if settings.get('poll_schedule') == 'daily' }}>Daily (9 AM)</option>
-                <option value="weekly" {{ 'selected' if settings.get('poll_schedule') == 'weekly' }}>Weekly (Monday 9 AM)</option>
+                {% set ps = settings.get('poll_schedule', 'hourly') %}
+                <option value="every_15min" {{ 'selected' if ps == 'every_15min' }}>Every 15 minutes</option>
+                <option value="every_30min" {{ 'selected' if ps == 'every_30min' }}>Every 30 minutes</option>
+                <option value="hourly" {{ 'selected' if ps == 'hourly' }}>Hourly</option>
+                <option value="every_4hours" {{ 'selected' if ps == 'every_4hours' }}>Every 4 hours</option>
+                <option value="daily_6am" {{ 'selected' if ps == 'daily_6am' }}>Daily at 6 AM</option>
+                <option value="daily_9am" {{ 'selected' if ps == 'daily_9am' }}>Daily at 9 AM</option>
+                <option value="daily_12pm" {{ 'selected' if ps == 'daily_12pm' }}>Daily at 12 PM</option>
+                <option value="daily_6pm" {{ 'selected' if ps == 'daily_6pm' }}>Daily at 6 PM</option>
+                <option value="weekly_mon" {{ 'selected' if ps == 'weekly_mon' }}>Weekly — Monday 9 AM</option>
+                <option value="weekly_tue" {{ 'selected' if ps == 'weekly_tue' }}>Weekly — Tuesday 9 AM</option>
+                <option value="weekly_wed" {{ 'selected' if ps == 'weekly_wed' }}>Weekly — Wednesday 9 AM</option>
+                <option value="weekly_thu" {{ 'selected' if ps == 'weekly_thu' }}>Weekly — Thursday 9 AM</option>
+                <option value="weekly_fri" {{ 'selected' if ps == 'weekly_fri' }}>Weekly — Friday 9 AM</option>
+                <option value="weekly_sat" {{ 'selected' if ps == 'weekly_sat' }}>Weekly — Saturday 9 AM</option>
+                <option value="weekly_sun" {{ 'selected' if ps == 'weekly_sun' }}>Weekly — Sunday 9 AM</option>
               </select>
               <div class="form-text">How often to check for new Meta receipt emails. Takes effect on next restart.</div>
             </div>
