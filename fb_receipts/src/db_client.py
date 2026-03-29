@@ -67,7 +67,7 @@ class DbClient:
         with _get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT client_name, ad_account_id, email, active, schedule "
+                    "SELECT client_name, ad_account_id, email, active, schedule, filter_words "
                     "FROM clients ORDER BY client_name"
                 )
                 rows = cur.fetchall()
@@ -78,7 +78,7 @@ class DbClient:
         with _get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT client_name, ad_account_id, email, schedule "
+                    "SELECT client_name, ad_account_id, email, schedule, filter_words "
                     "FROM clients WHERE active = 'yes' ORDER BY client_name"
                 )
                 rows = cur.fetchall()
@@ -89,12 +89,16 @@ class DbClient:
             if not r["ad_account_id"] or not emails:
                 logger.warning("Skipping client with missing account/email: %s", r)
                 continue
+            # Parse filter_words into a list of lowercase strings
+            raw_fw = r.get("filter_words") or ""
+            filter_words = [w.strip().lower() for w in raw_fw.split(",") if w.strip()]
             mappings.append({
                 "client_name":   r["client_name"],
                 "ad_account_id": r["ad_account_id"],
                 "emails":        emails,
                 "email":         emails[0],
                 "schedule":      r["schedule"] or "weekly_friday",
+                "filter_words":  filter_words,
             })
 
         logger.info("Loaded %d active client mapping(s) from DB", len(mappings))
@@ -108,13 +112,14 @@ class DbClient:
                     cur.execute(
                         """
                         INSERT INTO clients
-                            (client_name, ad_account_id, email, active, schedule)
-                        VALUES (%s, %s, %s, %s, %s)
+                            (client_name, ad_account_id, email, active, schedule, filter_words)
+                        VALUES (%s, %s, %s, %s, %s, %s)
                         ON DUPLICATE KEY UPDATE
-                            client_name = VALUES(client_name),
-                            email       = VALUES(email),
-                            active      = VALUES(active),
-                            schedule    = VALUES(schedule)
+                            client_name  = VALUES(client_name),
+                            email        = VALUES(email),
+                            active       = VALUES(active),
+                            schedule     = VALUES(schedule),
+                            filter_words = VALUES(filter_words)
                         """,
                         (
                             c.get("client_name", ""),
@@ -122,6 +127,7 @@ class DbClient:
                             c.get("email", ""),
                             c.get("active", "no"),
                             c.get("schedule", "weekly_friday"),
+                            c.get("filter_words", ""),
                         ),
                     )
                 # Remove rows whose ad_account_id is no longer in the list

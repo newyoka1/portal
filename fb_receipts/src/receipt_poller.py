@@ -103,6 +103,21 @@ def _run_poll_only():
             skipped += 1
             continue
 
+        # Apply per-client filter words (if set, at least one must appear in subject or receipt_for)
+        filter_words = client.get("filter_words") or []
+        if filter_words:
+            haystack = " ".join([
+                receipt.get("email_subject", ""),
+                receipt.get("receipt_for", ""),
+            ]).lower()
+            if not any(w in haystack for w in filter_words):
+                logger.debug(
+                    "Receipt poller: receipt for account %s skipped — filter words %s not found in '%s'",
+                    acct_id, filter_words, haystack[:80],
+                )
+                skipped += 1
+                continue
+
         client_name = client["client_name"]
         emails      = client.get("emails") or [client["email"]]
         amount      = receipt.get("amount", 0)

@@ -46,6 +46,12 @@
                 <th>Email(s)</th>
                 <th style="width:80px">Active</th>
                 <th style="width:150px">Schedule</th>
+                <th>
+                  Filter Words
+                  <i class="bi bi-info-circle text-muted ms-1"
+                     title="Comma-separated words. If set, a receipt must contain at least one word in its subject or client name to be pulled for this client. Leave blank to accept all receipts for this account."
+                     data-bs-toggle="tooltip"></i>
+                </th>
                 <th style="width:40px"></th>
               </tr>
             </thead>
@@ -68,6 +74,9 @@
                     {% endfor %}
                   </select>
                 </td>
+                <td><input type="text" class="form-control form-control-sm" name="filter_words"
+                           value="{{ c.filter_words or '' }}"
+                           placeholder="e.g. campaign, spring"></td>
                 <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()" title="Remove">&times;</button></td>
               </tr>
               {% endfor %}
@@ -411,6 +420,7 @@ function addClientRow() {
     <td><input type="text" class="form-control form-control-sm" name="email" value="" placeholder="a@co.com, b@co.com"></td>
     <td><select class="form-select form-select-sm" name="active"><option value="yes">yes</option><option value="no" selected>no</option></select></td>
     <td><select class="form-select form-select-sm" name="schedule">${schedOpts}</select></td>
+    <td><input type="text" class="form-control form-control-sm" name="filter_words" value="" placeholder="word1, word2"></td>
     <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="this.closest('tr').remove()" title="Remove">&times;</button></td>`;
   tbody.appendChild(tr);
 }
@@ -429,6 +439,7 @@ async function saveClients() {
       email: get('email'),
       active: get('active'),
       schedule: get('schedule'),
+      filter_words: get('filter_words'),
     });
   });
   try {
@@ -490,6 +501,11 @@ async function importMeta() {
     pre.textContent += '\n[Error: ' + err.message + ']';
   }
 }
+
+// ── Bootstrap tooltips ──
+document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el => {
+  new bootstrap.Tooltip(el);
+});
 
 // ── Settings form ──
 document.getElementById('settingsForm')?.addEventListener('submit', async function(e) {

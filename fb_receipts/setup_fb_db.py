@@ -39,12 +39,26 @@ with conn.cursor() as cur:
             email           VARCHAR(500) NOT NULL DEFAULT '',
             active          ENUM('yes','no') NOT NULL DEFAULT 'no',
             schedule        VARCHAR(64)  NOT NULL DEFAULT 'weekly_friday',
+            filter_words    VARCHAR(500) NOT NULL DEFAULT '',
             created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             UNIQUE KEY uq_ad_account (ad_account_id)
         )
     """)
     print("Table clients: ready")
+
+    # Migration: add filter_words column if missing
+    try:
+        cur.execute(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = 'fb_receipts' AND TABLE_NAME = 'clients' "
+            "AND COLUMN_NAME = 'filter_words'"
+        )
+        if cur.fetchone()[0] == 0:
+            cur.execute("ALTER TABLE clients ADD COLUMN filter_words VARCHAR(500) NOT NULL DEFAULT '' AFTER schedule")
+            print("Migration: added filter_words column to clients")
+    except Exception as e:
+        print(f"Migration check (filter_words): {e}")
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS settings (
