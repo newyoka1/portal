@@ -1,0 +1,284 @@
+{% extends "fb/base.html" %}
+{% block title %}{{ ad.title or 'Ad Detail' }}{% endblock %}
+
+{% block extra_head %}
+<style>
+    .placement-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
+    .placement-thumb {
+        border: 1px solid var(--border); border-radius: var(--radius);
+        overflow: hidden; background: var(--bg-raised);
+    }
+    .placement-thumb .thumb-label {
+        padding: 10px 14px 6px;
+        font-size: 11px; font-weight: 600; text-transform: uppercase;
+        letter-spacing: 0.5px; color: var(--text-muted);
+        display: flex; align-items: center; justify-content: space-between;
+    }
+    .placement-thumb .thumb-dims {
+        font-family: var(--mono); font-size: 10px; color: var(--accent);
+        background: rgba(79,125,249,0.1); padding: 2px 6px; border-radius: 4px;
+    }
+    .placement-thumb img {
+        display: block; width: 100%; object-fit: cover; max-height: 220px;
+    }
+    .placement-thumb .thumb-empty {
+        height: 100px; display: flex; align-items: center; justify-content: center;
+        color: var(--text-muted); font-size: 12px;
+    }
+</style>
+{% endblock %}
+
+{% block fb_content %}
+<div class="page-header">
+    <div>
+        <h1>{{ ad.title or 'Untitled Ad' }}</h1>
+        <div class="flex items-center gap-2 mt-2">
+            {% if ad.status == 'draft' %}
+                <span class="badge badge-draft"><span class="badge-dot badge-dot-gray"></span> Draft</span>
+            {% elif ad.status == 'pending_approval' %}
+                <span class="badge badge-pending"><span class="badge-dot badge-dot-yellow"></span> Pending Approval</span>
+            {% elif ad.status == 'approved' %}
+                <span class="badge badge-approved"><span class="badge-dot badge-dot-green"></span> Approved</span>
+            {% elif ad.status == 'rejected' %}
+                <span class="badge badge-rejected"><span class="badge-dot badge-dot-red"></span> Rejected</span>
+            {% elif ad.status and ad.status.startswith('pushed_fb') %}
+                <span class="badge badge-pushed"><span class="badge-dot" style="background:var(--accent)"></span> On Facebook</span>
+            {% endif %}
+            <span style="font-size:12px; color:var(--text-muted); text-transform:capitalize;">{{ ad.ad_type | replace('_', ' ') }}</span>
+        </div>
+    </div>
+    <div class="flex gap-2">
+        <a href="/ad/{{ ad.id }}/edit" class="btn btn-ghost">✏ Edit</a>
+        {% if ad.status == 'approved' %}
+        <form method="POST" action="/ad/{{ ad.id }}/push-to-facebook" style="display:inline;">
+            <button type="submit" class="btn btn-primary"
+                    onclick="return confirm('Push this ad to Facebook as a PAUSED campaign?')">
+                🚀 Push to Facebook
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ── Ad Copy ── -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        <h3 style="font-size:14px; font-weight:600; color:var(--text-dim); margin-bottom:20px; text-transform:uppercase; letter-spacing:0.5px;">Ad Copy</h3>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px;">
+            <div>
+                <div class="form-group">
+                    <div class="form-label">Primary Text</div>
+                    <div style="font-size:14px; line-height:1.6; white-space:pre-wrap;">{{ ad.primary_text or '—' }}</div>
+                </div>
+                <div class="form-group">
+                    <div class="form-label">Headline</div>
+                    <div style="font-size:16px; font-weight:600;">{{ ad.headline or '—' }}</div>
+                </div>
+                <div class="form-group">
+                    <div class="form-label">Description</div>
+                    <div style="font-size:14px; color:var(--text-dim);">{{ ad.description or '—' }}</div>
+                </div>
+                <div style="display:flex; gap:24px;">
+                    <div class="form-group">
+                        <div class="form-label">CTA</div>
+                        <div style="font-size:13px;">{{ (ad.cta or '—') | replace('_', ' ') | title }}</div>
+                    </div>
+                    <div class="form-group">
+                        <div class="form-label">Destination URL</div>
+                        <div style="font-size:13px;">
+                            {% if ad.link_url %}
+                            <a href="{{ ad.link_url }}" style="color:var(--accent);" target="_blank">{{ ad.link_url }}</a>
+                            {% else %}—{% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div class="form-group">
+                    <div class="form-label">Targeting</div>
+                    <div style="font-size:13px; color:var(--text-dim);">{{ ad.targeting_notes or '—' }}</div>
+                </div>
+                <div class="form-group">
+                    <div class="form-label">Budget</div>
+                    <div style="font-size:13px;">{{ ad.budget or '—' }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ── Placement Creatives ── -->
+{% set has_any_image = ad.image_square or ad.image_landscape or ad.image_portrait or ad.image_stories %}
+{% if has_any_image or ad.video_url %}
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        <h3 style="font-size:14px; font-weight:600; color:var(--text-dim); margin-bottom:20px; text-transform:uppercase; letter-spacing:0.5px;">Creatives by Placement</h3>
+
+        <div class="placement-grid">
+
+            {% if ad.image_square %}
+            <div class="placement-thumb">
+                <div class="thumb-label">
+                    Feed — Square <span class="thumb-dims">1:1</span>
+                </div>
+                <img src="{{ ad.image_square }}" alt="Square 1:1">
+            </div>
+            {% endif %}
+
+            {% if ad.image_landscape %}
+            <div class="placement-thumb">
+                <div class="thumb-label">
+                    Feed — Landscape <span class="thumb-dims">1.91:1</span>
+                </div>
+                <img src="{{ ad.image_landscape }}" alt="Landscape 1.91:1">
+            </div>
+            {% endif %}
+
+            {% if ad.image_portrait %}
+            <div class="placement-thumb">
+                <div class="thumb-label">
+                    Feed — Portrait <span class="thumb-dims">4:5</span>
+                </div>
+                <img src="{{ ad.image_portrait }}" alt="Portrait 4:5">
+            </div>
+            {% endif %}
+
+            {% if ad.image_stories %}
+            <div class="placement-thumb">
+                <div class="thumb-label">
+                    Stories &amp; Reels <span class="thumb-dims">9:16</span>
+                </div>
+                <img src="{{ ad.image_stories }}" alt="Stories 9:16">
+            </div>
+            {% endif %}
+
+            {% if ad.video_url %}
+            <div class="placement-thumb">
+                <div class="thumb-label">Video</div>
+                <div style="padding:12px 14px;">
+                    <a href="{{ ad.video_url }}" style="color:var(--accent); font-size:13px;" target="_blank">
+                        🎬 {{ ad.video_url }}
+                    </a>
+                </div>
+            </div>
+            {% endif %}
+
+        </div>
+
+        {# Carousel cards #}
+        {% if ad.ad_type == 'carousel' and ad.carousel_cards %}
+        {% set cards = ad.carousel_cards | from_json %}
+        {% if cards %}
+        <hr class="divider">
+        <div style="font-size:13px; font-weight:600; color:var(--text-dim); margin-bottom:16px;">
+            ⊞ Carousel — {{ cards | length }} card{{ 's' if cards | length != 1 else '' }}
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px;">
+            {% for card in cards %}
+            <div style="border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; background:var(--bg-raised);">
+                {% if card.image %}
+                <img src="{{ card.image }}" style="width:100%; display:block; aspect-ratio:1/1; object-fit:cover;">
+                {% else %}
+                <div style="height:80px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:12px;">No image</div>
+                {% endif %}
+                <div style="padding:10px 12px;">
+                    <div style="font-size:13px; font-weight:600; color:var(--text);">{{ card.headline or '—' }}</div>
+                    {% if card.description %}<div style="font-size:12px; color:var(--text-dim); margin-top:2px;">{{ card.description }}</div>{% endif %}
+                    {% if card.link_url %}<div style="font-size:11px; color:var(--accent); margin-top:4px;">{{ card.link_url }}</div>{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endif %}
+
+    </div>
+</div>
+{% endif %}
+
+<!-- ── Approval Status ── -->
+<div class="card" style="margin-bottom:20px;">
+    <div class="card-body">
+        <h3 style="font-size:14px; font-weight:600; color:var(--text-dim); margin-bottom:20px; text-transform:uppercase; letter-spacing:0.5px;">Approval Status</h3>
+
+        {% if approvals %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Approver</th>
+                        <th>Email</th>
+                        <th>Status</th>
+                        <th>Comments</th>
+                        <th>Responded</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in approvals %}
+                    <tr>
+                        <td style="font-weight:500;">{{ a.approver_name }}</td>
+                        <td style="font-size:13px; color:var(--text-dim);">{{ a.approver_email }}</td>
+                        <td>
+                            {% if a.status == 'pending' %}
+                                <span class="badge badge-pending"><span class="badge-dot badge-dot-yellow"></span> Pending</span>
+                            {% elif a.status == 'approved' %}
+                                <span class="badge badge-approved"><span class="badge-dot badge-dot-green"></span> Approved</span>
+                            {% elif a.status == 'rejected' %}
+                                <span class="badge badge-rejected"><span class="badge-dot badge-dot-red"></span> Rejected</span>
+                            {% endif %}
+                        </td>
+                        <td style="font-size:13px; color:var(--text-dim); max-width:200px;">{{ a.comments or '—' }}</td>
+                        <td style="font-size:12px; color:var(--text-muted);">{{ a.responded_at or '—' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p style="color:var(--text-dim); font-size:14px;">No approval requests sent yet.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- ── Send for Approval ── -->
+{% if ad.status in ('draft', 'pending_approval', 'rejected') %}
+<div class="card">
+    <div class="card-body">
+        <h3 style="font-size:14px; font-weight:600; color:var(--text-dim); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Send for Approval</h3>
+        <p style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">
+            Select approvers to send this ad for review. Each approver will receive an email with Facebook-accurate previews for every placement you've configured.
+        </p>
+
+        {% if approvers %}
+        <form method="POST" action="/ad/{{ ad.id }}/send">
+            {% for apvr in approvers %}
+            <label class="checkbox-row">
+                <input type="checkbox" name="approver_ids" value="{{ apvr.id }}">
+                <span class="checkbox-label">{{ apvr.name }}</span>
+                <span style="font-size:12px; color:var(--text-muted);">{{ apvr.email }}</span>
+                {% if apvr.required in [1, true, '1', 'TRUE', 'true'] %}
+                    <span class="badge badge-required">Required</span>
+                {% else %}
+                    <span class="badge badge-optional">Optional</span>
+                {% endif %}
+            </label>
+            {% endfor %}
+            <div style="margin-top:20px;">
+                <button type="submit" class="btn btn-primary"
+                        onclick="return confirm('Send approval emails to selected approvers?')">
+                    ✉ Send Approval Requests
+                </button>
+                <a href="/approvers" class="btn btn-ghost btn-sm" style="margin-left:8px;">Manage Approvers</a>
+            </div>
+        </form>
+        {% else %}
+        <div class="empty" style="padding:30px;">
+            <p>No approvers configured yet.</p>
+            <a href="/approvers" class="btn btn-primary btn-sm mt-4">＋ Add Approvers</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

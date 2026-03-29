@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="margin:0; padding:0; background:#f0f2f5; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f2f5; padding:24px 0;">
+<tr><td align="center">
+<table width="600" cellpadding="0" cellspacing="0" style="background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+
+<!-- Header -->
+<tr><td style="background:#1877F2; padding:20px 24px; text-align:center;">
+    <div style="color:#fff; font-size:22px; font-weight:700; letter-spacing:-0.5px;">Campaign Approval Request</div>
+    <div style="color:rgba(255,255,255,0.8); font-size:13px; margin-top:4px;">{{ (client or {}).get('name', '') }}</div>
+</td></tr>
+
+<!-- Greeting -->
+<tr><td style="padding:24px 24px 12px;">
+    <div style="font-size:16px; font-weight:600; color:#050505;">Hi {{ to_name }},</div>
+    <div style="font-size:14px; color:#65676B; margin-top:8px; line-height:1.5;">
+        Please review the following campaign and approve or reject it.
+    </div>
+</td></tr>
+
+<!-- Campaign Info -->
+<tr><td style="padding:12px 24px;">
+    <table width="100%" style="background:#f8f9fa; border-radius:8px; border:1px solid #e4e6eb;">
+        <tr><td style="padding:16px;">
+            <div style="font-size:18px; font-weight:700; color:#050505; margin-bottom:8px;">{{ campaign.campaign_name }}</div>
+            <table width="100%" cellpadding="0" cellspacing="0" style="font-size:13px; color:#65676B;">
+                <tr>
+                    <td style="padding:3px 0;"><strong>Objective:</strong> {{ (campaign.objective or '').replace('OUTCOME_','') }}</td>
+                    <td style="padding:3px 0;"><strong>Budget:</strong>
+                        {% if campaign.daily_budget %}${{ "%.2f"|format(campaign.daily_budget|float) }}/day{% elif campaign.lifetime_budget %}${{ "%.2f"|format(campaign.lifetime_budget|float) }} lifetime{% else %}Ad Set Budget{% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="padding:3px 0;"><strong>Special Categories:</strong> {{ campaign.special_ad_categories or 'None' }}</td>
+                    <td style="padding:3px 0;"><strong>Ad Sets:</strong> {{ adsets|length }}</td>
+                </tr>
+            </table>
+        </td></tr>
+    </table>
+</td></tr>
+
+<!-- Ad Sets & Ads -->
+{% for adset in adsets %}
+<tr><td style="padding:8px 24px;">
+    <div style="background:#eef1f5; border-radius:8px; padding:12px 14px; margin-bottom:4px;">
+        <div style="font-size:14px; font-weight:600; color:#050505;">📋 {{ adset.adset_name }}</div>
+        <div style="font-size:12px; color:#65676B; margin-top:4px;">
+            {% if adset.daily_budget %}Budget: ${{ "%.2f"|format(adset.daily_budget|float) }}/day{% endif %}
+            {% if adset.start_time %} · Start: {{ adset.start_time }}{% endif %}
+            {% if adset.end_time %} · End: {{ adset.end_time }}{% endif %}
+            {% if adset.optimization_goal %} · Goal: {{ adset.optimization_goal.replace('_',' ').title() }}{% endif %}
+        </div>
+        {% set adset_ads = ads | selectattr('adset_id', 'equalto', adset.id) | list %}
+        {% for ad in adset_ads %}
+        <div style="background:#fff; border:1px solid #e4e6eb; border-radius:8px; margin-top:10px; overflow:hidden;">
+            <!-- Ad Preview Card -->
+            {% set img = ad.image_square or ad.image_landscape or '' %}
+            {% if img %}
+            <div style="background:#000; text-align:center;">
+                <img src="{{ img }}" style="max-width:100%; max-height:300px; object-fit:contain;" alt="Ad Image">
+            </div>
+            {% endif %}
+            <div style="padding:12px;">
+                <div style="font-size:14px; font-weight:700; color:#050505;">{{ ad.ad_name }}</div>
+                <div style="font-size:12px; color:#65676B; margin-top:2px;">Page: {{ ad.page_name or ad.page_id or 'Not set' }}</div>
+                {% if ad.primary_text %}
+                <div style="font-size:13px; color:#050505; margin-top:8px; line-height:1.5; white-space:pre-wrap;">{{ ad.primary_text }}</div>
+                {% endif %}
+                {% if ad.headline %}
+                <div style="font-size:14px; font-weight:600; color:#050505; margin-top:6px;">{{ ad.headline }}</div>
+                {% endif %}
+                {% if ad.description %}
+                <div style="font-size:12px; color:#65676B; margin-top:2px;">{{ ad.description }}</div>
+                {% endif %}
+                {% if ad.link_url %}
+                <div style="font-size:11px; color:#1877F2; margin-top:4px;">{{ ad.link_url }}</div>
+                {% endif %}
+                {% if ad.cta %}
+                <div style="margin-top:8px;">
+                    <span style="background:#1877F2; color:#fff; padding:6px 16px; border-radius:6px; font-size:12px; font-weight:600; display:inline-block;">{{ ad.cta.replace('_',' ') }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</td></tr>
+{% endfor %}
+
+<!-- Lead Form (if present) -->
+{% if lead_form %}
+<tr><td style="padding:12px 24px;">
+    <div style="background:#e8f0fe; border-radius:8px; padding:14px; border:1px solid #c2d9fc;">
+        <div style="font-size:14px; font-weight:700; color:#1877F2; margin-bottom:8px;">📝 Lead Form: {{ lead_form.form_name or 'Instant Form' }}</div>
+        {% if lead_form.intro_headline %}
+        <div style="font-size:13px; font-weight:600; margin-bottom:4px;">{{ lead_form.intro_headline }}</div>
+        {% endif %}
+        {% if lead_form.intro_description %}
+        <div style="font-size:12px; color:#65676B; margin-bottom:8px;">{{ lead_form.intro_description }}</div>
+        {% endif %}
+        {% set questions = lead_form._questions or [] %}
+        {% if questions %}
+        <div style="font-size:12px; font-weight:600; color:#050505; margin-bottom:6px;">Questions:</div>
+        {% for q in questions %}
+        <div style="background:#fff; border:1px solid #d0d7de; border-radius:6px; padding:8px 10px; margin-bottom:4px; font-size:12px;">
+            {{ q.label or q.type.replace('_',' ').title() }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% if lead_form.thank_you_title %}
+        <div style="margin-top:10px; padding-top:8px; border-top:1px solid #c2d9fc;">
+            <div style="font-size:12px; font-weight:600;">Thank you: {{ lead_form.thank_you_title }}</div>
+            {% if lead_form.thank_you_body %}
+            <div style="font-size:11px; color:#65676B;">{{ lead_form.thank_you_body }}</div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</td></tr>
+{% endif %}
+
+<!-- Targeting Summary -->
+{% if adsets %}
+<tr><td style="padding:12px 24px;">
+    <div style="background:#f8f9fa; border-radius:8px; padding:12px 14px; border:1px solid #e4e6eb;">
+        <div style="font-size:13px; font-weight:700; color:#050505; margin-bottom:6px;">Targeting Summary</div>
+        {% set s = adsets[0] %}
+        <div style="font-size:12px; color:#65676B; line-height:1.6;">
+            {% if s.targeting_locations %}Locations: {{ s.targeting_locations }}<br>{% endif %}
+            Ages: {{ s.targeting_age_min or 18 }} – {{ s.targeting_age_max or 65 }}<br>
+            {% if s.targeting_interests %}Interests: {{ s.targeting_interests }}<br>{% endif %}
+            {% if s.targeting_custom_audiences %}Custom Audiences: {{ s.targeting_custom_audiences }}{% endif %}
+        </div>
+    </div>
+</td></tr>
+{% endif %}
+
+<!-- Action Buttons -->
+<tr><td style="padding:24px; text-align:center;">
+    <table width="100%" cellpadding="0" cellspacing="0">
+    <tr>
+        <td width="48%" align="center">
+            <a href="{{ approve_url }}" style="display:inline-block; background:#42B72A; color:#fff; padding:14px 32px; border-radius:8px; text-decoration:none; font-size:16px; font-weight:700; letter-spacing:0.3px;">✓ Approve Campaign</a>
+        </td>
+        <td width="4%"></td>
+        <td width="48%" align="center">
+            <a href="{{ reject_url }}" style="display:inline-block; background:#FA3E3E; color:#fff; padding:14px 32px; border-radius:8px; text-decoration:none; font-size:16px; font-weight:700; letter-spacing:0.3px;">✗ Reject Campaign</a>
+        </td>
+    </tr>
+    </table>
+</td></tr>
+
+<!-- Footer -->
+<tr><td style="padding:16px 24px; background:#f8f9fa; border-top:1px solid #e4e6eb; text-align:center;">
+    <div style="font-size:11px; color:#b0b3b8;">
+        Sent by Politika · Client Ad & Email Manager<br>
+        This is an automated approval request. Do not reply to this email.
+    </div>
+</td></tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>

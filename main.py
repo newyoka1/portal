@@ -2,6 +2,7 @@
 Politika Portal — FastAPI entry point.
 Run with: uvicorn main:app --reload
 """
+import json as _json
 import logging
 import os
 
@@ -11,7 +12,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
-from starlette.middleware.wsgi import WSGIMiddleware
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -19,7 +19,7 @@ from auth import get_current_user, require_user
 from database import Base, engine, get_db
 from gmail_poller import fetch_and_store_emails
 from models import Approval, Comment, Email, PortalSetting, User   # noqa: F401 — ensure models are imported before create_all
-from routers import auth, clients, comments, emails, fb_receipts, integrations, settings, users, voter_pipeline
+from routers import auth, clients, comments, emails, fb_ad_approval, fb_receipts, integrations, settings, users, voter_pipeline
 
 logging.basicConfig(level=logging.INFO)
 
@@ -31,6 +31,18 @@ app = FastAPI(title="Politika Portal", docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
+def _tojson_parse(value):
+    if not value:
+        return []
+    try:
+        result = _json.loads(value) if isinstance(value, str) else value
+        return result if isinstance(result, (list, dict)) else []
+    except Exception:
+        return []
+
+templates.env.filters["tojson_parse"] = _tojson_parse
+templates.env.filters["from_json"] = _tojson_parse
+
 app.include_router(auth.router)
 app.include_router(emails.router)
 app.include_router(clients.router)
@@ -40,22 +52,7 @@ app.include_router(integrations.router)
 app.include_router(fb_receipts.router)
 app.include_router(voter_pipeline.router)
 app.include_router(settings.router)
-
-# ---------------------------------------------------------------------------
-# Mount FB Ad Approval Flask app at /fb/
-# ---------------------------------------------------------------------------
-try:
-    from fb_ad_approval.app import app as flask_app
-    flask_wsgi = WSGIMiddleware(flask_app)
-    app.mount("/fb", flask_wsgi)
-    logging.info("FB Ad Approval Flask app mounted at /fb/")
-except Exception as exc:
-    logging.warning("Could not mount FB Ad Approval: %s — %s", type(exc).__name__, exc)
-
-# Redirect /fb (no trailing slash) to /fb/
-@app.get("/fb")
-def fb_redirect():
-    return RedirectResponse("/fb/", status_code=301)
+app.include_router(fb_ad_approval.router)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,105 @@
+{% extends "fb/base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block fb_content %}
+<div class="page-header">
+    <div>
+        {% if active_client %}
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+            <div style="width:32px; height:32px; border-radius:8px; background:{{ active_client.brand_color or '#1877F2' }}; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:800; color:#fff;">
+                {{ active_client.name[:1].upper() }}
+            </div>
+            <span style="font-size:13px; color:var(--text-dim); font-weight:500;">{{ active_client.name }}</span>
+        </div>
+        <h1>Ad Campaigns</h1>
+        <p>{{ active_client.fb_page_name or active_client.name }} — draft, approve, and push ads to Facebook</p>
+        {% else %}
+        <h1>All Ad Campaigns</h1>
+        <p>
+            No client selected —
+            <a href="{{ '/fb/clients' }}" style="color:var(--accent);">select or add a client</a>
+            to get started.
+        </p>
+        {% endif %}
+    </div>
+    <a href="/ad/new" class="btn btn-primary">＋ New Ad</a>
+</div>
+
+{% if ads %}
+<div class="card">
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Ad Title</th>
+                    <th>Type</th>
+                    <th>Status</th>
+                    <th>Approvals</th>
+                    <th>Created</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for ad in ads %}
+                <tr>
+                    <td>
+                        <a href="/ad/{{ ad.id }}" style="color: var(--text); text-decoration: none; font-weight: 500;">
+                            {{ ad.title or 'Untitled' }}
+                        </a>
+                    </td>
+                    <td>
+                        <span style="font-size:12px; color:var(--text-dim); text-transform:capitalize;">
+                            {{ ad.ad_type | replace('_', ' ') }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if ad.status == 'draft' %}
+                            <span class="badge badge-draft"><span class="badge-dot badge-dot-gray"></span> Draft</span>
+                        {% elif ad.status == 'pending_approval' %}
+                            <span class="badge badge-pending"><span class="badge-dot badge-dot-yellow"></span> Pending</span>
+                        {% elif ad.status == 'approved' %}
+                            <span class="badge badge-approved"><span class="badge-dot badge-dot-green"></span> Approved</span>
+                        {% elif ad.status == 'rejected' %}
+                            <span class="badge badge-rejected"><span class="badge-dot badge-dot-red"></span> Rejected</span>
+                        {% elif ad.status and ad.status.startswith('pushed_fb') %}
+                            <span class="badge badge-pushed"><span class="badge-dot" style="background:var(--accent)"></span> On Facebook</span>
+                        {% else %}
+                            <span class="badge badge-draft">{{ ad.status }}</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if ad.total_approvers > 0 %}
+                            <span style="font-size:13px;">
+                                <span style="color:var(--green);">{{ ad.approval_count }}</span>
+                                <span style="color:var(--text-muted);">/</span>
+                                {{ ad.total_approvers }}
+                            </span>
+                            <div class="progress-bar" style="width:120px;">
+                                {% set pct = (ad.approval_count / ad.total_approvers * 100) | int if ad.total_approvers > 0 else 0 %}
+                                <div class="progress-fill progress-fill-green" style="width:{{ pct }}%"></div>
+                            </div>
+                        {% else %}
+                            <span style="font-size:12px; color:var(--text-muted);">—</span>
+                        {% endif %}
+                    </td>
+                    <td style="font-size:12px; color:var(--text-dim);">{{ ad.created_at[:10] if ad.created_at else '—' }}</td>
+                    <td>
+                        <a href="/ad/{{ ad.id }}" class="btn btn-ghost btn-sm">View →</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="card">
+    <div class="empty">
+        <div class="empty-icon">📋</div>
+        <h3>No ad drafts yet</h3>
+        <p>Create your first Facebook ad draft to get started.</p>
+        <a href="/ad/new" class="btn btn-primary">＋ Create First Ad</a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

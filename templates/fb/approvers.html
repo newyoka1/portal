@@ -1,0 +1,121 @@
+{% extends "fb/base.html" %}
+{% block title %}Manage Approvers{% endblock %}
+
+{% block fb_content %}
+<div class="page-header">
+    <div>
+        <h1>Approvers</h1>
+        <p>
+            People who receive ad approval requests.
+            {% if active_client and active_client.meta_ad_account_id %}
+                Showing approvers for ad account <strong>{{ active_client.meta_ad_account_id }}</strong>
+                ({{ active_client.name }}).
+            {% elif active_client %}
+                Showing approvers for client <strong>{{ active_client.name }}</strong>.
+                <span style="color:var(--text-dim); font-size:13px;">Configure an ad account ID on the client to scope approvers by account.</span>
+            {% else %}
+                <span style="color:var(--text-dim);">Select a client to manage approvers by ad account.</span>
+            {% endif %}
+        </p>
+    </div>
+</div>
+
+<div style="display:grid; grid-template-columns:1fr 360px; gap:24px; align-items:start;">
+
+    <!-- ── Approver list ── -->
+    <div class="card">
+        {% if approvers %}
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Ad Account</th>
+                        <th>Required</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for a in approvers %}
+                    <tr>
+                        <td style="font-weight:500;">{{ a.name }}</td>
+                        <td style="font-size:13px; color:var(--text-dim);">{{ a.email }}</td>
+                        <td style="font-size:12px; color:var(--text-dim); font-family:monospace;">
+                            {{ a.meta_ad_account_id or '—' }}
+                        </td>
+                        <td>
+                            <form method="POST" action="/approvers/{{ a.id }}/toggle-required" style="display:inline;">
+                                {% if a.required in [1, true, '1', 'TRUE', 'true'] %}
+                                    <button type="submit" class="badge badge-required" style="cursor:pointer; border:none; background:rgba(249,115,22,0.12);">
+                                        ● Required
+                                    </button>
+                                {% else %}
+                                    <button type="submit" class="badge badge-optional" style="cursor:pointer; border:none;">
+                                        ○ Optional
+                                    </button>
+                                {% endif %}
+                            </form>
+                        </td>
+                        <td style="text-align:right;">
+                            <form method="POST" action="/approvers/{{ a.id }}/delete"
+                                  onsubmit="return confirm('Remove ' + {{ a.name|tojson }} + ' as an approver?')">
+                                <button type="submit" class="btn btn-ghost btn-sm" style="color:var(--red);">Remove</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty">
+            <div class="empty-icon">👥</div>
+            <h3>No approvers yet</h3>
+            {% if active_client and active_client.meta_ad_account_id %}
+                <p>Add people who need to sign off on ads for account <strong>{{ active_client.meta_ad_account_id }}</strong>.</p>
+            {% else %}
+                <p>Add the people who need to sign off on ads before they go live.</p>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- ── Add approver form ── -->
+    <div class="card">
+        <div class="card-body">
+            <h3 style="font-size:14px; font-weight:600; color:var(--text-dim); margin-bottom:20px; text-transform:uppercase; letter-spacing:0.5px;">Add Approver</h3>
+            {% if active_client and active_client.meta_ad_account_id %}
+            <div style="background:var(--bg-hover); border-radius:8px; padding:10px 12px; margin-bottom:16px; font-size:13px; color:var(--text-dim);">
+                Will be added to ad account <strong style="color:var(--text);">{{ active_client.meta_ad_account_id }}</strong>
+            </div>
+            {% elif not active_client %}
+            <div style="background:rgba(249,115,22,0.08); border-radius:8px; padding:10px 12px; margin-bottom:16px; font-size:13px; color:var(--amber, #f59e0b);">
+                ⚠ No client selected. Select a client first to scope approvers correctly.
+            </div>
+            {% endif %}
+            <form method="POST" action="/approvers/add">
+                <div class="form-group">
+                    <label class="form-label">Name</label>
+                    <input type="text" name="name" class="form-input" placeholder="Jane Smith" required>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <input type="email" name="email" class="form-input" placeholder="jane@example.com" required>
+                </div>
+                <div class="form-group" style="margin-bottom:20px;">
+                    <label class="checkbox-row" style="padding:10px 0;">
+                        <input type="checkbox" name="required" value="1">
+                        <span class="checkbox-label">Required approver</span>
+                    </label>
+                    <div class="form-hint" style="margin-top:4px;">
+                        If checked, the ad cannot reach "Approved" status until this person approves.
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;">＋ Add Approver</button>
+            </form>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
