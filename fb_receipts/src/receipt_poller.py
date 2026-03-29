@@ -119,8 +119,10 @@ def _run():
                 if img_path.exists():
                     img_bytes = img_path.read_bytes()
                     ad_image_bytes.append((img_path.name, img_bytes))
-                    sftp_upload(str(img_path), remote_dir=sftp_dir, cleanup=False)
-                    logger.info("  Uploaded image to SFTP: %s/%s", sftp_dir, img_path.name)
+                    try:
+                        sftp_upload(str(img_path), remote_dir=sftp_dir, cleanup=False)
+                    except Exception:
+                        pass
         except Exception as e:
             logger.warning("Receipt poller: ad image fetch/upload failed: %s", e)
 
@@ -160,11 +162,6 @@ def _run():
             ad_image_paths = list(_tmp.rglob("*.jpg")) + list(_tmp.rglob("*.png")) + list(_tmp.rglob("*.webp"))
 
         # 5. Send email
-        print(f"  PDF: {pdf_path}")
-        print(f"  Ad images for email: {len(ad_image_paths)}")
-        for p in ad_image_paths:
-            print(f"    {p} exists={p.exists()} size={p.stat().st_size if p.exists() else 0}")
-        print(f"  Ad images in DB: {len(ad_image_bytes)}")
         any_sent = False
         for recipient in emails:
             ok = email_svc.send_receipt(
