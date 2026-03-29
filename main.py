@@ -114,7 +114,6 @@ def startup():
         logging.info("Poller scheduled: hourly")
 
     scheduler.start()
-    logging.info("Gmail poller scheduled every %d minute(s).", poll_interval)
 
 
 # ---------------------------------------------------------------------------
