@@ -114,18 +114,15 @@ async def fb_last_run_info(current_user: User = Depends(require_user)):
 
 @router.post("/pull")
 async def fb_pull_receipts(current_user: User = Depends(require_user)):
-    """On-demand: check Gmail for new Meta receipts and process them."""
-    async def _pull():
-        import asyncio
-        loop = asyncio.get_event_loop()
-        yield "Checking Gmail for new Meta receipt emails...\n"
-        try:
-            from fb_receipts.src.receipt_poller import poll_and_send
-            await loop.run_in_executor(None, poll_and_send)
-            yield "\nDone.\n"
-        except Exception as e:
-            yield f"\nError: {e}\n"
-    return StreamingResponse(_pull(), media_type="text/plain")
+    """On-demand: check Gmail for new Meta receipts — streams all output."""
+    args = [sys.executable, "-c",
+            "import sys; sys.path.insert(0,'.'); "
+            "from fb_receipts.src.receipt_poller import poll_and_send; "
+            "poll_and_send()"]
+    return StreamingResponse(
+        _stream(args, str(PORTAL_DIR)),
+        media_type="text/plain",
+    )
 
 
 @router.post("/setup-db")
