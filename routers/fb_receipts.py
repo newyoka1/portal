@@ -245,6 +245,7 @@ def api_save_settings(
     admin_email:      str = Form(""),
     notify_email:     str = Form(""),
     receipt_inbox:    str = Form("support@politikanyc.com"),
+    poll_schedule:    str = Form("hourly"),
     current_user: User = Depends(require_user),
 ):
     try:
@@ -253,6 +254,7 @@ def api_save_settings(
             "admin_email":      admin_email,
             "notify_email":     notify_email,
             "receipt_inbox":    receipt_inbox,
+            "poll_schedule":    poll_schedule,
         })
         return JSONResponse({"ok": True})
     except Exception as e:

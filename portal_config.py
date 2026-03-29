@@ -77,8 +77,6 @@ DEFAULTS = [
     ("SFTP_DIR",            "ad-images", "SFTP Upload Directory", "sftp", False),
     ("SFTP_BASE_URL",       "", "SFTP Public URL Base",      "sftp",   False),
 
-    # Polling
-    ("RECEIPT_POLL_SCHEDULE",   "hourly", "Receipt Poll Schedule", "polling", False),
 
     # FB Ad Approval
     ("BASE_URL", "https://connect.politikanyc.com/fb", "FB Ad Approval Base URL", "fb_approval", False),

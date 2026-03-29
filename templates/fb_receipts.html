@@ -217,6 +217,15 @@
                      value="{{ settings.get('receipt_inbox', 'support@politikanyc.com') }}">
               <div class="form-text">Gmail address where Meta sends billing receipts.</div>
             </div>
+            <div class="col-md-6">
+              <label class="form-label fw-semibold">Poll schedule</label>
+              <select name="poll_schedule" class="form-select">
+                <option value="hourly" {{ 'selected' if settings.get('poll_schedule', 'hourly') == 'hourly' }}>Hourly</option>
+                <option value="daily" {{ 'selected' if settings.get('poll_schedule') == 'daily' }}>Daily (9 AM)</option>
+                <option value="weekly" {{ 'selected' if settings.get('poll_schedule') == 'weekly' }}>Weekly (Monday 9 AM)</option>
+              </select>
+              <div class="form-text">How often to check for new Meta receipt emails. Takes effect on next restart.</div>
+            </div>
           </div>
           <button type="submit" class="btn btn-primary">
             <i class="bi bi-floppy me-1"></i>Save Settings

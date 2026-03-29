@@ -16,7 +16,6 @@ CATEGORIES = [
     ("meta",        "Meta / Facebook"),
     ("email",       "Email"),
     ("sftp",        "SFTP / File Storage"),
-    ("polling",     "Polling & Automation"),
     ("fb_approval", "FB Ad Approval"),
 ]
 

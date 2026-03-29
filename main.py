@@ -89,8 +89,12 @@ def startup():
         _add_column_if_missing(conn, "approvals", "token", "VARCHAR(100) NULL")
 
     # Single unified poller — checks Gmail for both email approvals and Meta receipts
-    from portal_config import get_setting
-    _sched = get_setting("RECEIPT_POLL_SCHEDULE", "hourly")
+    _sched = "hourly"
+    try:
+        from fb_receipts.src.db_client import DbClient as _RcDb
+        _sched = _RcDb().get_settings().get("poll_schedule", "hourly")
+    except Exception:
+        pass
 
     def _poll_all():
         """One job: poll email queue + process Meta receipts."""
