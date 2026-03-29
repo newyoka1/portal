@@ -313,36 +313,54 @@ def upsert_contacts(cur, contacts, source_tag):
             email_slots = (all_emails + [None]*5)[:5]
             phone_slots = (all_phones + [None]*5)[:5]
 
-            cur.execute("""
-                INSERT INTO contacts (
-                    email_1, email_2, email_3, email_4, email_5,
+            try:
+                cur.execute("""
+                    INSERT INTO contacts (
+                        email_1, email_2, email_3, email_4, email_5,
+                        first_name, last_name, mobile,
+                        phone_1, phone_2, phone_3, phone_4, phone_5,
+                        address, city, state, zip, zip5,
+                        company, sources, cm_lists,
+                        clean_first, clean_last
+                    ) VALUES (
+                        %s,%s,%s,%s,%s,
+                        %s,%s,%s,
+                        %s,%s,%s,%s,%s,
+                        %s,%s,%s,%s,%s,
+                        %s,%s,%s,
+                        %s,%s
+                    )
+                """, (
+                    email_slots[0], email_slots[1], email_slots[2],
+                    email_slots[3], email_slots[4],
                     first_name, last_name, mobile,
-                    phone_1, phone_2, phone_3, phone_4, phone_5,
-                    address, city, state, zip, zip5,
-                    company, sources, cm_lists,
-                    clean_first, clean_last
-                ) VALUES (
-                    %s,%s,%s,%s,%s,
-                    %s,%s,%s,
-                    %s,%s,%s,%s,%s,
-                    %s,%s,%s,%s,%s,
-                    %s,%s,%s,
-                    %s,%s
-                )
-            """, (
-                email_slots[0], email_slots[1], email_slots[2],
-                email_slots[3], email_slots[4],
-                first_name, last_name, mobile,
-                phone_slots[0], phone_slots[1], phone_slots[2],
-                phone_slots[3], phone_slots[4],
-                address, city, state, zipval, zip5,
-                company, source_tag, cm_lists_val,
-                clean_name(first_name), clean_name(last_name),
-            ))
-            inserted += 1
+                    phone_slots[0], phone_slots[1], phone_slots[2],
+                    phone_slots[3], phone_slots[4],
+                    address, city, state, zipval, zip5,
+                    company, source_tag, cm_lists_val,
+                    clean_name(first_name), clean_name(last_name),
+                ))
+                inserted += 1
+                continue  # successfully inserted — skip update path
+            except Exception as exc:
+                if getattr(exc, 'args', (None,))[0] != 1062:
+                    raise
+                # Duplicate email_1 (same contact in multiple lists/batches).
+                # Re-fetch the existing row and fall through to the update path.
+                cur.execute(
+                    "SELECT id, email_1, email_2, email_3, email_4, email_5, "
+                    "       first_name, last_name, mobile, "
+                    "       phone_1, phone_2, phone_3, phone_4, phone_5, "
+                    "       address, city, state, zip, zip5, "
+                    "       company, sources, cm_lists, cm_segments "
+                    "FROM contacts WHERE email_1 = %s",
+                    (primary_email,))
+                row = cur.fetchone()
+                if row is None:
+                    continue  # can't recover; skip
 
-        else:
-            # ---- UPDATE existing contact ------------------------------------
+        # ---- UPDATE existing contact ----------------------------------------
+        if row is not None:
             row_id    = row[0]
             ex_emails = list(row[1:6])    # email_1 .. email_5
             ex_fn     = row[6]
