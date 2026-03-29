@@ -76,10 +76,12 @@ def fetch_meta_receipts(
     before = (end_date + timedelta(days=1)).strftime("%Y/%m/%d")
     query = (
         f"from:(business-updates.facebook.com OR facebookmail.com OR meta.com OR facebook.com) "
-        f"subject:(receipt) after:{after} before:{before}"
+        f"(receipt OR payment OR transaction OR billing OR invoice) "
+        f"after:{after} before:{before}"
     )
 
     receipt_email = _get_receipt_email()
+    print(f"Searching Gmail ({receipt_email}): {query}")
     logger.info("Searching Gmail (%s): %s", receipt_email, query)
 
     all_receipts = []
@@ -92,9 +94,11 @@ def fetch_meta_receipts(
 
         messages = resp.get("messages", [])
         if not messages:
+            print("No emails found matching query")
             logger.info("No receipt emails found")
             break
 
+        print(f"Found {len(messages)} email(s) to check")
         logger.info("Found %d receipt email(s)", len(messages))
 
         for msg_ref in messages:
