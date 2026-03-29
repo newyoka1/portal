@@ -2,6 +2,10 @@
 
 {% block content %}
 <style>
+    /* ── Escape portal container padding so FB app can be full-width ── */
+    .main-content > main.container-fluid {
+        padding: 0 !important;
+    }
     /* ── FB Ad Approval CSS — scoped to this section ── */
     :root {
         --bg:           #CEE1FF;
