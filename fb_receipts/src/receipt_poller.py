@@ -101,27 +101,63 @@ def _run():
         except Exception:
             pass
 
-        # Get ad images
-        ad_images = []
-        tmp_dir = Path(mkdtemp(prefix="receipts_"))
+        # Get ad images → upload to SFTP → store in DB
+        import base64, json as _json
+        ad_image_bytes = []  # list of (filename, bytes)
         try:
-            ad_images = meta.get_ad_images(
-                f"act_{acct_id}", start, end, max_images=4, base_dir=tmp_dir
+            # Fetch from Meta API into memory via temp dir
+            _tmp = Path(mkdtemp(prefix="img_"))
+            raw_images = meta.get_ad_images(
+                f"act_{acct_id}", start, end, max_images=4, base_dir=_tmp
             )
-            if ad_images:
-                logger.info("Receipt poller: fetched %d ad image(s) for %s", len(ad_images), client_name)
+            for img_path in (raw_images or []):
+                if img_path.exists():
+                    ad_image_bytes.append((img_path.name, img_path.read_bytes()))
+
+            # Upload to SFTP for persistent storage
+            if ad_image_bytes:
+                try:
+                    sys.path.insert(0, str(FB_DIR.parent))
+                    from utils_sftp import sftp_upload
+                    for fname, _ in ad_image_bytes:
+                        fpath = _tmp / acct_id / "images" / fname
+                        if fpath.exists():
+                            sftp_upload(str(fpath), remote_dir=f"receipts/{acct_id}")
+                except Exception as sftp_err:
+                    logger.debug("SFTP image upload skipped: %s", sftp_err)
+
+            # Clean up temp
+            import shutil
+            shutil.rmtree(_tmp, ignore_errors=True)
+
+            if ad_image_bytes:
+                logger.info("Receipt poller: fetched %d ad image(s) for %s", len(ad_image_bytes), client_name)
             else:
                 logger.info("Receipt poller: no ad images found for %s", client_name)
         except Exception as e:
             logger.warning("Receipt poller: ad image fetch failed for %s: %s", client_name, e)
 
-        # Generate PDF
+        # Serialize images for DB (base64) and email attachment (temp files)
+        images_for_db = [{"filename": fn, "data": base64.b64encode(d).decode()} for fn, d in ad_image_bytes]
+        ad_images_json = _json.dumps(images_for_db) if images_for_db else ""
+
+        # Write images to temp files for email attachment
+        import tempfile
+        ad_image_paths = []
+        for fname, img_data in ad_image_bytes:
+            ext = Path(fname).suffix or ".jpg"
+            tmp_img = tempfile.NamedTemporaryFile(delete=False, suffix=ext, prefix="ad_")
+            tmp_img.write(img_data)
+            tmp_img.close()
+            ad_image_paths.append(Path(tmp_img.name))
+
+        # Generate PDF (no images embedded — they go as email attachments)
+        _pdf_tmp = Path(mkdtemp(prefix="pdf_"))
         pdf_path = generate_email_receipt_pdf(
             receipt=receipt,
             campaigns=campaigns,
             adsets=adsets,
-            ad_images=ad_images,
-            base_dir=tmp_dir,
+            base_dir=_pdf_tmp,
         )
 
         if not pdf_path:
@@ -133,18 +169,7 @@ def _run():
         pdf_data = Path(pdf_path).read_bytes()
         pdf_filename = Path(pdf_path).name
 
-        # Serialize ad images to JSON for DB storage (base64 + filename)
-        import base64, json as _json
-        images_for_db = []
-        for img in ad_images:
-            if img.exists():
-                images_for_db.append({
-                    "filename": img.name,
-                    "data": base64.b64encode(img.read_bytes()).decode(),
-                })
-        ad_images_json = _json.dumps(images_for_db) if images_for_db else ""
-
-        # Send email
+        # Send email with PDF + ad images attached
         email_receipts = [{"pdf_path": str(pdf_path), "type": "receipt"}]
         any_sent = False
         for recipient in emails:
@@ -152,7 +177,7 @@ def _run():
                 to_email=recipient,
                 client_name=client_name,
                 receipts=email_receipts,
-                ad_images=ad_images,
+                ad_images=ad_image_paths,
                 bcc=admin_email,
             )
             if ok:

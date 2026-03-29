@@ -14,6 +14,7 @@ from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 from pathlib import Path
+from pathlib import Path
 
 from src.config import GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD, NOTIFY_EMAIL
 
@@ -145,16 +146,30 @@ class EmailService:
                 msg.attach(attachment)
 
         # Attach ad images
+        logger.info("Ad images to attach: %d", len(ad_images or []))
         for img_path in (ad_images or []):
+            img_path = Path(img_path)  # ensure Path object
+            logger.info("  Image: %s exists=%s", img_path, img_path.exists())
             if img_path.exists():
                 with open(img_path, "rb") as f:
                     img_data = f.read()
-                subtype = "jpeg" if img_path.suffix.lower() in (".jpg", ".jpeg") else "png"
+                ext = img_path.suffix.lower()
+                if ext in (".jpg", ".jpeg"):
+                    subtype = "jpeg"
+                elif ext == ".png":
+                    subtype = "png"
+                elif ext == ".gif":
+                    subtype = "gif"
+                elif ext == ".webp":
+                    subtype = "png"  # webp not supported by MIMEImage, use png
+                else:
+                    subtype = "jpeg"
                 img_attachment = MIMEImage(img_data, _subtype=subtype)
                 img_attachment.add_header(
                     "Content-Disposition", "attachment", filename=img_path.name
                 )
                 msg.attach(img_attachment)
+                logger.info("  Attached %s (%d KB)", img_path.name, len(img_data) // 1024)
 
         return msg
 

@@ -97,7 +97,10 @@
           <h6 class="fw-bold mb-0">Receipts</h6>
           <div class="d-flex gap-2 align-items-center">
             <button class="btn btn-primary btn-sm" onclick="pullReceipts()" id="pullBtn">
-              <i class="bi bi-cloud-download me-1"></i>Pull Receipts Now
+              <i class="bi bi-cloud-download me-1"></i>Pull New
+            </button>
+            <button class="btn btn-outline-danger btn-sm" onclick="deleteAllReceipts()" id="deleteAllBtn">
+              <i class="bi bi-trash me-1"></i>Delete All
             </button>
             <span id="pullStatus" class="small d-none"></span>
             <a href="/fb-receipts" class="btn btn-sm btn-outline-secondary">
@@ -298,6 +301,20 @@ async function pullReceipts() {
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Pull Receipts Now';
   }
+}
+
+// ── Delete all receipts ──
+async function deleteAllReceipts() {
+  if (!confirm('Delete ALL receipts from the database? This allows re-pulling everything.')) return;
+  const btn = document.getElementById('deleteAllBtn');
+  btn.disabled = true;
+  try {
+    const resp = await fetch('/fb-receipts/delete-all', {method: 'POST'});
+    const data = await resp.json();
+    if (data.ok) window.location.reload();
+    else alert('Failed: ' + (data.error || 'unknown'));
+  } catch (err) { alert('Failed: ' + err.message); }
+  finally { btn.disabled = false; }
 }
 
 // ── Delete receipt ──
