@@ -71,6 +71,13 @@ DEFAULTS = [
 
     # FB Ad Approval
     ("BASE_URL", "https://connect.politikanyc.com/fb", "FB Ad Approval Base URL", "fb_approval", False),
+
+    # Voter & Research
+    ("AIVEN_HOST",     "", "Aiven MySQL Host (voter sync)",     "voter", False),
+    ("AIVEN_PORT",     "3306", "Aiven MySQL Port",              "voter", False),
+    ("AIVEN_USER",     "avnadmin", "Aiven MySQL User",          "voter", False),
+    ("AIVEN_PASSWORD", "", "Aiven MySQL Password",              "voter", True),
+    ("AIVEN_DB",       "nys_voter_tagging", "Aiven Database",   "voter", False),
 ]
 
 
