@@ -498,14 +498,6 @@ def main():
     p_fb.add_argument("--dry-run", action="store_true",
         help="Hash records but do not upload to Facebook")
 
-    # sync
-    p_sync = sub.add_parser("sync", help="Push enriched tables to Aiven remote MySQL")
-    p_sync.add_argument("--tables", choices=["all", "voter", "summary"], default="all")
-    p_sync.add_argument("--full",   action="store_true")
-    p_sync.add_argument("--all-databases", action="store_true",
-        help="Also sync all extra databases (boe_donors, National_Donors, cfb_donors, crm_unified)")
-    p_sync.add_argument("--databases", nargs="+", metavar="DB",
-        help="Sync specific extra databases by name")
 
     args = parser.parse_args()
 
@@ -726,16 +718,6 @@ def _dispatch(args, verbosity):
     elif args.command == "reset":
         run_reset(db_only=args.db_only, verbosity=verbosity)
 
-    # ── sync ──────────────────────────────────────────────────────────────────
-    elif args.command == "sync":
-        extra = ["--tables", args.tables]
-        if args.full:
-            extra.append("--full")
-        if args.all_databases:
-            extra.append("--all-databases")
-        elif args.databases:
-            extra.extend(["--databases"] + args.databases)
-        run("sync/aiven_sync.py", extra, verbosity_level=verbosity)
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 """
 MySQL-backed client/settings store — replaces SheetsClient.
 
-Database: fb_receipts  (Aiven MySQL)
+Database: fb_receipts  (VPS local MySQL)
 Tables:
   clients  — one row per ad account
   settings — key/value global config
@@ -9,48 +9,30 @@ Tables:
 
 import logging
 import os
-from pathlib import Path
 
 import pymysql
 import pymysql.cursors
 
 logger = logging.getLogger(__name__)
 
-# ── Connection config from env ─────────────────────────────────────────────────
-_PROJECT_DIR = Path(__file__).resolve().parent.parent   # facebook-receipt-automation/
-
-def _ssl_ca() -> str | None:
-    raw = os.environ.get("FB_AIVEN_SSL_CA", "")
-    if not raw:
-        return None
-    p = Path(raw)
-    if not p.is_absolute():
-        p = _PROJECT_DIR / p
-    return str(p) if p.exists() else None
-
-
 def _get_conn() -> pymysql.connections.Connection:
-    ssl_ca = _ssl_ca()
-    kwargs = dict(
-        host=os.environ.get("FB_AIVEN_HOST") or os.environ.get("MYSQL_HOST", ""),
-        user=os.environ.get("FB_AIVEN_USER") or os.environ.get("MYSQL_USER", ""),
-        password=os.environ.get("FB_AIVEN_PASSWORD") or os.environ.get("MYSQL_PASSWORD", ""),
-        port=int(os.environ.get("FB_AIVEN_PORT") or os.environ.get("MYSQL_PORT", 3306)),
-        database=os.environ.get("FB_AIVEN_DB", "fb_receipts"),
+    return pymysql.connect(
+        host=os.environ.get("MYSQL_HOST", "localhost"),
+        user=os.environ.get("MYSQL_USER", "root"),
+        password=os.environ.get("MYSQL_PASSWORD", ""),
+        port=int(os.environ.get("MYSQL_PORT", 3306)),
+        database=os.environ.get("FB_RECEIPTS_DB", "fb_receipts"),
         charset="utf8mb4",
         autocommit=False,
         cursorclass=pymysql.cursors.DictCursor,
         connect_timeout=10,
     )
-    if ssl_ca:
-        kwargs["ssl"] = {"ca": ssl_ca}
-    return pymysql.connect(**kwargs)
 
 
 # ── Public client class ────────────────────────────────────────────────────────
 
 class DbClient:
-    """Drop-in replacement for SheetsClient backed by Aiven MySQL."""
+    """MySQL-backed client/settings store."""
 
     # ── Settings ──────────────────────────────────────────────────────────────
 
