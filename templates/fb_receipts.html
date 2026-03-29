@@ -15,6 +15,7 @@
   <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-run">Run</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-custom">Custom Run</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-clients">Clients</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-receipts">Receipts</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-settings">Settings</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-activity">Sent Log</a></li>
 </ul>
@@ -190,6 +191,87 @@
         </div>
         <p class="text-muted small mt-2 mb-0">{{ clients|length }} client(s)</p>
         <div id="logImport" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RECEIPTS (DB records) ──────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="tab-receipts">
+    <div class="card shadow-sm">
+      <div class="card-body p-0">
+        {% if not sent_receipts %}
+        <p class="text-muted text-center py-5">No receipts in database yet.</p>
+        {% else %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Client</th>
+                <th>Amount</th>
+                <th>Transaction ID</th>
+                <th>Date Range</th>
+                <th>Payment</th>
+                <th>Status</th>
+                <th>Sent To</th>
+                <th>Sent At</th>
+                <th>PDF</th>
+                <th>Resend</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in sent_receipts %}
+              <tr>
+                <td>
+                  <strong>{{ r.receipt_for or '—' }}</strong>
+                  <div class="text-muted" style="font-size:.65rem">act_{{ r.ad_account_id }}</div>
+                </td>
+                <td class="fw-bold text-nowrap">${{ "%.2f"|format(r.amount) }} {{ r.currency or 'USD' }}</td>
+                <td class="small text-muted" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ r.transaction_id or '' }}">
+                  {{ r.transaction_id or '—' }}
+                </td>
+                <td class="small text-nowrap">
+                  {% if r.date_range_start %}
+                  {{ r.date_range_start[:20] }}<br>→ {{ r.date_range_end[:20] or '' }}
+                  {% else %}
+                  —
+                  {% endif %}
+                </td>
+                <td class="small">{{ r.payment_method or '—' }}</td>
+                <td>
+                  <span class="badge {% if r.status == 'sent' %}bg-success{% elif r.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">
+                    {{ r.status }}
+                  </span>
+                  {% if r.error %}<div class="text-danger" style="font-size:.65rem">{{ r.error }}</div>{% endif %}
+                </td>
+                <td class="small">{{ r.sent_to or '—' }}</td>
+                <td class="small text-muted text-nowrap">{{ r.sent_at.strftime('%m/%d/%y %I:%M%p') if r.sent_at else '—' }}</td>
+                <td>
+                  {% if r.pdf_filename %}
+                  <a href="/fb-receipts/download-db/{{ r.id }}" class="btn btn-sm btn-outline-primary py-0 px-1" title="{{ r.pdf_filename }}">
+                    <i class="bi bi-download"></i>
+                  </a>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if r.pdf_filename %}
+                  <div class="d-flex gap-1">
+                    <input type="email" class="form-control form-control-sm" style="width:150px;font-size:.7rem"
+                           placeholder="email" id="resend_r_{{ r.id }}">
+                    <button class="btn btn-sm btn-outline-success py-0 px-2"
+                            onclick="resendReceipt({{ r.id }}, 'resend_r_{{ r.id }}')"
+                            title="Resend">
+                      <i class="bi bi-send"></i>
+                    </button>
+                  </div>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <p class="text-muted small p-3 mb-0">{{ sent_receipts|length }} receipt(s) stored in database</p>
+        {% endif %}
       </div>
     </div>
   </div>
