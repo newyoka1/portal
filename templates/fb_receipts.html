@@ -12,118 +12,12 @@
 {% else %}
 
 <ul class="nav nav-tabs mb-3" id="fbTabs">
-  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-run">Run</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-custom">Custom Run</a></li>
+  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-receipts">Receipts</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-clients">Clients</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-receipts">Receipts</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-settings">Settings</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-activity">Sent Log</a></li>
 </ul>
 
 <div class="tab-content">
-
-  <!-- ── RUN ─────────────────────────────────────────────────────────────── -->
-  <div class="tab-pane fade show active" id="tab-run">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <form id="runForm">
-          <div class="row g-3 mb-3">
-            <div class="col-md-4">
-              <label class="form-label fw-semibold">Start date</label>
-              <input type="date" name="start_date" class="form-control" value="{{ default_start }}" required>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold">End date</label>
-              <input type="date" name="end_date" class="form-control" value="{{ default_end }}" required>
-            </div>
-          </div>
-          <div class="d-flex gap-4 mb-3">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="dry_run" value="1" id="dryRun">
-              <label class="form-check-label" for="dryRun">Dry run (no emails sent)</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="resend" value="1" id="resend">
-              <label class="form-check-label" for="resend">Resend (ignore sent log)</label>
-            </div>
-          </div>
-          <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary" id="runBtn">
-              <i class="bi bi-play-fill me-1"></i>Send Receipts
-            </button>
-            <button type="button" class="btn btn-outline-secondary" id="lastRunBtn">
-              <i class="bi bi-clock-history me-1"></i>Last run info
-            </button>
-          </div>
-        </form>
-        <div id="logSection" class="mt-3 d-none">
-          <div class="d-flex justify-content-between align-items-center mb-1">
-            <span class="fw-semibold small">Output</span>
-            <span id="runStatus" class="badge bg-secondary">Running…</span>
-          </div>
-          <pre id="logOutput" class="bg-dark text-light p-3 rounded small"
-               style="max-height:400px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;"></pre>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ── CUSTOM RUN ──────────────────────────────────────────────────────── -->
-  <div class="tab-pane fade" id="tab-custom">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <p class="text-muted small mb-3">Run receipts for a single client by selecting from the client list.</p>
-        <form id="customRunForm">
-          {% if clients %}
-          <div class="row g-3 mb-3">
-            <div class="col-md-6">
-              <label class="form-label fw-semibold">Client</label>
-              <select name="account_id" class="form-select" id="customClient">
-                {% for c in clients %}
-                <option value="{{ c.ad_account_id or '' }}">{{ c.client_name or c.ad_account_id or '?' }} ({{ c.ad_account_id or '' }})</option>
-                {% endfor %}
-              </select>
-            </div>
-          </div>
-          <div class="row g-3 mb-3">
-            <div class="col-md-4">
-              <label class="form-label fw-semibold">Start date</label>
-              <input type="date" name="start_date" class="form-control" value="{{ default_start }}" required>
-            </div>
-            <div class="col-md-4">
-              <label class="form-label fw-semibold">End date</label>
-              <input type="date" name="end_date" class="form-control" value="{{ default_end }}" required>
-            </div>
-          </div>
-          <div class="d-flex gap-4 mb-3">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="dry_run" value="1" id="crDry">
-              <label class="form-check-label" for="crDry">Dry run</label>
-            </div>
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" name="resend" value="1" id="crResend">
-              <label class="form-check-label" for="crResend">Resend</label>
-            </div>
-          </div>
-          <button type="submit" class="btn btn-primary" id="customRunBtn">
-            <i class="bi bi-play-fill me-1"></i>Run for Client
-          </button>
-          {% else %}
-          <div class="alert alert-info mb-0">No clients loaded. Check the Clients tab or Google Sheets configuration.</div>
-          {% endif %}
-        </form>
-        <div id="customAlert" class="mt-3 d-none"></div>
-        <div id="logCustom" class="mt-3 d-none">
-          <div class="d-flex justify-content-between align-items-center mb-1">
-            <span class="fw-semibold small">Output</span>
-            <span id="customStatus" class="badge bg-secondary">Running…</span>
-          </div>
-          <pre id="customOutput" class="bg-dark text-light p-3 rounded small"
-               style="max-height:400px; overflow-y:auto; white-space:pre-wrap; word-break:break-all;"></pre>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- ── CLIENTS ─────────────────────────────────────────────────────────── -->
   <div class="tab-pane fade" id="tab-clients">
@@ -196,11 +90,26 @@
   </div>
 
   <!-- ── RECEIPTS (DB records) ──────────────────────────────────────────── -->
-  <div class="tab-pane fade" id="tab-receipts">
+  <div class="tab-pane fade show active" id="tab-receipts">
     <div class="card shadow-sm">
-      <div class="card-body p-0">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <h6 class="fw-bold mb-0">Receipts</h6>
+          <div class="d-flex gap-2 align-items-center">
+            <button class="btn btn-primary btn-sm" onclick="pullReceipts()" id="pullBtn">
+              <i class="bi bi-cloud-download me-1"></i>Pull Receipts Now
+            </button>
+            <span id="pullStatus" class="small d-none"></span>
+            <a href="/fb-receipts" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </a>
+          </div>
+        </div>
+        <div id="pullLog" class="mb-3 d-none">
+          <pre class="bg-dark text-light p-3 rounded small" style="max-height:200px;overflow-y:auto;white-space:pre-wrap;" id="pullOutput"></pre>
+        </div>
         {% if not sent_receipts %}
-        <p class="text-muted text-center py-5">No receipts in database yet.</p>
+        <p class="text-muted text-center py-4">No receipts in database yet. Click "Pull Receipts Now" to check Gmail.</p>
         {% else %}
         <div class="table-responsive">
           <table class="table table-sm table-hover mb-0">
@@ -331,155 +240,58 @@
     </div>
   </div>
 
-  <!-- ── SENT LOG ──────────────────────────────────────────────────────── -->
-  <div class="tab-pane fade" id="tab-activity">
-    <div class="card shadow-sm">
-      <div class="card-body p-0">
-        {% if not sent_receipts %}
-        <p class="text-muted text-center py-5">No receipts sent yet. The poller checks Gmail every 10 minutes for new Meta billing emails.</p>
-        {% else %}
-        <div class="table-responsive">
-          <table class="table table-sm table-hover mb-0">
-            <thead class="table-light">
-              <tr>
-                <th>Client</th>
-                <th>Amount</th>
-                <th>Date Range</th>
-                <th>Status</th>
-                <th>Sent To</th>
-                <th>Sent At</th>
-                <th>PDF</th>
-                <th>Resend</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for r in sent_receipts %}
-              <tr>
-                <td>
-                  {{ r.receipt_for or '—' }}
-                  <div class="text-muted" style="font-size:.7rem">{{ r.ad_account_id }}</div>
-                </td>
-                <td class="fw-bold">${{ "%.2f"|format(r.amount) }}</td>
-                <td class="small text-muted">{{ r.date_range_start[:20] or '—' }} → {{ r.date_range_end[:20] or '' }}</td>
-                <td>
-                  <span class="badge {% if r.status == 'sent' %}bg-success{% elif r.status == 'failed' %}bg-danger{% else %}bg-secondary{% endif %}">
-                    {{ r.status }}
-                  </span>
-                </td>
-                <td class="small">{{ r.sent_to or '—' }}</td>
-                <td class="small text-muted">{{ r.sent_at.strftime('%m/%d %I:%M%p') if r.sent_at else '—' }}</td>
-                <td>
-                  {% if r.pdf_filename %}
-                  <a href="/fb-receipts/download-db/{{ r.id }}" class="btn btn-sm btn-outline-primary py-0 px-1" title="{{ r.pdf_filename }}">
-                    <i class="bi bi-download"></i>
-                  </a>
-                  {% endif %}
-                </td>
-                <td>
-                  {% if r.pdf_filename %}
-                  <div class="d-flex gap-1">
-                    <input type="email" class="form-control form-control-sm" style="width:160px;font-size:.75rem"
-                           placeholder="email@example.com" id="resend_{{ r.id }}">
-                    <button class="btn btn-sm btn-outline-success py-0 px-2"
-                            onclick="resendReceipt({{ r.id }}, 'resend_{{ r.id }}')"
-                            title="Resend">
-                      <i class="bi bi-send"></i>
-                    </button>
-                  </div>
-                  {% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        <p class="text-muted small p-3 mb-0">{{ sent_receipts|length }} receipt(s) — stored in database, survives redeploys</p>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-
 </div><!-- tab-content -->
 {% endif %}
 {% endblock %}
 
 {% block scripts %}
 <script>
-// ── Run form ──
-document.getElementById('runForm')?.addEventListener('submit', async function(e) {
-  e.preventDefault();
-  const alertDiv = document.getElementById('runAlert') || (() => {
-    const d = document.createElement('div'); d.id = 'runAlert'; d.className = 'mt-3 alert alert-info';
-    document.getElementById('logSection').parentElement.insertBefore(d, document.getElementById('logSection'));
-    return d;
-  })();
-  alertDiv.className = 'mt-3 alert alert-info';
-  alertDiv.innerHTML = '<i class="bi bi-hourglass-split me-2"></i><strong>Running...</strong> Sending receipts to all active clients';
+// ── Pull Receipts Now ──
+async function pullReceipts() {
+  const btn = document.getElementById('pullBtn');
+  const status = document.getElementById('pullStatus');
+  const logDiv = document.getElementById('pullLog');
+  const output = document.getElementById('pullOutput');
 
-  await streamRun('/fb-receipts/run', new FormData(this), 'logSection', 'logOutput', 'runStatus', 'runBtn');
-
-  const output = document.getElementById('logOutput')?.textContent || '';
-  const exitMatch = output.match(/\[Exit code: (\d+)\]/);
-  const code = exitMatch ? parseInt(exitMatch[1]) : -1;
-  const sentMatch = output.match(/'sent': (\d+)/);
-  const sent = sentMatch ? parseInt(sentMatch[1]) : 0;
-
-  if (code === 0 && sent > 0) {
-    alertDiv.className = 'mt-3 alert alert-success';
-    alertDiv.innerHTML = '<i class="bi bi-check-circle me-2"></i><strong>Complete!</strong> ' + sent + ' receipt(s) sent.';
-  } else if (code === 0 && output.includes('DRY RUN')) {
-    alertDiv.className = 'mt-3 alert alert-info';
-    alertDiv.innerHTML = '<i class="bi bi-info-circle me-2"></i><strong>Dry run complete</strong> — no emails were sent.';
-  } else if (code === 0) {
-    alertDiv.className = 'mt-3 alert alert-warning';
-    alertDiv.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i><strong>Completed</strong> but no receipts were sent. Check output.';
-  } else {
-    alertDiv.className = 'mt-3 alert alert-danger';
-    alertDiv.innerHTML = '<i class="bi bi-x-circle me-2"></i><strong>Failed</strong> — check the output below.';
-  }
-});
-
-document.getElementById('lastRunBtn')?.addEventListener('click', async function() {
-  await streamRun('/fb-receipts/last-run-info', new FormData(), 'logSection', 'logOutput', 'runStatus', 'runBtn');
-});
-
-// ── Custom run form ──
-document.getElementById('customRunForm')?.addEventListener('submit', async function(e) {
-  e.preventDefault();
-  const clientSelect = document.getElementById('customClient');
-  const clientName = clientSelect?.options[clientSelect.selectedIndex]?.text || 'Client';
-  const alertDiv = document.getElementById('customAlert');
-  const btn = document.getElementById('customRunBtn');
-
-  // Show progress alert
-  alertDiv.className = 'mt-3 alert alert-info';
-  alertDiv.innerHTML = '<i class="bi bi-hourglass-split me-2"></i><strong>Running...</strong> Generating receipt for ' + clientName;
   btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pulling...';
+  status.className = 'small text-muted';
+  status.textContent = 'Checking Gmail for new receipts...';
+  status.classList.remove('d-none');
+  logDiv.classList.remove('d-none');
+  output.textContent = '';
 
-  await streamRun('/fb-receipts/run', new FormData(this), 'logCustom', 'customOutput', 'customStatus', null);
+  try {
+    const resp = await fetch('/fb-receipts/pull', { method: 'POST' });
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      output.textContent += dec.decode(value);
+      output.scrollTop = output.scrollHeight;
+    }
 
-  // Show completion alert based on output
-  const output = document.getElementById('customOutput')?.textContent || '';
-  const exitMatch = output.match(/\[Exit code: (\d+)\]/);
-  const code = exitMatch ? parseInt(exitMatch[1]) : -1;
-  const sentMatch = output.match(/'sent': (\d+)/);
-  const sent = sentMatch ? parseInt(sentMatch[1]) : 0;
-
-  if (code === 0 && sent > 0) {
-    alertDiv.className = 'mt-3 alert alert-success';
-    alertDiv.innerHTML = '<i class="bi bi-check-circle me-2"></i><strong>Complete!</strong> Receipt sent to ' + clientName;
-  } else if (code === 0 && output.includes('DRY RUN')) {
-    alertDiv.className = 'mt-3 alert alert-info';
-    alertDiv.innerHTML = '<i class="bi bi-info-circle me-2"></i><strong>Dry run complete</strong> — no emails were sent.';
-  } else if (code === 0) {
-    alertDiv.className = 'mt-3 alert alert-warning';
-    alertDiv.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i><strong>Completed</strong> but no receipts were sent. Check the output below.';
-  } else {
-    alertDiv.className = 'mt-3 alert alert-danger';
-    alertDiv.innerHTML = '<i class="bi bi-x-circle me-2"></i><strong>Failed</strong> — check the output below for details.';
+    const text = output.textContent;
+    if (text.includes('sent') && !text.includes('0 sent')) {
+      status.className = 'small text-success';
+      status.textContent = 'New receipts processed! Refreshing...';
+      setTimeout(() => window.location.reload(), 2000);
+    } else if (text.includes('no new') || text.includes('0 sent')) {
+      status.className = 'small text-muted';
+      status.textContent = 'No new receipts found.';
+    } else {
+      status.className = 'small text-warning';
+      status.textContent = 'Check output for details.';
+    }
+  } catch (err) {
+    status.className = 'small text-danger';
+    status.textContent = 'Error: ' + err.message;
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Pull Receipts Now';
   }
-  btn.disabled = false;
-});
+}
 
 // ── Resend receipt (from DB) ──
 async function resendReceipt(receiptId, emailInputId) {
