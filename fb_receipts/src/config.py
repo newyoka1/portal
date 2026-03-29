@@ -1,17 +1,28 @@
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv()
 
+# ── Portal settings helper ────────────────────────────────────────────────────
+def _ps(key, default=""):
+    """Read from portal_config DB settings, fall back to env var."""
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+        from portal_config import get_setting
+        return get_setting(key, default)
+    except Exception:
+        return os.getenv(key, default)
+
 # Meta
-META_ACCESS_TOKEN = os.getenv("META_ACCESS_TOKEN", "")
+META_ACCESS_TOKEN = _ps("META_ACCESS_TOKEN", "")
 META_BUSINESS_IDS = [
     bid.strip()
-    for bid in os.getenv("META_BUSINESS_IDS", "").split(",")
+    for bid in _ps("META_BUSINESS_IDS", "").split(",")
     if bid.strip()
 ]
-META_API_VERSION = os.getenv("META_API_VERSION", "v21.0")
+META_API_VERSION = _ps("META_API_VERSION", "v21.0")
 META_BASE_URL = f"https://graph.facebook.com/{META_API_VERSION}"
 
 # Google — resolve credentials from env var (Railway) or local file (dev)
@@ -34,9 +45,9 @@ else:
 GOOGLE_SHEET_ID = os.getenv("GOOGLE_SHEET_ID", "")
 
 # Gmail
-GMAIL_SENDER_EMAIL = os.getenv("GMAIL_SENDER_EMAIL", "")
-GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
-NOTIFY_EMAIL = os.getenv("NOTIFY_EMAIL", "George@politikanyc.com")
+GMAIL_SENDER_EMAIL = _ps("GMAIL_SENDER_EMAIL", "")
+GMAIL_APP_PASSWORD = _ps("GMAIL_APP_PASSWORD", "")
+NOTIFY_EMAIL = _ps("NOTIFY_EMAIL", "George@politikanyc.com")
 
 # Schedule
 SCHEDULE_FREQUENCY = os.getenv("SCHEDULE_FREQUENCY", "weekly")

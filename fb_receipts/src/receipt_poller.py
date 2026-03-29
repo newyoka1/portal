@@ -140,8 +140,11 @@ def _run():
 
         pdf_data = Path(pdf_path).read_bytes()
         pdf_filename = Path(pdf_path).name
-        sftp_upload(str(pdf_path), remote_dir=sftp_dir, cleanup=False)
-        logger.info("  Uploaded PDF to SFTP: %s/%s", sftp_dir, pdf_filename)
+        try:
+            sftp_upload(str(pdf_path), remote_dir=sftp_dir, cleanup=False)
+            print(f"  Uploaded PDF to SFTP: {sftp_dir}/{pdf_filename}")
+        except Exception as sftp_err:
+            print(f"  SFTP PDF upload skipped: {sftp_err}")
 
         # 3. Store in DB (base64 images + PDF binary)
         images_for_db = [{"filename": fn, "data": base64.b64encode(d).decode()} for fn, d in ad_image_bytes]
