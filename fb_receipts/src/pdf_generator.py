@@ -48,10 +48,13 @@ from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
 from reportlab.platypus import (
     SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
-    HRFlowable,
+    HRFlowable, Image,
 )
 
 from src.config import RECEIPT_DOWNLOAD_DIR
+
+# Meta logo — resolved relative to this file so it works from any working directory
+_META_LOGO_PATH = Path(__file__).resolve().parent.parent.parent.parent / "static" / "meta-logo.png"
 
 logger = logging.getLogger(__name__)
 
@@ -93,13 +96,20 @@ S_META_LOGO  = _s("ML", fontSize=16, fontName="Helvetica-Bold", textColor=C_META
 
 
 def _build_header(story, client_name: str, account_id: str, W: float):
-    """Title + Account ID + Meta branding + separator line."""
-    # Title row: "Receipt for ..." left, Meta logo text right
+    """Title + Account ID + Meta logo + separator line."""
+    # Meta logo image — height fixed at 18pt, width scales proportionally
+    if _META_LOGO_PATH.exists():
+        logo_cell = Image(str(_META_LOGO_PATH), height=18, width=18 * (1280 / 258))
+    else:
+        # Fallback to text if image not found
+        logo_cell = Paragraph("\u221e Meta", S_META_LOGO)
+
+    # Title row: "Receipt for ..." left, Meta logo right
     title_table = Table([[
         [Paragraph(f"Receipt for {client_name}", S_TITLE),
          Paragraph(f"Account ID: {account_id}", S_ACCT_ID)],
-        Paragraph("\u221e Meta", S_META_LOGO),
-    ]], colWidths=[W * 0.70, W * 0.30])
+        logo_cell,
+    ]], colWidths=[W * 0.65, W * 0.35])
     title_table.setStyle(TableStyle([
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
         ("LEFTPADDING", (0, 0), (-1, -1), 0),
