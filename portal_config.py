@@ -72,15 +72,8 @@ DEFAULTS = [
     # FB Ad Approval
     ("BASE_URL", "https://connect.politikanyc.com/fb", "FB Ad Approval Base URL", "fb_approval", False),
 
-    # Voter Pipeline — HubSpot CRM
-    ("HUBSPOT_TOKEN_1", "", "HubSpot Token #1",            "voter", True),
-    ("HUBSPOT_TOKEN_2", "", "HubSpot Token #2 (optional)", "voter", True),
-    ("HUBSPOT_TOKEN_3", "", "HubSpot Token #3 (optional)", "voter", True),
-
-    # Voter Pipeline — Campaign Monitor
-    ("CM_API_KEY_1",    "", "Campaign Monitor API Key #1",            "voter", True),
-    ("CM_API_KEY_2",    "", "Campaign Monitor API Key #2 (optional)", "voter", True),
-    ("CM_API_KEY_3",    "", "Campaign Monitor API Key #3 (optional)", "voter", True),
+    # Voter Pipeline tokens are managed dynamically via the settings UI
+    # (HUBSPOT_TOKEN_*, CM_API_KEY_*, MAILCHIMP_KEY_* rows are user-created)
 
 ]
 
@@ -104,13 +97,15 @@ def seed_defaults():
                         category=category,
                         is_secret=is_secret,
                     ))
-            # Remove stale settings that no longer exist in DEFAULTS
+            # Remove stale settings — but preserve dynamically-managed voter tokens
+            DYNAMIC_PREFIXES = ("HUBSPOT_TOKEN_", "CM_API_KEY_", "MAILCHIMP_KEY_")
             valid_keys = {d[0] for d in DEFAULTS}
             stale = db.query(PortalSetting).filter(
                 PortalSetting.key.notin_(valid_keys)
             ).all()
             for s in stale:
-                db.delete(s)
+                if not any(s.key.startswith(p) for p in DYNAMIC_PREFIXES):
+                    db.delete(s)
 
             db.commit()
         finally:

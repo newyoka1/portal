@@ -13,6 +13,55 @@
 </div>
 
 {% for cat_key, cat_label in categories %}
+
+{% if cat_key == 'voter' %}
+{# ── Voter: dynamic per-platform token sections ───────────────────────────── #}
+{% if voter_platforms %}
+<div class="card shadow-sm mb-3">
+  <div class="card-header bg-white py-2">
+    <h6 class="fw-bold mb-0"><i class="bi bi-people me-1"></i>{{ cat_label }}</h6>
+  </div>
+  <div class="card-body">
+    {% for plat in voter_platforms %}
+    <div class="mb-4">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="fw-semibold text-secondary small text-uppercase" style="letter-spacing:.05em">
+          {{ plat.label }}
+        </span>
+        <button class="btn btn-outline-secondary btn-sm"
+                onclick="addTokenRow('{{ plat.prefix }}', '{{ plat.label }}', this)">
+          <i class="bi bi-plus-lg me-1"></i>Add Account
+        </button>
+      </div>
+      <div id="rows_{{ plat.prefix | replace('_','') }}">
+        {% for s in plat.rows %}
+        <div class="row mb-2 align-items-center token-row">
+          <div class="col-md-3">
+            <div class="text-muted font-monospace" style="font-size:.7rem">{{ s.key }}</div>
+          </div>
+          <div class="col-md-9">
+            <div class="input-group">
+              <input type="password" class="form-control font-monospace"
+                     data-key="{{ s.key }}" value="{{ s.value or '' }}"
+                     placeholder="pat-na1-…">
+              <button class="btn btn-outline-secondary" type="button"
+                      onclick="toggleSecret(this)"><i class="bi bi-eye"></i></button>
+              <button class="btn btn-outline-danger" type="button"
+                      onclick="deleteToken('{{ s.key }}', this)"><i class="bi bi-trash"></i></button>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% if not loop.last %}<hr class="my-3">{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% else %}
+{# ── All other categories: standard key/value rows ────────────────────────── #}
 {% set settings = grouped.get(cat_key, []) %}
 {% if settings %}
 <div class="card shadow-sm mb-3">
@@ -23,7 +72,6 @@
       {% elif cat_key == 'sftp' %}<i class="bi bi-cloud-upload me-1"></i>
       {% elif cat_key == 'polling' %}<i class="bi bi-clock me-1"></i>
       {% elif cat_key == 'fb_approval' %}<i class="bi bi-megaphone me-1"></i>
-      {% elif cat_key == 'voter' %}<i class="bi bi-people me-1"></i>
       {% endif %}
       {{ cat_label }}
     </h6>
@@ -62,6 +110,8 @@
   </div>
 </div>
 {% endif %}
+{% endif %}
+
 {% endfor %}
 
 <div class="text-muted small mt-3">
@@ -84,11 +134,59 @@ function toggleSecret(btn) {
   }
 }
 
+function addTokenRow(prefix, label, btn) {
+  const containerId = 'rows_' + prefix.replace(/_/g, '');
+  const container = document.getElementById(containerId);
+  // Find next available number
+  const existing = container.querySelectorAll('[data-key]');
+  let maxN = 0;
+  existing.forEach(el => {
+    const m = el.dataset.key.match(/(\d+)$/);
+    if (m) maxN = Math.max(maxN, parseInt(m[1]));
+  });
+  const newKey = prefix + (maxN + 1);
+
+  const row = document.createElement('div');
+  row.className = 'row mb-2 align-items-center token-row';
+  row.innerHTML = `
+    <div class="col-md-3">
+      <div class="text-muted font-monospace" style="font-size:.7rem">${newKey}</div>
+    </div>
+    <div class="col-md-9">
+      <div class="input-group">
+        <input type="password" class="form-control font-monospace"
+               data-key="${newKey}" placeholder="Paste token here…" autofocus>
+        <button class="btn btn-outline-secondary" type="button"
+                onclick="toggleSecret(this)"><i class="bi bi-eye"></i></button>
+        <button class="btn btn-outline-danger" type="button"
+                onclick="deleteToken('${newKey}', this)"><i class="bi bi-trash"></i></button>
+      </div>
+    </div>`;
+  container.appendChild(row);
+  row.querySelector('input').focus();
+}
+
+async function deleteToken(key, btn) {
+  if (!confirm(`Remove ${key}?`)) return;
+  const row = btn.closest('.token-row');
+  // If row was never saved (no value in DB), just remove from DOM
+  const input = row.querySelector('input');
+  if (!input.value) { row.remove(); return; }
+
+  const resp = await fetch(`/settings/${encodeURIComponent(key)}`, { method: 'DELETE' });
+  const result = await resp.json();
+  if (result.ok) {
+    row.remove();
+  } else {
+    alert('Delete failed: ' + (result.error || 'unknown'));
+  }
+}
+
 async function saveAllSettings() {
   const inputs = document.querySelectorAll('[data-key]');
   const data = {};
   inputs.forEach(input => {
-    data[input.dataset.key] = input.value;
+    if (input.value !== '') data[input.dataset.key] = input.value;
   });
 
   const status = document.getElementById('saveStatus');

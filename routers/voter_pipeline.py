@@ -29,7 +29,7 @@ def voter_pipeline_page(
     })
 
 
-_VOTER_PREFIXES = ("HUBSPOT_TOKEN_", "CM_API_KEY_")
+_VOTER_PREFIXES = ("HUBSPOT_TOKEN_", "CM_API_KEY_", "MAILCHIMP_KEY_")
 
 def _build_env() -> dict:
     """Inject voter pipeline credentials from portal settings into subprocess env.
