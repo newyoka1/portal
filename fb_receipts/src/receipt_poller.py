@@ -101,76 +101,62 @@ def _run():
         except Exception:
             pass
 
-        # Get ad images → upload to SFTP → store in DB
-        import base64, json as _json
-        ad_image_bytes = []  # list of (filename, bytes)
+        # ── All files go through SFTP ─────────────────────────────────────
+        import base64, json as _json, shutil, tempfile
+        sys.path.insert(0, str(FB_DIR.parent))
+        from utils_sftp import sftp_upload
+
+        sftp_dir = f"receipts/{acct_id}"
+        _tmp = Path(mkdtemp(prefix="receipt_"))
+
+        # 1. Fetch ad images from Meta → SFTP
+        ad_image_bytes = []  # (filename, bytes) for DB + email
         try:
-            # Fetch from Meta API into memory via temp dir
-            _tmp = Path(mkdtemp(prefix="img_"))
             raw_images = meta.get_ad_images(
                 f"act_{acct_id}", start, end, max_images=4, base_dir=_tmp
             )
             for img_path in (raw_images or []):
                 if img_path.exists():
-                    ad_image_bytes.append((img_path.name, img_path.read_bytes()))
-
-            # Upload to SFTP for persistent storage
-            if ad_image_bytes:
-                try:
-                    sys.path.insert(0, str(FB_DIR.parent))
-                    from utils_sftp import sftp_upload
-                    for fname, _ in ad_image_bytes:
-                        fpath = _tmp / acct_id / "images" / fname
-                        if fpath.exists():
-                            sftp_upload(str(fpath), remote_dir=f"receipts/{acct_id}")
-                except Exception as sftp_err:
-                    logger.debug("SFTP image upload skipped: %s", sftp_err)
-
-            # Clean up temp
-            import shutil
-            shutil.rmtree(_tmp, ignore_errors=True)
-
-            if ad_image_bytes:
-                logger.info("Receipt poller: fetched %d ad image(s) for %s", len(ad_image_bytes), client_name)
-            else:
-                logger.info("Receipt poller: no ad images found for %s", client_name)
+                    img_bytes = img_path.read_bytes()
+                    ad_image_bytes.append((img_path.name, img_bytes))
+                    sftp_upload(str(img_path), remote_dir=sftp_dir, cleanup=False)
+                    logger.info("  Uploaded image to SFTP: %s/%s", sftp_dir, img_path.name)
         except Exception as e:
-            logger.warning("Receipt poller: ad image fetch failed for %s: %s", client_name, e)
+            logger.warning("Receipt poller: ad image fetch/upload failed: %s", e)
 
-        # Serialize images for DB (base64) and email attachment (temp files)
-        images_for_db = [{"filename": fn, "data": base64.b64encode(d).decode()} for fn, d in ad_image_bytes]
-        ad_images_json = _json.dumps(images_for_db) if images_for_db else ""
+        if ad_image_bytes:
+            logger.info("Receipt poller: %d ad image(s) for %s", len(ad_image_bytes), client_name)
 
-        # Write images to temp files for email attachment
-        import tempfile
-        ad_image_paths = []
-        for fname, img_data in ad_image_bytes:
-            ext = Path(fname).suffix or ".jpg"
-            tmp_img = tempfile.NamedTemporaryFile(delete=False, suffix=ext, prefix="ad_")
-            tmp_img.write(img_data)
-            tmp_img.close()
-            ad_image_paths.append(Path(tmp_img.name))
-
-        # Generate PDF (no images embedded — they go as email attachments)
-        _pdf_tmp = Path(mkdtemp(prefix="pdf_"))
+        # 2. Generate PDF → SFTP
         pdf_path = generate_email_receipt_pdf(
-            receipt=receipt,
-            campaigns=campaigns,
-            adsets=adsets,
-            base_dir=_pdf_tmp,
+            receipt=receipt, campaigns=campaigns, adsets=adsets, base_dir=_tmp,
         )
 
         if not pdf_path:
             logger.warning("Receipt poller: could not generate PDF for %s", client_name)
             db.save_sent_receipt(receipt, b"", "", ", ".join(emails), "failed", "PDF generation failed")
+            shutil.rmtree(_tmp, ignore_errors=True)
             continue
 
-        # Read PDF binary for DB storage
         pdf_data = Path(pdf_path).read_bytes()
         pdf_filename = Path(pdf_path).name
+        sftp_upload(str(pdf_path), remote_dir=sftp_dir, cleanup=False)
+        logger.info("  Uploaded PDF to SFTP: %s/%s", sftp_dir, pdf_filename)
 
-        # Send email with PDF + ad images attached
+        # 3. Store in DB (base64 images + PDF binary)
+        images_for_db = [{"filename": fn, "data": base64.b64encode(d).decode()} for fn, d in ad_image_bytes]
+        ad_images_json = _json.dumps(images_for_db) if images_for_db else ""
+
+        # 4. Build email attachments from the files still in _tmp
         email_receipts = [{"pdf_path": str(pdf_path), "type": "receipt"}]
+        ad_image_paths = [_tmp / acct_id / "images" / fn for fn, _ in ad_image_bytes]
+        # Fallback: check if images are directly in _tmp subdirs
+        ad_image_paths = [p for p in ad_image_paths if p.exists()]
+        if not ad_image_paths:
+            # Images may be in a different structure — find all image files
+            ad_image_paths = list(_tmp.rglob("*.jpg")) + list(_tmp.rglob("*.png")) + list(_tmp.rglob("*.webp"))
+
+        # 5. Send email
         any_sent = False
         for recipient in emails:
             ok = email_svc.send_receipt(
@@ -194,6 +180,9 @@ def _run():
             error="" if any_sent else "email send failed",
             ad_images_json=ad_images_json,
         )
+
+        # Clean up temp dir
+        shutil.rmtree(_tmp, ignore_errors=True)
 
         if any_sent:
             sent += 1
