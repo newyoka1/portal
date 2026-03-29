@@ -106,6 +106,14 @@ def seed_defaults():
                         category=category,
                         is_secret=is_secret,
                     ))
+            # Remove stale settings that no longer exist in DEFAULTS
+            valid_keys = {d[0] for d in DEFAULTS}
+            stale = db.query(PortalSetting).filter(
+                PortalSetting.key.notin_(valid_keys)
+            ).all()
+            for s in stale:
+                db.delete(s)
+
             db.commit()
         finally:
             db.close()

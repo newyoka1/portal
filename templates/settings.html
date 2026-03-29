@@ -35,7 +35,14 @@
         <div class="text-muted" style="font-size:.7rem">{{ s.key }}</div>
       </div>
       <div class="col-md-8">
-        {% if s.is_secret %}
+        {% if s.key == 'RECEIPT_POLL_SCHEDULE' %}
+        <select class="form-select" id="setting_{{ s.key }}" data-key="{{ s.key }}">
+          <option value="hourly" {{ 'selected' if (s.value or 'hourly') == 'hourly' }}>Hourly</option>
+          <option value="daily" {{ 'selected' if s.value == 'daily' }}>Daily (9 AM)</option>
+          <option value="weekly" {{ 'selected' if s.value == 'weekly' }}>Weekly (Monday 9 AM)</option>
+        </select>
+        <div class="form-text">Takes effect on next deploy/restart.</div>
+        {% elif s.is_secret %}
         <div class="input-group">
           <input type="password" class="form-control" id="setting_{{ s.key }}"
                  data-key="{{ s.key }}" value="{{ s.value or '' }}">
