@@ -88,31 +88,30 @@ def startup():
         _add_column_if_missing(conn, "emails",    "sent_for_approval_at", "DATETIME NULL")
         _add_column_if_missing(conn, "approvals", "token", "VARCHAR(100) NULL")
 
-    # Poll Gmail every 5 minutes automatically
-    poll_interval = int(os.getenv("POLL_INTERVAL_MINUTES", "5"))
+    # Single unified poller — checks Gmail for both email approvals and Meta receipts
+    from portal_config import get_setting
+    _sched = get_setting("RECEIPT_POLL_SCHEDULE", "hourly")
+
+    def _poll_all():
+        """One job: poll email queue + process Meta receipts."""
+        fetch_and_store_emails()
+        try:
+            from fb_receipts.src.receipt_poller import poll_and_send
+            poll_and_send()
+        except Exception as e:
+            logging.warning("Receipt poller error: %s", e)
+
     scheduler = BackgroundScheduler()
-    scheduler.add_job(fetch_and_store_emails, "interval", minutes=poll_interval)
 
-    # Poll Gmail for new Meta receipt emails and auto-send
-    try:
-        from fb_receipts.src.receipt_poller import poll_and_send
-        from portal_config import get_setting
-        _sched = get_setting("RECEIPT_POLL_SCHEDULE", "hourly")
-
-        if _sched == "weekly":
-            scheduler.add_job(poll_and_send, "cron", day_of_week="mon", hour=9, minute=5,
-                              id="fb_receipt_poller")
-            logging.info("FB receipt poller scheduled: weekly (Mon 9:05 AM)")
-        elif _sched == "daily":
-            scheduler.add_job(poll_and_send, "cron", hour=9, minute=5,
-                              id="fb_receipt_poller")
-            logging.info("FB receipt poller scheduled: daily (9:05 AM)")
-        else:  # hourly (default)
-            scheduler.add_job(poll_and_send, "interval", hours=1,
-                              id="fb_receipt_poller")
-            logging.info("FB receipt poller scheduled: hourly")
-    except Exception as exc:
-        logging.warning("FB receipt poller not loaded: %s", exc)
+    if _sched == "weekly":
+        scheduler.add_job(_poll_all, "cron", day_of_week="mon", hour=9, minute=5, id="poller")
+        logging.info("Poller scheduled: weekly (Mon 9:05 AM)")
+    elif _sched == "daily":
+        scheduler.add_job(_poll_all, "cron", hour=9, minute=5, id="poller")
+        logging.info("Poller scheduled: daily (9:05 AM)")
+    else:  # hourly (default)
+        scheduler.add_job(_poll_all, "interval", hours=1, id="poller")
+        logging.info("Poller scheduled: hourly")
 
     scheduler.start()
     logging.info("Gmail poller scheduled every %d minute(s).", poll_interval)
