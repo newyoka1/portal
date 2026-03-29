@@ -405,34 +405,7 @@ def auth_fb_status():
     return jsonify({"connected": False})
 
 # ── Route: Image upload ────────────────────────────────────────────────────
-# Images are uploaded via SFTP to WP Engine for public hosting,
-# with a local fallback to static/uploads/ if SFTP is not configured.
-
-# SFTP config — read from DB settings at runtime via get_setting()
-
-def _sftp_upload(file_bytes, filename):
-    """Upload file bytes to WP Engine via SFTP. Returns public URL."""
-    import paramiko
-    host = get_setting("SFTP_HOST")
-    port = int(get_setting("SFTP_PORT") or "2222")
-    user = get_setting("SFTP_USER")
-    pw   = get_setting("SFTP_PASS")
-    sdir = get_setting("SFTP_DIR") or "ad-images"
-    base = get_setting("SFTP_BASE_URL") or "https://politikanyc.com/ad-images"
-    if not host or not user or not pw:
-        raise Exception("SFTP not configured — check Settings")
-    transport = paramiko.Transport((host, port))
-    transport.connect(username=user, password=pw)
-    sftp = paramiko.SFTPClient.from_transport(transport)
-    try:
-        sftp.mkdir(sdir)
-    except IOError:
-        pass
-    with sftp.open(f"{sdir}/{filename}", "wb") as remote_file:
-        remote_file.write(file_bytes)
-    sftp.close()
-    transport.close()
-    return f"{base}/{filename}"
+# Images are saved to static/uploads/ on the VPS (persistent disk).
 
 @app.route("/upload", methods=["POST"])
 @csrf.exempt
@@ -455,23 +428,7 @@ def upload_image():
     if not is_video and file_size > FB_IMAGE_MAX_SIZE:
         return jsonify({"error": f"Image too large ({file_size // (1024*1024)}MB). Facebook max is 30MB."}), 400
 
-    # Try SFTP first (production), fall back to local (dev)
-    sftp_host = get_setting("SFTP_HOST")
-    sftp_user = get_setting("SFTP_USER")
-    sftp_pass = get_setting("SFTP_PASS")
-    if sftp_host and sftp_user and sftp_pass:
-        try:
-            url = _sftp_upload(file_bytes, filename)
-            # Save locally only in dev (Railway has ephemeral disk)
-            if not os.getenv("PORT"):
-                os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-                with open(os.path.join(UPLOAD_FOLDER, filename), "wb") as lf:
-                    lf.write(file_bytes)
-            return jsonify({"url": url, "type": file_type, "size": file_size, "ext": ext})
-        except Exception as e:
-            print(f"[WARN] SFTP upload failed: {e}, falling back to local")
-
-    # Local fallback
+    # Save to local static/uploads/ (VPS persistent disk)
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     with open(os.path.join(UPLOAD_FOLDER, filename), "wb") as lf:
         lf.write(file_bytes)

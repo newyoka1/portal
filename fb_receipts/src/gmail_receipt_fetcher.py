@@ -46,6 +46,7 @@ def _get_receipt_email() -> str:
     return _DEFAULT_RECEIPT_EMAIL
 
 
+
 def _get_gmail_service(email: str | None = None):
     """Build Gmail API service impersonating the receipt inbox."""
     from src.config import GOOGLE_SERVICE_ACCOUNT_FILE

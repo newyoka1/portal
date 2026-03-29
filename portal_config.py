@@ -69,15 +69,6 @@ DEFAULTS = [
     ("GMAIL_APP_PASSWORD",  "", "Gmail App Password",        "email",  True),
     ("APP_URL",             "https://connect.politikanyc.com", "Portal URL (for approval links)", "email", False),
 
-    # SFTP
-    ("SFTP_HOST",           "", "SFTP Host",                 "sftp",   False),
-    ("SFTP_PORT",           "2222", "SFTP Port",             "sftp",   False),
-    ("SFTP_USER",           "", "SFTP Username",             "sftp",   False),
-    ("SFTP_PASS",           "", "SFTP Password",             "sftp",   True),
-    ("SFTP_DIR",            "ad-images", "SFTP Upload Directory", "sftp", False),
-    ("SFTP_BASE_URL",       "", "SFTP Public URL Base",      "sftp",   False),
-
-
     # FB Ad Approval
     ("BASE_URL", "https://connect.politikanyc.com/fb", "FB Ad Approval Base URL", "fb_approval", False),
 ]

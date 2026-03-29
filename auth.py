@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-# In-memory session store — fine for a single Railway instance.
+# In-memory session store — fine for a single-process VPS deployment.
 # Key: token, Value: {"user_id": int, "expires": datetime}
 _sessions: dict[str, dict] = {}
 

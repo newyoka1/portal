@@ -101,15 +101,11 @@ def _run():
         except Exception:
             pass
 
-        # ── All files go through SFTP ─────────────────────────────────────
         import base64, json as _json, shutil, tempfile
-        sys.path.insert(0, str(FB_DIR.parent))
-        from utils_sftp import sftp_upload
 
-        sftp_dir = f"receipts/{acct_id}"
         _tmp = Path(mkdtemp(prefix="receipt_"))
 
-        # 1. Fetch ad images from Meta → SFTP
+        # 1. Fetch ad images from Meta
         ad_image_bytes = []  # (filename, bytes) for DB + email
         try:
             raw_images = meta.get_ad_images(
@@ -119,12 +115,8 @@ def _run():
                 if img_path.exists():
                     img_bytes = img_path.read_bytes()
                     ad_image_bytes.append((img_path.name, img_bytes))
-                    try:
-                        sftp_upload(str(img_path), remote_dir=sftp_dir, cleanup=False)
-                    except Exception:
-                        pass
         except Exception as e:
-            logger.warning("Receipt poller: ad image fetch/upload failed: %s", e)
+            logger.warning("Receipt poller: ad image fetch failed: %s", e)
 
         if ad_image_bytes:
             logger.info("Receipt poller: %d ad image(s) for %s", len(ad_image_bytes), client_name)
@@ -142,11 +134,6 @@ def _run():
 
         pdf_data = Path(pdf_path).read_bytes()
         pdf_filename = Path(pdf_path).name
-        try:
-            sftp_upload(str(pdf_path), remote_dir=sftp_dir, cleanup=False)
-            print(f"  Uploaded PDF to SFTP: {sftp_dir}/{pdf_filename}")
-        except Exception as sftp_err:
-            print(f"  SFTP PDF upload skipped: {sftp_err}")
 
         # 3. Store in DB (base64 images + PDF binary)
         images_for_db = [{"filename": fn, "data": base64.b64encode(d).decode()} for fn, d in ad_image_bytes]

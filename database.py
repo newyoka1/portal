@@ -40,10 +40,10 @@ _ssl_key  = _qs.pop("ssl_key", [None])[0]
 # Rebuild the URL without SSL query params
 _clean_url = urlunparse(_parsed._replace(query=urlencode({k: v[0] for k, v in _qs.items()})))
 
-# Railway / production: SSL cert supplied as env var content instead of a file path.
+# VPS/production: SSL cert supplied as env var content instead of a file path.
 # Accepts either:
 #   MYSQL_SSL_CA_B64     — base64-encoded PEM (recommended: avoids line-ending corruption)
-#   MYSQL_SSL_CA_CONTENT — raw PEM text (works locally, may corrupt in Railway UI)
+#   MYSQL_SSL_CA_CONTENT — raw PEM text (works locally)
 _ssl_ca_b64     = os.getenv("MYSQL_SSL_CA_B64")
 _ssl_ca_content = os.getenv("MYSQL_SSL_CA_CONTENT")
 

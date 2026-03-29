@@ -62,7 +62,17 @@ class MetaClient:
         return list(all_accounts.values())
 
     def get_all_ad_accounts(self) -> list[dict]:
-        """Get ad accounts across all configured business managers."""
+        """Get ad accounts across all configured business managers.
+
+        Falls back to me/adaccounts when META_BUSINESS_IDS is not configured
+        (works with system user tokens that have direct ad account access).
+        """
+        if not META_BUSINESS_IDS:
+            logger.info("No META_BUSINESS_IDS configured — using me/adaccounts")
+            return self._get_paginated(
+                "me/adaccounts",
+                {"fields": "id,name,account_id,currency,business_name,account_status"},
+            )
         accounts = []
         for bid in META_BUSINESS_IDS:
             try:

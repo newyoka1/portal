@@ -15,7 +15,6 @@ templates = Jinja2Templates(directory="templates")
 CATEGORIES = [
     ("meta",        "Meta / Facebook"),
     ("email",       "Email"),
-    ("sftp",        "SFTP / File Storage"),
     ("fb_approval", "FB Ad Approval"),
     ("voter",       "Voter & Research"),
 ]
@@ -23,7 +22,7 @@ CATEGORIES = [
 # Which DB categories each section filter shows
 _SECTION_CATS = {
     "email":    ["email"],
-    "facebook": ["meta", "sftp", "fb_approval"],
+    "facebook": ["meta", "fb_approval"],
     "voter":    ["voter"],
 }
 

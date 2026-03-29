@@ -1759,16 +1759,6 @@ def main():
         print(f"\nFile saved to:")
         print(f"  {output_file}")
 
-        # Upload to SFTP if configured (Railway / production)
-        try:
-            sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-            from utils_sftp import sftp_upload
-            url = sftp_upload(str(output_file), remote_dir="exports")
-            if url:
-                print(f"\n  Download: {url}")
-        except Exception as _sftp_err:
-            pass  # SFTP not available — local-only run
-
         print(f"\nWorkbook contains:")
         print("  - Ethnicity (Modeled) tab")
         print("  - BOE Donors tab")

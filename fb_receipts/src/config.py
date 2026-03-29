@@ -25,7 +25,7 @@ META_BUSINESS_IDS = [
 META_API_VERSION = _ps("META_API_VERSION", "v21.0")
 META_BASE_URL = f"https://graph.facebook.com/{META_API_VERSION}"
 
-# Google — resolve credentials from env var (Railway) or local file (dev)
+# Google — resolve credentials from env var (VPS/production) or local file (dev)
 import base64, json, tempfile
 
 _sa_b64  = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON_B64")
