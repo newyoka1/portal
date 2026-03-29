@@ -173,32 +173,43 @@ async def fb_resend(
             return JSONResponse({"ok": False, "error": "No receipt ID"}, status_code=400)
 
         db = _get_db_client()
-        result = db.get_receipt_pdf(int(receipt_id))
+        result = db.get_receipt_with_images(int(receipt_id))
         if not result:
             return JSONResponse({"ok": False, "error": "Receipt PDF not found in database"}, status_code=404)
 
-        pdf_data, pdf_filename = result
+        pdf_data = result["pdf_data"]
+        client_name = result.get("receipt_for", "Client")
 
-        # Write PDF to temp file for the email builder
-        import tempfile
+        # Write PDF to temp file
+        import tempfile, json as _json, base64
         tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf", prefix="resend_")
         tmp.write(pdf_data)
         tmp.close()
 
         receipts = [{"pdf_path": tmp.name, "type": "resend"}]
 
+        # Restore ad images from DB to temp files
+        ad_images = []
+        if result.get("ad_images_json"):
+            try:
+                for img in _json.loads(result["ad_images_json"]):
+                    img_tmp = tempfile.NamedTemporaryFile(
+                        delete=False, suffix=Path(img["filename"]).suffix, prefix="img_")
+                    img_tmp.write(base64.b64decode(img["data"]))
+                    img_tmp.close()
+                    ad_images.append(Path(img_tmp.name))
+            except Exception:
+                pass
+
         sys.path.insert(0, str(FB_DIR))
         from src.email_service import EmailService
         svc = EmailService()
-
-        # Get client name from the receipt record
-        sent_list = db.get_sent_receipts()
-        client_name = next((r["receipt_for"] for r in sent_list if r["id"] == int(receipt_id)), "Client")
 
         ok = svc.send_receipt(
             to_email=to_email,
             client_name=client_name,
             receipts=receipts,
+            ad_images=ad_images,
             subject=f"Facebook Ads Receipt — {client_name} (resent)",
         )
 

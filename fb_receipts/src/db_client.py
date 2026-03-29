@@ -174,8 +174,9 @@ class DbClient:
                 return cur.fetchone() is not None
 
     def save_sent_receipt(self, receipt: dict, pdf_data: bytes, pdf_filename: str,
-                          sent_to: str, status: str = "sent", error: str = "") -> int:
-        """Store a sent receipt with its PDF binary for future resend."""
+                          sent_to: str, status: str = "sent", error: str = "",
+                          ad_images_json: str = "") -> int:
+        """Store a sent receipt with PDF + ad images for future resend."""
         with _get_conn() as conn:
             with conn.cursor() as cur:
                 cur.execute(
@@ -184,11 +185,13 @@ class DbClient:
                         (ad_account_id, transaction_id, gmail_message_id, receipt_for,
                          amount, currency, invoice_date, date_range_start, date_range_end,
                          payment_method, reference_number, billing_reason, product_type,
-                         email_subject, pdf_data, pdf_filename, sent_to, sent_at, status, error)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),%s,%s)
+                         email_subject, pdf_data, pdf_filename, ad_images_json,
+                         sent_to, sent_at, status, error)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),%s,%s)
                     ON DUPLICATE KEY UPDATE
                         pdf_data = VALUES(pdf_data),
                         pdf_filename = VALUES(pdf_filename),
+                        ad_images_json = VALUES(ad_images_json),
                         sent_to = VALUES(sent_to),
                         sent_at = NOW(),
                         status = VALUES(status),
@@ -211,6 +214,7 @@ class DbClient:
                         receipt.get("email_subject", ""),
                         pdf_data,
                         pdf_filename,
+                        ad_images_json,
                         sent_to,
                         status,
                         error,
@@ -250,4 +254,18 @@ class DbClient:
                 row = cur.fetchone()
                 if row and row.get("pdf_data"):
                     return row["pdf_data"], row["pdf_filename"]
+                return None
+
+    def get_receipt_with_images(self, receipt_id: int) -> dict | None:
+        """Get PDF + ad images for resend."""
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT pdf_data, pdf_filename, ad_images_json, receipt_for "
+                    "FROM sent_receipts WHERE id = %s",
+                    (receipt_id,),
+                )
+                row = cur.fetchone()
+                if row and row.get("pdf_data"):
+                    return dict(row)
                 return None

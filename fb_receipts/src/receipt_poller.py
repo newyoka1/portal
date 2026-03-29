@@ -108,8 +108,12 @@ def _run():
             ad_images = meta.get_ad_images(
                 f"act_{acct_id}", start, end, max_images=4, base_dir=tmp_dir
             )
-        except Exception:
-            pass
+            if ad_images:
+                logger.info("Receipt poller: fetched %d ad image(s) for %s", len(ad_images), client_name)
+            else:
+                logger.info("Receipt poller: no ad images found for %s", client_name)
+        except Exception as e:
+            logger.warning("Receipt poller: ad image fetch failed for %s: %s", client_name, e)
 
         # Generate PDF
         pdf_path = generate_email_receipt_pdf(
@@ -129,6 +133,17 @@ def _run():
         pdf_data = Path(pdf_path).read_bytes()
         pdf_filename = Path(pdf_path).name
 
+        # Serialize ad images to JSON for DB storage (base64 + filename)
+        import base64, json as _json
+        images_for_db = []
+        for img in ad_images:
+            if img.exists():
+                images_for_db.append({
+                    "filename": img.name,
+                    "data": base64.b64encode(img.read_bytes()).decode(),
+                })
+        ad_images_json = _json.dumps(images_for_db) if images_for_db else ""
+
         # Send email
         email_receipts = [{"pdf_path": str(pdf_path), "type": "receipt"}]
         any_sent = False
@@ -144,7 +159,7 @@ def _run():
                 any_sent = True
                 logger.info("Receipt poller: sent to %s <%s>", client_name, recipient)
 
-        # Store in DB (PDF binary + metadata — survives redeploys)
+        # Store in DB (PDF + images + metadata — survives redeploys)
         db.save_sent_receipt(
             receipt=receipt,
             pdf_data=pdf_data,
@@ -152,6 +167,7 @@ def _run():
             sent_to=", ".join(emails),
             status="sent" if any_sent else "failed",
             error="" if any_sent else "email send failed",
+            ad_images_json=ad_images_json,
         )
 
         if any_sent:

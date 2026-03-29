@@ -80,6 +80,7 @@ with conn.cursor() as cur:
             email_subject   VARCHAR(500)  NOT NULL DEFAULT '',
             pdf_data        LONGBLOB      NULL,
             pdf_filename    VARCHAR(255)  NOT NULL DEFAULT '',
+            ad_images_json  LONGTEXT      NULL,
             sent_to         VARCHAR(500)  NOT NULL DEFAULT '',
             sent_at         DATETIME      NULL,
             status          ENUM('sent','failed','pending') NOT NULL DEFAULT 'pending',
@@ -91,6 +92,19 @@ with conn.cursor() as cur:
         )
     """)
     print("Table sent_receipts: ready")
+
+    # Migration: add ad_images_json column if missing
+    try:
+        cur.execute(
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS "
+            "WHERE TABLE_SCHEMA = 'fb_receipts' AND TABLE_NAME = 'sent_receipts' "
+            "AND COLUMN_NAME = 'ad_images_json'"
+        )
+        if cur.fetchone()[0] == 0:
+            cur.execute("ALTER TABLE sent_receipts ADD COLUMN ad_images_json LONGTEXT NULL AFTER pdf_filename")
+            print("Migration: added ad_images_json column")
+    except Exception as e:
+        print(f"Migration check: {e}")
 
 conn.commit()
 conn.close()
