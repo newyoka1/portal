@@ -2,9 +2,13 @@
 
 {% block content %}
 <style>
-    /* ── Escape portal container padding so FB app can be full-width ── */
+    /* ── Strip portal container padding — FB app owns its own spacing ── */
     .main-content > main.container-fluid {
         padding: 0 !important;
+    }
+    /* ── Consistent breathing room between portal sidebar and FB content ── */
+    .fb-wrap {
+        padding-left: 12px;
     }
     /* ── FB Ad Approval CSS — scoped to this section ── */
     :root {
@@ -368,7 +372,9 @@
 </div>
 {% endif %}
 
+<div class="fb-wrap">
 {% block fb_content %}{% endblock %}
+</div>
 
 <script>
 function toggleFbClientDropdown(e) {
