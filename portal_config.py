@@ -67,7 +67,6 @@ DEFAULTS = [
     ("GMAIL_SENDER_EMAIL",  "", "Gmail Sender Email",        "email",  False),
     ("GMAIL_ADDRESS",       "", "Gmail Poller Address (impersonate)", "email", False),
     ("GMAIL_APP_PASSWORD",  "", "Gmail App Password",        "email",  True),
-    ("GMAIL_RECEIPT_ADDRESS", "support@politikanyc.com", "Receipt Inbox (Meta billing emails)", "email", False),
     ("APP_URL",             "https://connect.politikanyc.com", "Portal URL (for approval links)", "email", False),
 
     # SFTP
