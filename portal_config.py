@@ -80,8 +80,7 @@ DEFAULTS = [
 
     # Polling
     ("POLL_INTERVAL_MINUTES",   "5",  "Email Poll Interval (minutes)", "polling", False),
-    ("RECEIPT_POLL_MINUTES",    "10", "Receipt Poll Interval (minutes)", "polling", False),
-    ("RECEIPT_LOOKBACK_DAYS",   "7",  "Receipt Lookback Days",          "polling", False),
+    ("RECEIPT_POLL_SCHEDULE",   "hourly", "Receipt Poll Schedule (hourly / daily / weekly)", "polling", False),
 
     # FB Ad Approval
     ("BASE_URL", "https://connect.politikanyc.com/fb", "FB Ad Approval Base URL", "fb_approval", False),

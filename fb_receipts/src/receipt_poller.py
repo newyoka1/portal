@@ -1,16 +1,14 @@
 """
 Receipt Poller — checks Gmail for new Meta receipt emails and auto-sends.
 
-Called by APScheduler every N minutes. For each new Meta receipt email:
-1. Parse receipt data from email
-2. Match to a client in fb_receipts.clients by account_id
-3. Skip if client not active or no email set
-4. Skip if already processed (transaction_id in sent_receipts)
-5. Get campaign/adset breakdown from Meta API
-6. Fetch ad images
-7. Generate PDF
-8. Email to client
-9. Store receipt + PDF binary in sent_receipts table
+Logic is simple:
+  1. Search Gmail for ALL Meta receipt emails (last 90 days max)
+  2. For each email, extract the transaction_id + account_id
+  3. Check if transaction_id already exists in sent_receipts table
+  4. If not → match to active client → generate PDF → send → store in DB
+  5. If yes → skip (already processed)
+
+No lookback window or schedule needed. The sent_receipts table IS the state.
 """
 
 import logging
@@ -50,21 +48,19 @@ def _run():
     if not clients:
         return
 
-    # Build account_id → client mapping
     client_map = {c["ad_account_id"]: c for c in clients}
     settings = db.get_settings()
     admin_email = settings.get("admin_email") or None
-    lookback_days = int(settings.get("lookback_days") or 7)
 
-    # Search Gmail for receipts within the lookback window
+    # Search Gmail for Meta receipt emails (last 90 days — wide net, DB deduplicates)
     end = datetime.now()
-    start = end - timedelta(days=lookback_days)
+    start = end - timedelta(days=90)
 
     logger.info("Receipt poller: checking Gmail for new Meta receipts...")
     gmail_receipts = fetch_meta_receipts(start_date=start, end_date=end)
 
     if not gmail_receipts:
-        logger.info("Receipt poller: no new Meta receipt emails found")
+        logger.info("Receipt poller: no Meta receipt emails found")
         return
 
     sent = 0
@@ -74,31 +70,36 @@ def _run():
         acct_id = receipt.get("account_id", "")
         txn_id = receipt.get("transaction_id", "")
 
-        # Match to client
+        # Must have a transaction_id to deduplicate
+        if not txn_id:
+            skipped += 1
+            continue
+
+        # Already in DB?
+        if db.is_receipt_sent(acct_id, txn_id):
+            skipped += 1
+            continue
+
+        # Match to active client
         client = client_map.get(acct_id)
         if not client:
             logger.debug("Receipt poller: no active client for account %s — skipping", acct_id)
             skipped += 1
             continue
 
-        # Already processed?
-        if txn_id and db.is_receipt_sent(acct_id, txn_id):
-            logger.debug("Receipt poller: txn %s already sent — skipping", txn_id[:25])
-            skipped += 1
-            continue
-
         client_name = client["client_name"]
         emails = client.get("emails") or [client["email"]]
-        logger.info("Receipt poller: new receipt for %s ($%.2f) — sending to %s",
-                     client_name, receipt.get("amount", 0), ", ".join(emails))
+        amount = receipt.get("amount", 0)
+        logger.info("Receipt poller: NEW receipt for %s ($%.2f, txn %s) — sending to %s",
+                     client_name, amount, txn_id[:25], ", ".join(emails))
 
-        # Get campaign + adset detail
+        # Get campaign + adset detail from Meta API
+        campaigns, adsets = [], []
         try:
-            # Parse date range to get the right period for campaign data
             campaigns = meta.get_campaign_spend(f"act_{acct_id}", start, end)
             adsets = meta.get_adset_spend(f"act_{acct_id}", start, end)
         except Exception:
-            campaigns, adsets = [], []
+            pass
 
         # Get ad images
         ad_images = []
@@ -124,14 +125,12 @@ def _run():
             db.save_sent_receipt(receipt, b"", "", ", ".join(emails), "failed", "PDF generation failed")
             continue
 
-        # Read PDF binary
+        # Read PDF binary for DB storage
         pdf_data = Path(pdf_path).read_bytes()
         pdf_filename = Path(pdf_path).name
 
-        # Build receipts list for email builder
+        # Send email
         email_receipts = [{"pdf_path": str(pdf_path), "type": "receipt"}]
-
-        # Send
         any_sent = False
         for recipient in emails:
             ok = email_svc.send_receipt(
@@ -145,7 +144,7 @@ def _run():
                 any_sent = True
                 logger.info("Receipt poller: sent to %s <%s>", client_name, recipient)
 
-        # Store in DB
+        # Store in DB (PDF binary + metadata — survives redeploys)
         db.save_sent_receipt(
             receipt=receipt,
             pdf_data=pdf_data,
@@ -157,7 +156,5 @@ def _run():
 
         if any_sent:
             sent += 1
-        else:
-            skipped += 1
 
     logger.info("Receipt poller done: %d sent, %d skipped", sent, skipped)

@@ -96,17 +96,21 @@ def startup():
     # Poll Gmail for new Meta receipt emails and auto-send
     try:
         from fb_receipts.src.receipt_poller import poll_and_send
-        # Read interval from DB settings, fall back to env var, default 10 min
-        _receipt_interval = 10
-        try:
-            from fb_receipts.src.db_client import DbClient as _RcDb
-            _rc_settings = _RcDb().get_settings()
-            _receipt_interval = int(_rc_settings.get("poll_interval") or os.getenv("RECEIPT_POLL_MINUTES", "10"))
-        except Exception:
-            _receipt_interval = int(os.getenv("RECEIPT_POLL_MINUTES", "10"))
-        scheduler.add_job(poll_and_send, "interval", minutes=_receipt_interval,
-                          id="fb_receipt_poller")
-        logging.info("FB receipt poller scheduled every %d minute(s).", _receipt_interval)
+        from portal_config import get_setting
+        _sched = get_setting("RECEIPT_POLL_SCHEDULE", "hourly")
+
+        if _sched == "weekly":
+            scheduler.add_job(poll_and_send, "cron", day_of_week="mon", hour=9, minute=5,
+                              id="fb_receipt_poller")
+            logging.info("FB receipt poller scheduled: weekly (Mon 9:05 AM)")
+        elif _sched == "daily":
+            scheduler.add_job(poll_and_send, "cron", hour=9, minute=5,
+                              id="fb_receipt_poller")
+            logging.info("FB receipt poller scheduled: daily (9:05 AM)")
+        else:  # hourly (default)
+            scheduler.add_job(poll_and_send, "interval", hours=1,
+                              id="fb_receipt_poller")
+            logging.info("FB receipt poller scheduled: hourly")
     except Exception as exc:
         logging.warning("FB receipt poller not loaded: %s", exc)
 
