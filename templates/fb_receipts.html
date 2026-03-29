@@ -285,15 +285,15 @@ async function pullReceipts() {
     const text = output.textContent;
     if (text.includes('sent') && !text.includes('0 sent')) {
       status.className = 'small text-success';
-      status.textContent = 'New receipts processed! Refreshing...';
-      setTimeout(() => window.location.reload(), 2000);
+      status.textContent = 'Done! Refreshing...';
     } else if (text.includes('no new') || text.includes('0 sent')) {
       status.className = 'small text-muted';
-      status.textContent = 'No new receipts found.';
+      status.textContent = 'No new receipts found. Refreshing...';
     } else {
-      status.className = 'small text-warning';
-      status.textContent = 'Check output for details.';
+      status.className = 'small text-muted';
+      status.textContent = 'Done. Refreshing...';
     }
+    setTimeout(() => window.location.reload(), 2000);
   } catch (err) {
     status.className = 'small text-danger';
     status.textContent = 'Error: ' + err.message;
