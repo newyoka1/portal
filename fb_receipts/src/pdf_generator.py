@@ -513,34 +513,7 @@ def generate_email_receipt_pdf(
         else:
             story.append(Paragraph(f"Total ad spend: ${amount:,.2f} {currency}", S_VALUE))
 
-        # ── Ad Images ──────────────────────────────────────────────────────
-        if ad_images:
-            valid = [p for p in ad_images if p.exists()]
-            if valid:
-                story.append(Spacer(1, 3*mm))
-                story.append(HRFlowable(width="100%", thickness=0.5, color=C_LIGHT_GRAY))
-                story.append(Paragraph("Ad Creatives", S_SECTION))
-                from reportlab.platypus import Image as RLImage
-                row = []
-                for img in valid[:6]:
-                    try:
-                        row.append(RLImage(str(img), width=50*mm, height=50*mm, kind="proportional"))
-                        if len(row) == 3:
-                            t = Table([row], colWidths=[W/3]*3)
-                            t.setStyle(TableStyle([
-                                ("ALIGN",(0,0),(-1,-1),"CENTER"),
-                                ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
-                                ("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3),
-                            ]))
-                            story.append(t)
-                            row = []
-                    except Exception:
-                        pass
-                if row:
-                    row += [""] * (3 - len(row))
-                    t = Table([row], colWidths=[W/3]*3)
-                    t.setStyle(TableStyle([("ALIGN",(0,0),(-1,-1),"CENTER")]))
-                    story.append(t)
+        # Ad images are attached to the email separately, not embedded in the PDF
 
         # ── Footer ─────────────────────────────────────────────────────────
         story.append(Spacer(1, 8*mm))
