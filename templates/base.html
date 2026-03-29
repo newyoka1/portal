@@ -55,6 +55,9 @@
     <a href="/clients" class="nav-link {% if request.url.path.startswith('/clients') %}active{% endif %}">
       <i class="bi bi-people me-2"></i>Clients
     </a>
+    <a href="/settings?cat=email" class="nav-link {% if request.url.path == '/settings' and request.query_params.get('cat') == 'email' %}active{% endif %}">
+      <i class="bi bi-gear me-2"></i>Settings
+    </a>
     {% endif %}
 
     <div class="nav-section mt-2">Facebook</div>
@@ -64,19 +67,29 @@
     <a href="/fb/" class="nav-link {% if request.url.path.startswith('/fb') and not request.url.path.startswith('/fb-receipts') %}active{% endif %}">
       <i class="bi bi-megaphone me-2"></i>Ad Approval
     </a>
+    {% if current_user.is_admin %}
+    <a href="/settings?cat=facebook" class="nav-link {% if request.url.path == '/settings' and request.query_params.get('cat') == 'facebook' %}active{% endif %}">
+      <i class="bi bi-gear me-2"></i>Settings
+    </a>
+    {% endif %}
 
     <div class="nav-section mt-2">Voter & Research</div>
     <a href="/voter-pipeline" class="nav-link {% if request.url.path.startswith('/voter-pipeline') %}active{% endif %}">
       <i class="bi bi-diagram-3 me-2"></i>Voter Pipeline
     </a>
+    {% if current_user.is_admin %}
+    <a href="/settings?cat=voter" class="nav-link {% if request.url.path == '/settings' and request.query_params.get('cat') == 'voter' %}active{% endif %}">
+      <i class="bi bi-gear me-2"></i>Settings
+    </a>
+    {% endif %}
 
     {% if current_user.is_admin %}
     <div class="nav-section mt-2">Admin</div>
     <a href="/users" class="nav-link {% if request.url.path == '/users' %}active{% endif %}">
       <i class="bi bi-person-gear me-2"></i>Users
     </a>
-    <a href="/settings" class="nav-link {% if request.url.path == '/settings' %}active{% endif %}">
-      <i class="bi bi-gear me-2"></i>Settings
+    <a href="/settings" class="nav-link {% if request.url.path == '/settings' and not request.query_params.get('cat') %}active{% endif %}">
+      <i class="bi bi-gear me-2"></i>All Settings
     </a>
     {% endif %}
 

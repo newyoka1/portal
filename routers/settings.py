@@ -11,31 +11,52 @@ from models import PortalSetting, User
 router = APIRouter(prefix="/settings")
 templates = Jinja2Templates(directory="templates")
 
-# Categories in display order
+# All categories in display order
 CATEGORIES = [
     ("meta",        "Meta / Facebook"),
     ("email",       "Email"),
     ("sftp",        "SFTP / File Storage"),
     ("fb_approval", "FB Ad Approval"),
+    ("voter",       "Voter & Research"),
 ]
+
+# Which DB categories each section filter shows
+_SECTION_CATS = {
+    "email":    ["email"],
+    "facebook": ["meta", "sftp", "fb_approval"],
+    "voter":    ["voter"],
+}
+
+_SECTION_TITLES = {
+    "email":    "Email Approval Settings",
+    "facebook": "Facebook Settings",
+    "voter":    "Voter & Research Settings",
+}
 
 
 @router.get("", response_class=HTMLResponse)
 def settings_page(
     request: Request,
+    cat: str = "",
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     rows = db.query(PortalSetting).order_by(PortalSetting.category, PortalSetting.key).all()
     grouped = {}
     for r in rows:
-        cat = r.category or "general"
-        grouped.setdefault(cat, []).append(r)
+        grouped.setdefault(r.category or "general", []).append(r)
+
+    # Filter categories to the requested section; show all when no filter
+    active_cats = _SECTION_CATS.get(cat, [c for c, _ in CATEGORIES])
+    visible_categories = [(k, label) for k, label in CATEGORIES if k in active_cats]
+    page_title = _SECTION_TITLES.get(cat, "Portal Settings")
 
     return templates.TemplateResponse(request, "settings.html", {
-        "current_user": current_user,
-        "categories":   CATEGORIES,
-        "grouped":      grouped,
+        "current_user":       current_user,
+        "categories":         visible_categories,
+        "grouped":            grouped,
+        "page_title":         page_title,
+        "active_cat":         cat,
     })
 
 
