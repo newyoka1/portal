@@ -14,7 +14,6 @@ from email.mime.text import MIMEText
 from email.mime.application import MIMEApplication
 from email.mime.image import MIMEImage
 from pathlib import Path
-from pathlib import Path
 
 from src.config import GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD, NOTIFY_EMAIL
 
@@ -68,6 +67,131 @@ class EmailService:
             self._gmail_service = _get_gmail_api_service()
         return self._gmail_service
 
+    # ── Meta brand colors (match pdf_generator.py) ───────────────────────────
+    _META_BLUE   = "#0668E1"
+    _DARK        = "#1C2B33"
+    _GRAY        = "#65676B"
+    _LIGHT_GRAY  = "#DADDE1"
+
+    def _build_html_body(
+        self,
+        client_name: str,
+        pdf_attachments: list[Path],
+        receipts: list[dict],
+        ad_images: list[Path] | None,
+    ) -> str:
+        """Build an HTML email body styled to match the Meta receipt PDF."""
+        # ── Content rows ────────────────────────────────────────────────────
+        if pdf_attachments:
+            n = len(pdf_attachments)
+            content_html = f"""
+            <p style="margin:0 0 12px;">Please find your Facebook Ads receipt(s) attached
+            ({n} PDF{'s' if n > 1 else ''}).</p>
+            <table width="100%" cellpadding="6" cellspacing="0"
+                   style="border:1px solid {self._LIGHT_GRAY}; border-radius:4px; margin-bottom:16px;">
+              <tr style="background:{self._LIGHT_GRAY};">
+                <th align="left" style="font-size:11px; color:{self._GRAY}; font-weight:600;
+                    padding:8px 12px;">Attached Receipts</th>
+              </tr>
+              {"".join(
+                  f'<tr><td style="padding:6px 12px; font-size:13px; color:{self._DARK}; '
+                  f'border-top:1px solid {self._LIGHT_GRAY};">&#128206; {p.name}</td></tr>'
+                  for p in pdf_attachments
+              )}
+            </table>"""
+        else:
+            total = sum(float(r.get("amount", 0) or 0) for r in receipts)
+            rows_html = ""
+            for r in receipts:
+                amount = float(r.get("amount", 0) or 0)
+                date = r.get("date", "N/A")
+                impr = r.get("impressions", "")
+                clicks = r.get("clicks", "")
+                extra = f"&nbsp;&nbsp;·&nbsp;&nbsp;{impr:,} impr&nbsp;&nbsp;{clicks:,} clicks" \
+                    if impr else ""
+                rows_html += (
+                    f'<tr>'
+                    f'<td style="padding:6px 12px; font-size:13px; color:{self._GRAY}; '
+                    f'border-top:1px solid {self._LIGHT_GRAY};">{date}</td>'
+                    f'<td align="right" style="padding:6px 12px; font-size:13px; '
+                    f'color:{self._DARK}; border-top:1px solid {self._LIGHT_GRAY}; white-space:nowrap;">'
+                    f'<strong>${amount:,.2f}</strong>{extra}</td>'
+                    f'</tr>'
+                )
+            content_html = f"""
+            <p style="margin:0 0 12px;">Please find your Facebook Ads spend summary below.</p>
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="border:1px solid {self._LIGHT_GRAY}; border-radius:4px; margin-bottom:16px;">
+              <tr style="background:{self._LIGHT_GRAY};">
+                <th align="left"  style="font-size:11px; color:{self._GRAY}; font-weight:600; padding:8px 12px;">Date</th>
+                <th align="right" style="font-size:11px; color:{self._GRAY}; font-weight:600; padding:8px 12px;">Amount</th>
+              </tr>
+              {rows_html}
+              <tr style="background:#f9f9f9;">
+                <td style="padding:8px 12px; font-size:13px; font-weight:600; color:{self._DARK};
+                    border-top:2px solid {self._LIGHT_GRAY};">Total</td>
+                <td align="right" style="padding:8px 12px; font-size:15px; font-weight:700;
+                    color:{self._DARK}; border-top:2px solid {self._LIGHT_GRAY};">${total:,.2f} USD</td>
+              </tr>
+            </table>"""
+
+        ad_note = (
+            f'<p style="font-size:12px; color:{self._GRAY}; margin:12px 0 0;">'
+            f'&#128248; {len(ad_images)} ad creative(s) attached.</p>'
+        ) if ad_images else ""
+
+        return f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0; padding:20px; background:#f0f2f5; font-family:Helvetica,Arial,sans-serif;">
+<table width="600" cellpadding="0" cellspacing="0" align="center"
+       style="background:#ffffff; border-radius:8px; overflow:hidden;
+              box-shadow:0 1px 4px rgba(0,0,0,.12); max-width:600px;">
+
+  <!-- Header -->
+  <tr>
+    <td style="padding:20px 32px; border-bottom:1px solid {self._LIGHT_GRAY};">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="font-size:13px; font-weight:700; color:{self._DARK}; letter-spacing:.02em;">
+            POLITIKA NYC
+          </td>
+          <td align="right"
+              style="font-size:20px; font-weight:700; color:{self._META_BLUE};
+                     font-family:Helvetica,Arial,sans-serif; letter-spacing:-.01em;">
+            &#8734;&nbsp;Meta
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+
+  <!-- Body -->
+  <tr>
+    <td style="padding:28px 32px;">
+      <p style="margin:0 0 20px; font-size:15px; color:{self._DARK};">Hi <strong>{client_name}</strong>,</p>
+      {content_html}
+      {ad_note}
+
+      <p style="margin:28px 0 0; font-size:14px; color:{self._DARK};">Best regards,<br>
+        <strong>Politika NYC</strong></p>
+    </td>
+  </tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="padding:16px 32px; background:#f7f8fa; border-top:1px solid {self._LIGHT_GRAY};">
+      <p style="margin:0; font-size:11px; color:{self._GRAY}; line-height:1.5;">
+        This receipt was generated by Politika NYC using billing data from Meta Platforms, Inc.
+        &nbsp;·&nbsp; 1 Meta Way, Menlo Park, CA 94025
+      </p>
+    </td>
+  </tr>
+
+</table>
+</body>
+</html>"""
+
     def _build_message(
         self,
         to_email: str,
@@ -77,8 +201,9 @@ class EmailService:
         ad_images: list[Path] | None = None,
         bcc: str | None = None,
     ) -> MIMEMultipart:
-        msg = MIMEMultipart()
-        msg["From"] = f"George - Politika - Invoice Delivery <{self.sender_email}>"
+        # Outer container holds alternative body + file attachments
+        msg = MIMEMultipart("mixed")
+        msg["From"] = f"Politika NYC — Invoice Delivery <{self.sender_email}>"
         msg["To"] = to_email
         if bcc:
             msg["Bcc"] = bcc
@@ -92,51 +217,37 @@ class EmailService:
 
         # Build subject
         if subject is None:
-            if pdf_attachments:
-                first_name = pdf_attachments[0].name
-                date_part = first_name.split("T")[0] if "T" in first_name else \
-                    receipts[0].get("date", "recent") if receipts else "recent"
-            else:
-                date_part = receipts[0].get("date", "recent") if receipts else "recent"
+            date_part = receipts[0].get("date", "recent") if receipts else "recent"
             subject = f"Facebook Ads Receipt — {client_name} ({date_part})"
         msg["Subject"] = subject
 
-        # ── Email body ──
+        # ── Plain text fallback ────────────────────────────────────────────
         lines = [f"Hi {client_name},\n"]
-
         if pdf_attachments:
-            lines.append(
-                f"Please find your Facebook Ads receipt(s) attached "
-                f"({len(pdf_attachments)} PDF{'s' if len(pdf_attachments) > 1 else ''}).\n"
-            )
-            lines.append("Attached receipts:")
-            lines.append("-" * 40)
+            n = len(pdf_attachments)
+            lines.append(f"Please find your Facebook Ads receipt(s) attached ({n} PDF{'s' if n > 1 else ''}).\n")
             for p in pdf_attachments:
                 lines.append(f"  - {p.name}")
-            lines.append("-" * 40)
         else:
-            lines.append("Please find your Facebook Ads spend summary below.\n")
-            lines.append("Spend summary:")
-            lines.append("-" * 40)
             total = 0.0
             for r in receipts:
                 amount = float(r.get("amount", 0) or 0)
                 total += amount
-                date = r.get("date", "N/A")
-                impressions = r.get("impressions", "")
-                clicks = r.get("clicks", "")
-                extra = f"  |  Impr: {impressions}  Clicks: {clicks}" if impressions else ""
-                lines.append(f"  - {date}  |  ${amount:.2f} USD{extra}")
-            lines.append("-" * 40)
-            lines.append(f"  Total spend: ${total:.2f} USD")
-
+                lines.append(f"  - {r.get('date', 'N/A')}  ${amount:.2f} USD")
+            lines.append(f"\nTotal: ${total:.2f} USD")
         if ad_images:
-            lines.append(f"\nAd creatives ({len(ad_images)} image(s) attached below):")
-
+            lines.append(f"\nAd creatives ({len(ad_images)} image(s) attached).")
         lines.append("\nBest regards,\nPolitika NYC")
+        plain_body = "\n".join(lines)
 
-        body = "\n".join(lines)
-        msg.attach(MIMEText(body, "plain"))
+        # ── HTML body ──────────────────────────────────────────────────────
+        html_body = self._build_html_body(client_name, pdf_attachments, receipts, ad_images)
+
+        # Attach both text variants — clients pick whichever they support
+        alternative = MIMEMultipart("alternative")
+        alternative.attach(MIMEText(plain_body, "plain"))
+        alternative.attach(MIMEText(html_body, "html"))
+        msg.attach(alternative)
 
         # Attach PDFs
         for p in pdf_attachments:
@@ -148,22 +259,15 @@ class EmailService:
         # Attach ad images
         logger.info("Ad images to attach: %d", len(ad_images or []))
         for img_path in (ad_images or []):
-            img_path = Path(img_path)  # ensure Path object
+            img_path = Path(img_path)
             logger.info("  Image: %s exists=%s", img_path, img_path.exists())
             if img_path.exists():
                 with open(img_path, "rb") as f:
                     img_data = f.read()
                 ext = img_path.suffix.lower()
-                if ext in (".jpg", ".jpeg"):
-                    subtype = "jpeg"
-                elif ext == ".png":
-                    subtype = "png"
-                elif ext == ".gif":
-                    subtype = "gif"
-                elif ext == ".webp":
-                    subtype = "png"  # webp not supported by MIMEImage, use png
-                else:
-                    subtype = "jpeg"
+                subtype = "jpeg" if ext in (".jpg", ".jpeg") else \
+                          "png"  if ext in (".png", ".webp") else \
+                          "gif"  if ext == ".gif" else "jpeg"
                 img_attachment = MIMEImage(img_data, _subtype=subtype)
                 img_attachment.add_header(
                     "Content-Disposition", "attachment", filename=img_path.name
@@ -174,7 +278,7 @@ class EmailService:
         return msg
 
     def _send_via_gmail_api(self, msg: MIMEMultipart) -> bool:
-        """Send email using Gmail API (works on Railway — no SMTP needed)."""
+        """Send email using Gmail API (primary method on VPS)."""
         service = self._get_service()
         if not service:
             return False
@@ -220,14 +324,14 @@ class EmailService:
 
         msg = self._build_message(to_email, client_name, receipts, subject, ad_images, bcc)
 
-        # Try Gmail API first (works on Railway)
+        # Try Gmail API first
         logger.info("Sending email to %s via Gmail API...", to_email)
         if self._send_via_gmail_api(msg):
             logger.info("Sent %d receipt(s) to %s <%s> via Gmail API",
                         len(receipts), client_name, to_email)
             return True
 
-        # Fall back to SMTP (works locally)
+        # Fall back to SMTP
         logger.info("Gmail API unavailable, trying SMTP for %s...", to_email)
         if self._send_via_smtp(msg):
             logger.info("Sent %d receipt(s) to %s <%s> via SMTP",
