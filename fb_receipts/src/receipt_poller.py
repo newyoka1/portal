@@ -1,14 +1,14 @@
 """
-Receipt Poller — checks Gmail for new Meta receipt emails and auto-sends.
+Receipt Poller — checks Gmail for new Meta receipt emails, stores them, and sends.
 
-Logic is simple:
-  1. Search Gmail for ALL Meta receipt emails (last 90 days max)
-  2. For each email, extract the transaction_id + account_id
-  3. Check if transaction_id already exists in sent_receipts table
-  4. If not → match to active client → generate PDF → send → store in DB
-  5. If yes → skip (already processed)
+Flow:
+  poll_only()    → fetch Gmail receipts → generate PDFs → store in DB as "pending"
+  send_pending() → load all "pending" DB rows → email each client → mark "sent"
+  poll_and_send()→ calls both (used by APScheduler)
 
-No lookback window or schedule needed. The sent_receipts table IS the state.
+The sent_receipts table is the deduplication state:
+  - is_receipt_sent() returns True for any status (pending, sent, failed)
+  - so re-polling never creates duplicates
 """
 
 import logging
@@ -22,37 +22,55 @@ logger = logging.getLogger(__name__)
 FB_DIR = Path(__file__).resolve().parent.parent
 
 
-def poll_and_send():
-    """Main entry point — called by APScheduler."""
+# ── Public entry points ────────────────────────────────────────────────────────
+
+def poll_only():
+    """Fetch new Gmail receipts and store them in DB as 'pending' (no email sent)."""
     try:
-        _run()
+        _run_poll_only()
+    except Exception as e:
+        logger.error("Receipt poll error: %s", e, exc_info=True)
+
+
+def send_pending():
+    """Email all receipts currently stored as 'pending' in DB."""
+    try:
+        _run_send_pending()
+    except Exception as e:
+        logger.error("Receipt send error: %s", e, exc_info=True)
+
+
+def poll_and_send():
+    """Combined entry point — used by APScheduler (poll then send in one call)."""
+    try:
+        _run_poll_only()
+        _run_send_pending()
     except Exception as e:
         logger.error("Receipt poller error: %s", e, exc_info=True)
 
 
-def _run():
+# ── Internal implementation ────────────────────────────────────────────────────
+
+def _run_poll_only():
+    """Fetch Gmail receipts, generate PDFs, and store in DB as status='pending'."""
     sys.path.insert(0, str(FB_DIR))
 
     from src.db_client import DbClient
     from src.gmail_receipt_fetcher import fetch_meta_receipts
     from src.pdf_generator import generate_email_receipt_pdf
-    from src.email_service import EmailService
     from src.meta_client import MetaClient
 
     db = DbClient()
     meta = MetaClient()
-    email_svc = EmailService()
 
-    # Load active clients
     clients = db.get_client_mappings()
     if not clients:
+        logger.info("Receipt poller: no active clients configured")
         return
 
     client_map = {c["ad_account_id"]: c for c in clients}
-    settings = db.get_settings()
-    admin_email = settings.get("admin_email") or None
 
-    # Search Gmail for Meta receipt emails (last 90 days — wide net, DB deduplicates)
+    # Wide net — DB deduplicates
     end = datetime.now()
     start = end - timedelta(days=90)
 
@@ -63,24 +81,22 @@ def _run():
         logger.info("Receipt poller: no Meta receipt emails found")
         return
 
-    sent = 0
+    stored = 0
     skipped = 0
 
     for receipt in gmail_receipts:
         acct_id = receipt.get("account_id", "")
-        txn_id = receipt.get("transaction_id", "")
+        txn_id  = receipt.get("transaction_id", "")
 
-        # Must have a transaction_id to deduplicate
         if not txn_id:
             skipped += 1
             continue
 
-        # Already in DB?
+        # Already in DB (any status)?
         if db.is_receipt_sent(acct_id, txn_id):
             skipped += 1
             continue
 
-        # Match to active client
         client = client_map.get(acct_id)
         if not client:
             logger.debug("Receipt poller: no active client for account %s — skipping", acct_id)
@@ -88,40 +104,36 @@ def _run():
             continue
 
         client_name = client["client_name"]
-        emails = client.get("emails") or [client["email"]]
-        amount = receipt.get("amount", 0)
-        logger.info("Receipt poller: NEW receipt for %s ($%.2f, txn %s) — sending to %s",
-                     client_name, amount, txn_id[:25], ", ".join(emails))
+        emails      = client.get("emails") or [client["email"]]
+        amount      = receipt.get("amount", 0)
+        logger.info("Receipt poller: NEW receipt for %s ($%.2f, txn %s)",
+                    client_name, amount, txn_id[:25])
 
-        # Get campaign + adset detail from Meta API
+        # Fetch campaign/adset detail from Meta API
         campaigns, adsets = [], []
         try:
             campaigns = meta.get_campaign_spend(f"act_{acct_id}", start, end)
-            adsets = meta.get_adset_spend(f"act_{acct_id}", start, end)
+            adsets    = meta.get_adset_spend(f"act_{acct_id}", start, end)
         except Exception:
             pass
 
-        import base64, json as _json, shutil, tempfile
+        import base64, json as _json, shutil
 
         _tmp = Path(mkdtemp(prefix="receipt_"))
 
-        # 1. Fetch ad images from Meta
-        ad_image_bytes = []  # (filename, bytes) for DB + email
+        # Fetch ad images
+        ad_image_bytes = []
         try:
             raw_images = meta.get_ad_images(
                 f"act_{acct_id}", start, end, max_images=4, base_dir=_tmp
             )
             for img_path in (raw_images or []):
                 if img_path.exists():
-                    img_bytes = img_path.read_bytes()
-                    ad_image_bytes.append((img_path.name, img_bytes))
+                    ad_image_bytes.append((img_path.name, img_path.read_bytes()))
         except Exception as e:
             logger.warning("Receipt poller: ad image fetch failed: %s", e)
 
-        if ad_image_bytes:
-            logger.info("Receipt poller: %d ad image(s) for %s", len(ad_image_bytes), client_name)
-
-        # 2. Generate PDF → SFTP
+        # Generate PDF
         pdf_path = generate_email_receipt_pdf(
             receipt=receipt, campaigns=campaigns, adsets=adsets, base_dir=_tmp,
         )
@@ -132,51 +144,129 @@ def _run():
             shutil.rmtree(_tmp, ignore_errors=True)
             continue
 
-        pdf_data = Path(pdf_path).read_bytes()
+        pdf_data     = Path(pdf_path).read_bytes()
         pdf_filename = Path(pdf_path).name
 
-        # 3. Store in DB (base64 images + PDF binary)
-        images_for_db = [{"filename": fn, "data": base64.b64encode(d).decode()} for fn, d in ad_image_bytes]
+        images_for_db  = [{"filename": fn, "data": base64.b64encode(d).decode()} for fn, d in ad_image_bytes]
         ad_images_json = _json.dumps(images_for_db) if images_for_db else ""
 
-        # 4. Build email attachments from the files still in _tmp
-        email_receipts = [{"pdf_path": str(pdf_path), "type": "receipt"}]
-        ad_image_paths = [_tmp / acct_id / "images" / fn for fn, _ in ad_image_bytes]
-        # Fallback: check if images are directly in _tmp subdirs
-        ad_image_paths = [p for p in ad_image_paths if p.exists()]
-        if not ad_image_paths:
-            # Images may be in a different structure — find all image files
-            ad_image_paths = list(_tmp.rglob("*.jpg")) + list(_tmp.rglob("*.png")) + list(_tmp.rglob("*.webp"))
-
-        # 5. Send email
-        any_sent = False
-        for recipient in emails:
-            ok = email_svc.send_receipt(
-                to_email=recipient,
-                client_name=client_name,
-                receipts=email_receipts,
-                ad_images=ad_image_paths,
-                bcc=admin_email,
-            )
-            if ok:
-                any_sent = True
-                logger.info("Receipt poller: sent to %s <%s>", client_name, recipient)
-
-        # Store in DB (PDF + images + metadata — survives redeploys)
+        # Store as PENDING — email will be sent separately
         db.save_sent_receipt(
             receipt=receipt,
             pdf_data=pdf_data,
             pdf_filename=pdf_filename,
             sent_to=", ".join(emails),
-            status="sent" if any_sent else "failed",
-            error="" if any_sent else "email send failed",
+            status="pending",
+            error="",
             ad_images_json=ad_images_json,
         )
 
-        # Clean up temp dir
         shutil.rmtree(_tmp, ignore_errors=True)
+        stored += 1
+        logger.info("Receipt poller: stored %s ($%.2f) as pending", client_name, amount)
+
+    logger.info("Receipt poll done: %d stored as pending, %d skipped", stored, skipped)
+
+
+def _run_send_pending():
+    """Send emails for all receipts in DB with status='pending'."""
+    sys.path.insert(0, str(FB_DIR))
+
+    from src.db_client import DbClient
+    from src.email_service import EmailService
+
+    db        = DbClient()
+    email_svc = EmailService()
+
+    settings    = db.get_settings()
+    admin_email = settings.get("admin_email") or None
+
+    # Load current client emails (may differ from when receipt was stored)
+    client_map = {c["ad_account_id"]: c for c in db.get_client_mappings()}
+
+    pending = db.get_pending_receipts()
+    if not pending:
+        logger.info("Send pending: no pending receipts to send")
+        return
+
+    logger.info("Send pending: %d receipt(s) to send", len(pending))
+
+    import tempfile, json as _json, base64
+
+    sent   = 0
+    failed = 0
+
+    for row in pending:
+        receipt_id  = row["id"]
+        acct_id     = row["ad_account_id"]
+        client_name = row.get("receipt_for", "Client")
+        pdf_data    = row.get("pdf_data", b"")
+        pdf_filename = row.get("pdf_filename", "receipt.pdf")
+        ad_images_json = row.get("ad_images_json", "")
+
+        # Prefer current client email over stored sent_to
+        client = client_map.get(acct_id)
+        if client:
+            emails = client.get("emails") or [client["email"]]
+        else:
+            emails = [e.strip() for e in (row.get("sent_to") or "").split(",") if e.strip()]
+
+        if not emails:
+            logger.warning("Send pending: no email for receipt %d (%s)", receipt_id, client_name)
+            db.update_receipt_status(receipt_id, "failed", "no email address")
+            failed += 1
+            continue
+
+        if not pdf_data:
+            logger.warning("Send pending: no PDF for receipt %d (%s)", receipt_id, client_name)
+            db.update_receipt_status(receipt_id, "failed", "no PDF data")
+            failed += 1
+            continue
+
+        # Write PDF to temp file
+        tmp_pdf = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf", prefix="send_")
+        tmp_pdf.write(pdf_data)
+        tmp_pdf.close()
+
+        # Decode ad images from DB
+        ad_image_paths = []
+        if ad_images_json:
+            try:
+                for img in _json.loads(ad_images_json):
+                    img_tmp = tempfile.NamedTemporaryFile(
+                        delete=False, suffix=Path(img["filename"]).suffix, prefix="img_"
+                    )
+                    img_tmp.write(base64.b64decode(img["data"]))
+                    img_tmp.close()
+                    ad_image_paths.append(Path(img_tmp.name))
+            except Exception as e:
+                logger.warning("Send pending: could not decode ad images for %s: %s", client_name, e)
+
+        receipts = [{"pdf_path": tmp_pdf.name, "type": "receipt"}]
+
+        any_sent = False
+        for recipient in emails:
+            ok = email_svc.send_receipt(
+                to_email=recipient,
+                client_name=client_name,
+                receipts=receipts,
+                ad_images=ad_image_paths,
+                bcc=admin_email,
+            )
+            if ok:
+                any_sent = True
+                logger.info("Send pending: sent to %s <%s>", client_name, recipient)
+
+        # Clean up temp files
+        Path(tmp_pdf.name).unlink(missing_ok=True)
+        for p in ad_image_paths:
+            p.unlink(missing_ok=True)
 
         if any_sent:
+            db.update_receipt_status(receipt_id, "sent")
             sent += 1
+        else:
+            db.update_receipt_status(receipt_id, "failed", "email send failed")
+            failed += 1
 
-    logger.info("Receipt poller done: %d sent, %d skipped", sent, skipped)
+    logger.info("Send pending done: %d sent, %d failed", sent, failed)

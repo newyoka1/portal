@@ -265,3 +265,24 @@ class DbClient:
                 if row and row.get("pdf_data"):
                     return dict(row)
                 return None
+
+    def get_pending_receipts(self) -> list[dict]:
+        """Return all receipts stored but not yet emailed (status='pending')."""
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, ad_account_id, transaction_id, receipt_for, amount, "
+                    "currency, pdf_filename, pdf_data, ad_images_json, sent_to "
+                    "FROM sent_receipts WHERE status = 'pending' ORDER BY sent_at"
+                )
+                return [dict(r) for r in cur.fetchall()]
+
+    def update_receipt_status(self, receipt_id: int, status: str, error: str = "") -> None:
+        """Update the status of a stored receipt after a send attempt."""
+        with _get_conn() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE sent_receipts SET status=%s, error=%s, sent_at=NOW() WHERE id=%s",
+                    (status, error, receipt_id),
+                )
+            conn.commit()

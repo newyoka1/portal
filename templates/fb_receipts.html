@@ -95,9 +95,12 @@
       <div class="card-body">
         <div class="d-flex justify-content-between align-items-center mb-3">
           <h6 class="fw-bold mb-0">Receipts</h6>
-          <div class="d-flex gap-2 align-items-center">
+          <div class="d-flex gap-2 align-items-center flex-wrap">
             <button class="btn btn-primary btn-sm" onclick="pullReceipts()" id="pullBtn">
               <i class="bi bi-cloud-download me-1"></i>Pull New
+            </button>
+            <button class="btn btn-success btn-sm" onclick="sendReceipts()" id="sendBtn">
+              <i class="bi bi-send me-1"></i>Send Receipts
             </button>
             <button class="btn btn-outline-danger btn-sm" onclick="deleteAllReceipts()" id="deleteAllBtn">
               <i class="bi bi-trash me-1"></i>Delete All
@@ -256,25 +259,30 @@
 
 {% block scripts %}
 <script>
-// ── Pull Receipts Now ──
-async function pullReceipts() {
-  const btn = document.getElementById('pullBtn');
+// ── Shared stream helper ──
+async function _streamToLog(url, label, btnId, btnIdleHtml) {
+  const btn    = document.getElementById(btnId);
   const status = document.getElementById('pullStatus');
   const logDiv = document.getElementById('pullLog');
   const output = document.getElementById('pullOutput');
 
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pulling...';
+  // Disable both action buttons while running
+  ['pullBtn', 'sendBtn'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.disabled = true;
+  });
+  btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span>${label}...`;
+
   status.className = 'small text-muted';
-  status.textContent = 'Checking Gmail for new receipts...';
+  status.textContent = label + '...';
   status.classList.remove('d-none');
   logDiv.classList.remove('d-none');
   output.textContent = '';
 
   try {
-    const resp = await fetch('/fb-receipts/pull', { method: 'POST' });
+    const resp   = await fetch(url, { method: 'POST' });
     const reader = resp.body.getReader();
-    const dec = new TextDecoder();
+    const dec    = new TextDecoder();
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -283,24 +291,44 @@ async function pullReceipts() {
     }
 
     const text = output.textContent;
-    if (text.includes('sent') && !text.includes('0 sent')) {
+    if (text.includes('[Exit code: 0]') || (!text.includes('[Exit code:') && !text.includes('Error'))) {
       status.className = 'small text-success';
       status.textContent = 'Done! Refreshing...';
-    } else if (text.includes('no new') || text.includes('0 sent')) {
-      status.className = 'small text-muted';
-      status.textContent = 'No new receipts found. Refreshing...';
     } else {
-      status.className = 'small text-muted';
-      status.textContent = 'Done. Refreshing...';
+      status.className = 'small text-danger';
+      status.textContent = 'Completed with errors. Refreshing...';
     }
     setTimeout(() => window.location.reload(), 2000);
   } catch (err) {
     status.className = 'small text-danger';
     status.textContent = 'Error: ' + err.message;
   } finally {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="bi bi-cloud-download me-1"></i>Pull Receipts Now';
+    ['pullBtn', 'sendBtn'].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.disabled = false;
+    });
+    btn.innerHTML = btnIdleHtml;
   }
+}
+
+// ── Pull New Receipts ──
+function pullReceipts() {
+  _streamToLog(
+    '/fb-receipts/pull',
+    'Pulling',
+    'pullBtn',
+    '<i class="bi bi-cloud-download me-1"></i>Pull New'
+  );
+}
+
+// ── Send Pending Receipts ──
+function sendReceipts() {
+  _streamToLog(
+    '/fb-receipts/send-receipts',
+    'Sending',
+    'sendBtn',
+    '<i class="bi bi-send me-1"></i>Send Receipts'
+  );
 }
 
 // ── Delete all receipts ──

@@ -114,11 +114,24 @@ async def fb_last_run_info(current_user: User = Depends(require_user)):
 
 @router.post("/pull")
 async def fb_pull_receipts(current_user: User = Depends(require_user)):
-    """On-demand: check Gmail for new Meta receipts — streams all output."""
+    """On-demand: check Gmail for new Meta receipts and store as pending (no email sent)."""
     args = [sys.executable, "-c",
             "import sys; sys.path.insert(0,'.'); "
-            "from fb_receipts.src.receipt_poller import poll_and_send; "
-            "poll_and_send()"]
+            "from fb_receipts.src.receipt_poller import poll_only; "
+            "poll_only()"]
+    return StreamingResponse(
+        _stream(args, str(PORTAL_DIR)),
+        media_type="text/plain",
+    )
+
+
+@router.post("/send-receipts")
+async def fb_send_receipts(current_user: User = Depends(require_user)):
+    """On-demand: send emails for all receipts currently stored as 'pending'."""
+    args = [sys.executable, "-c",
+            "import sys; sys.path.insert(0,'.'); "
+            "from fb_receipts.src.receipt_poller import send_pending; "
+            "send_pending()"]
     return StreamingResponse(
         _stream(args, str(PORTAL_DIR)),
         media_type="text/plain",
