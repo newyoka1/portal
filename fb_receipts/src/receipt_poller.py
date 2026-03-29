@@ -157,6 +157,11 @@ def _run():
             ad_image_paths = list(_tmp.rglob("*.jpg")) + list(_tmp.rglob("*.png")) + list(_tmp.rglob("*.webp"))
 
         # 5. Send email
+        print(f"  PDF: {pdf_path}")
+        print(f"  Ad images for email: {len(ad_image_paths)}")
+        for p in ad_image_paths:
+            print(f"    {p} exists={p.exists()} size={p.stat().st_size if p.exists() else 0}")
+        print(f"  Ad images in DB: {len(ad_image_bytes)}")
         any_sent = False
         for recipient in emails:
             ok = email_svc.send_receipt(
