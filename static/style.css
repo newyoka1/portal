@@ -1,36 +1,69 @@
-/* Email Approval — custom styles */
+/* ── Politika brand tokens ───────────────────────────────────────────────── */
+:root {
+  --pk-black:  #070007;
+  --pk-red:    #ce2825;
+  --pk-red-dk: #a81f1c;
+  --pk-red-lt: rgba(206,40,37,.15);
 
-body { background: #f4f6f9; }
-
-/* Queue table */
-.email-row { cursor: pointer; }
-.email-row:hover td { background: #eef2ff; }
-
-.badge-origin-hubspot         { background: #ff7a59; }
-.badge-origin-mailchimp       { background: #ffe01b; color: #333; }
-.badge-origin-constant-contact{ background: #1c5fa8; }
-.badge-origin-unknown         { background: #6c757d; }
-
-/* Status pills */
-.status-pending   { background: #ffc107; color: #333; }
-.status-in_review { background: #0d6efd; }
-.status-approved  { background: #198754; }
-.status-rejected  { background: #dc3545; }
-
-/* Email iframe renderer */
-#email-frame {
-  width: 100%;
-  border: none;
-  min-height: 600px;
-  background: #fff;
-  border-radius: 0 0 .375rem .375rem;
+  /* Override Bootstrap primary throughout */
+  --bs-primary:        #ce2825;
+  --bs-primary-rgb:    206,40,37;
+  --bs-link-color:     #ce2825;
+  --bs-link-color-rgb: 206,40,37;
+  --bs-link-hover-color: #a81f1c;
 }
 
-/* Comment thread */
-.comment-card { border-left: 3px solid #0d6efd; }
-.comment-card.reply { margin-left: 2rem; border-left-color: #6c757d; }
+/* ── Page background ─────────────────────────────────────────────────────── */
+body { background: #f2f2f2; }
 
-/* Input / select contrast against white card backgrounds */
+/* ── Navbar ──────────────────────────────────────────────────────────────── */
+.navbar.bg-dark { background-color: var(--pk-black) !important; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+.sidebar { background: var(--pk-black) !important; }
+.sidebar .nav-link:hover,
+.sidebar .nav-link.active {
+  color: #fff !important;
+  background: var(--pk-red) !important;
+}
+.sidebar .nav-section { color: #7a6a7a; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.btn-primary {
+  background-color: var(--pk-red);
+  border-color:     var(--pk-red);
+  color: #fff;
+}
+.btn-primary:hover, .btn-primary:active, .btn-primary:focus {
+  background-color: var(--pk-red-dk);
+  border-color:     var(--pk-red-dk);
+  color: #fff;
+}
+.btn-primary:focus, .btn-primary:focus-visible {
+  box-shadow: 0 0 0 .2rem rgba(206,40,37,.35);
+}
+.btn-outline-primary {
+  color:        var(--pk-red);
+  border-color: var(--pk-red);
+}
+.btn-outline-primary:hover {
+  background-color: var(--pk-red);
+  border-color:     var(--pk-red);
+  color: #fff;
+}
+
+/* ── Links ───────────────────────────────────────────────────────────────── */
+a { color: var(--pk-red); }
+a:hover { color: var(--pk-red-dk); }
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+.nav-tabs .nav-link.active {
+  color: var(--pk-red);
+  border-bottom-color: var(--pk-red);
+}
+.nav-tabs .nav-link:hover { color: var(--pk-red-dk); }
+
+/* ── Form inputs ─────────────────────────────────────────────────────────── */
 .form-control,
 .form-select {
   background-color: #f0f3f7;
@@ -39,11 +72,47 @@ body { background: #f4f6f9; }
 .form-control:focus,
 .form-select:focus {
   background-color: #fff;
-  border-color: #0d6efd;
-  box-shadow: 0 0 0 .2rem rgba(13,110,253,.18);
+  border-color: var(--pk-red);
+  box-shadow: 0 0 0 .2rem var(--pk-red-lt);
+}
+.form-check-input:checked {
+  background-color: var(--pk-red);
+  border-color:     var(--pk-red);
+}
+.form-check-input:focus {
+  box-shadow: 0 0 0 .2rem var(--pk-red-lt);
 }
 
-/* Approval panel */
+/* ── Queue table ─────────────────────────────────────────────────────────── */
+.email-row { cursor: pointer; }
+.email-row:hover td { background: #fdf0f0; }
+
+/* ── Origin badges ───────────────────────────────────────────────────────── */
+.badge-origin-hubspot          { background: #ff7a59; }
+.badge-origin-mailchimp        { background: #ffe01b; color: #333; }
+.badge-origin-constant-contact { background: #1c5fa8; }
+.badge-origin-unknown          { background: #6c757d; }
+
+/* ── Status pills ────────────────────────────────────────────────────────── */
+.status-pending   { background: #ffc107; color: #333; }
+.status-in_review { background: var(--pk-red); }
+.status-approved  { background: #198754; }
+.status-rejected  { background: #6c757d; }
+
+/* ── Email iframe ────────────────────────────────────────────────────────── */
+#email-frame {
+  width: 100%;
+  border: none;
+  min-height: 600px;
+  background: #fff;
+  border-radius: 0 0 .375rem .375rem;
+}
+
+/* ── Comment thread ──────────────────────────────────────────────────────── */
+.comment-card       { border-left: 3px solid var(--pk-red); }
+.comment-card.reply { margin-left: 2rem; border-left-color: #6c757d; }
+
+/* ── Approval panel ──────────────────────────────────────────────────────── */
 .approver-row.required   .badge { background: #dc3545; }
 .approver-row.optional   .badge { background: #6c757d; }
 .approver-row .decision-approved { color: #198754; }
