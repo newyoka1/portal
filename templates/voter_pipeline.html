@@ -71,7 +71,18 @@
           <button class="btn btn-outline-secondary" onclick="vpRunFull('cm-sync')">Campaign Monitor</button>
           <button class="btn btn-outline-secondary" onclick="vpRunFull('crm-enrich')">Enrich Contacts</button>
         </div>
-        <div id="log-crm"></div>
+
+        <!-- Per-account progress cards -->
+        <div id="crm-progress" class="d-none mb-3"></div>
+
+        <!-- Raw log (collapsible) -->
+        <div id="log-crm-wrap" class="d-none">
+          <a class="text-muted small d-block mb-1" data-bs-toggle="collapse"
+             href="#log-crm" style="cursor:pointer">
+            <i class="bi bi-terminal me-1"></i>Raw log
+          </a>
+          <div class="collapse" id="log-crm"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -152,9 +163,12 @@ const CMD_TAB = {
   'fb-audiences':'enrich',
 };
 
+const CRM_CMDS = new Set(['crm-sync','hubspot-sync','cm-sync','crm-enrich']);
+
 function vpRun(cmd, extra) {
   const tab = CMD_TAB[cmd] || 'status';
-  runStream(cmd, extra, tab);
+  if (CRM_CMDS.has(cmd)) runCrmStream(cmd, extra);
+  else                    runStream(cmd, extra, tab);
 }
 
 function vpRunFull(cmd) {
@@ -183,6 +197,188 @@ function updateDistInput() {
   }
 }
 
+/* ── CRM stream with progress cards ─────────────────────────────────────── */
+
+function _acctId(name) { return 'crm-acct-' + name.replace(/\W/g,'_'); }
+
+function _ensureAccountCard(name, progressEl) {
+  const id = _acctId(name);
+  if (document.getElementById(id)) return;
+  const card = document.createElement('div');
+  card.id = id;
+  card.className = 'card mb-2 border-0 shadow-sm';
+  card.innerHTML = `
+    <div class="card-body py-2 px-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="fw-semibold small">Account <strong>${name}</strong></span>
+        <span class="badge bg-secondary" id="${id}-badge">Waiting</span>
+      </div>
+      <div class="mb-1">
+        <div class="d-flex justify-content-between" style="font-size:.75rem">
+          <span class="text-muted">Contacts</span>
+          <span id="${id}-contacts-count" class="text-muted">—</span>
+        </div>
+        <div class="progress mt-1" style="height:5px">
+          <div id="${id}-contacts-bar" class="progress-bar" style="width:0%"></div>
+        </div>
+      </div>
+      <div>
+        <div class="d-flex justify-content-between" style="font-size:.75rem">
+          <span class="text-muted">Deals</span>
+          <span id="${id}-deals-count" class="text-muted">—</span>
+        </div>
+        <div class="progress mt-1" style="height:5px">
+          <div id="${id}-deals-bar" class="progress-bar" style="width:0%"></div>
+        </div>
+      </div>
+    </div>`;
+  progressEl.appendChild(card);
+}
+
+function _setBar(id, state, text) {
+  // state: 'running' | 'done' | 'idle'
+  const bar   = document.getElementById(id + '-bar');
+  const count = document.getElementById(id + '-count');
+  if (!bar) return;
+  if (state === 'running') {
+    bar.style.width = '100%';
+    bar.style.background = 'var(--pk-red)';
+    bar.classList.add('progress-bar-striped','progress-bar-animated');
+  } else if (state === 'done') {
+    bar.style.width = '100%';
+    bar.style.background = '#198754';
+    bar.classList.remove('progress-bar-striped','progress-bar-animated');
+  }
+  if (text && count) count.textContent = text;
+}
+
+function _setBadge(acctName, state) {
+  const badge = document.getElementById(_acctId(acctName) + '-badge');
+  if (!badge) return;
+  const map = {
+    syncing: ['Syncing','bg-warning text-dark'],
+    done:    ['Done','bg-success'],
+    error:   ['Error','bg-danger'],
+  };
+  const [label, cls] = map[state] || ['Waiting','bg-secondary'];
+  badge.textContent = label;
+  badge.className = 'badge ' + cls;
+}
+
+async function runCrmStream(cmd, extra) {
+  const progressEl = document.getElementById('crm-progress');
+  const logWrap    = document.getElementById('log-crm-wrap');
+  const logEl      = document.getElementById('log-crm');
+  progressEl.innerHTML = '';
+  progressEl.classList.remove('d-none');
+  logWrap.classList.remove('d-none');
+  logEl.innerHTML = '';
+
+  const pre = document.createElement('pre');
+  pre.className = 'bg-dark text-light p-3 rounded small mt-1';
+  pre.style = 'max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;';
+  logEl.appendChild(pre);
+
+  const fd = new FormData();
+  fd.append('cmd', cmd);
+  fd.append('extra', extra || '');
+
+  let currentAcct = null;
+  let currentPhase = null; // 'contacts' | 'deals'
+  let lineBuffer = '';
+
+  function processLine(line) {
+    // Trim carriage returns / whitespace
+    const l = line.replace(/\r/g,'').trim();
+    if (!l) return;
+
+    // New account
+    const acctMatch = l.match(/^---\s+Account:\s+(.+?)\s+---/);
+    if (acctMatch) {
+      currentAcct  = acctMatch[1];
+      currentPhase = null;
+      _ensureAccountCard(currentAcct, progressEl);
+      _setBadge(currentAcct, 'syncing');
+      return;
+    }
+    if (!currentAcct) return;
+
+    const aid = _acctId(currentAcct);
+
+    // Phase start
+    if (/Contacts:\s+(FULL|incremental)/i.test(l)) {
+      currentPhase = 'contacts';
+      _setBar(aid + '-contacts', 'running', 'syncing…');
+      return;
+    }
+    if (/Deals:\s+(FULL|incremental)/i.test(l)) {
+      currentPhase = 'deals';
+      _setBar(aid + '-deals', 'running', 'syncing…');
+      return;
+    }
+
+    // Contact progress / done
+    const cProg = l.match(/^([\d,]+)\s+contacts?\s+\([\d.]+\/sec\)/);
+    if (cProg) { _setBar(aid + '-contacts', 'running', cProg[1] + ' contacts'); return; }
+
+    const cDone = l.match(/^([\d,]+)\s+contacts?\s+synced/);
+    if (cDone) { _setBar(aid + '-contacts', 'done', cDone[1] + ' contacts'); return; }
+
+    // Merged count (incremental short path)
+    const cMerge = l.match(/Merged\s+([\d,]+)\s+contacts?/);
+    if (cMerge && currentPhase === 'contacts') {
+      _setBar(aid + '-contacts', 'done', cMerge[1] + ' contacts'); return;
+    }
+
+    // Deal progress / done
+    const dProg = l.match(/^([\d,]+)\s+deals?\s+\([\d.]+\/sec\)/);
+    if (dProg) { _setBar(aid + '-deals', 'running', dProg[1] + ' deals'); return; }
+
+    const dDone = l.match(/^([\d,]+)\s+deals?\s+synced/);
+    if (dDone) { _setBar(aid + '-deals', 'done', dDone[1] + ' deals'); return; }
+
+    const dUpd = l.match(/Updated\s+([\d,]+)\s+deals?/);
+    if (dUpd) { _setBar(aid + '-deals', 'done', dUpd[1] + ' deals'); return; }
+
+    // Exit code → mark incomplete bars as done
+    if (/^\[Exit code:\s*0\]/.test(l)) {
+      document.querySelectorAll('#crm-progress .progress-bar-animated').forEach(b => {
+        b.classList.remove('progress-bar-striped','progress-bar-animated');
+        b.style.background = '#198754';
+        b.style.width = '100%';
+      });
+      document.querySelectorAll('#crm-progress .badge.bg-warning').forEach(b => {
+        b.textContent = 'Done'; b.className = 'badge bg-success';
+      });
+    } else if (/^\[Exit code:/.test(l)) {
+      _setBadge(currentAcct, 'error');
+    }
+  }
+
+  try {
+    const resp   = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
+    const reader = resp.body.getReader();
+    const dec    = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = dec.decode(value);
+      pre.textContent += chunk;
+      pre.scrollTop    = pre.scrollHeight;
+
+      // Parse line by line (split on \n or \r)
+      lineBuffer += chunk;
+      const parts = lineBuffer.split(/[\n\r]+/);
+      lineBuffer = parts.pop(); // keep incomplete last segment
+      parts.forEach(processLine);
+    }
+    if (lineBuffer) processLine(lineBuffer);
+  } catch (err) {
+    pre.textContent += '\n[Error: ' + err.message + ']';
+  }
+}
+
+/* ── Generic stream (non-CRM tabs) ──────────────────────────────────────── */
 async function runStream(cmd, extra, tab) {
   const container = document.getElementById('log-' + tab);
   if (!container) return;
