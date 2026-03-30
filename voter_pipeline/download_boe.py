@@ -141,14 +141,19 @@ def run(force: bool = False):
 
             print(f"[{i}/{len(DOWNLOADS)}] {fname}")
 
+            # Fast path: CSV already extracted from a previous run — skip download
+            if csv_dest.exists() and md5_file.exists() and not force:
+                print(f"  Already extracted: {csv_nm} ({fmt_size(csv_dest.stat().st_size)})")
+                print(f"  Use --force to re-download and check for server updates.")
+                results.append((fname, "UNCHANGED", fmt_size(csv_dest.stat().st_size)))
+                print()
+                continue
+
             # Change detection: compare MD5 of last downloaded outer ZIP
             # (stored as a tiny sidecar file so we don't need to keep the ZIP)
             old_hash = md5_file.read_text().strip() if md5_file.exists() else None
             if csv_dest.exists():
                 print(f"  Extracted CSV: {fmt_size(csv_dest.stat().st_size)}")
-
-            if csv_dest.exists() and not force:
-                print("  Checking server for updates...")
 
             # Step 1: POST SetSessions via fetch() inside the browser page
             # Must run in-page so Cloudflare session cookies are included
