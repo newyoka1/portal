@@ -145,48 +145,239 @@
 
   <!-- ── DONORS ─────────────────────────────────────────────────────────── -->
   <div class="tab-pane fade" id="tab-donors">
-    <div class="card shadow-sm">
+
+    <!-- Quick actions -->
+    <div class="card shadow-sm mb-3">
       <div class="card-body">
         <p class="text-muted small mb-3">
-          Downloads campaign finance data from government sources and matches donors to voter records.
-          After this runs, each matched voter gains donation totals, R/D splits, and last-gift details.
-          Run individual sources to update just one dataset without re-downloading all three.
+          Downloads and processes campaign finance data from three sources. Each source has
+          individual step buttons so you can re-run just the part that failed or changed.
+          After running, each matched voter record gains donation totals, R/D splits, and last-gift details.
         </p>
-        <div class="form-check mb-3">
-          <input class="form-check-input" type="checkbox" id="donorRefresh">
-          <label class="form-check-label" for="donorRefresh">Download fresh data
-            <span class="text-muted fw-normal">(re-downloads source files — skip if already downloaded recently)</span>
-          </label>
-        </div>
-        <div class="row g-2">
+        <div class="row g-2 align-items-center">
           <div class="col-auto">
-            <button class="btn btn-primary" onclick="vpRun('donors', document.getElementById('donorRefresh').checked ? '--refresh' : '--no-refresh')">
+            <button class="btn btn-primary" onclick="vpRun('donors','--no-refresh')">
               <i class="bi bi-currency-dollar me-1"></i>All Donors
             </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Runs BOE + FEC + CFB in sequence</div>
+            <div class="text-muted mt-1" style="font-size:.75rem">BOE + FEC + CFB in sequence — skips downloads, uses existing files</div>
           </div>
           <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('boe-enrich', '')">
-              <i class="bi bi-building me-1"></i>State (BOE)
+            <button class="btn btn-outline-secondary" onclick="vpRun('donors','--refresh')">
+              <i class="bi bi-cloud-download me-1"></i>All Donors + Download
             </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">NY Board of Elections — state &amp; local race donations</div>
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('national-enrich', '')">
-              <i class="bi bi-flag me-1"></i>National (FEC)
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Federal Election Commission — federal race donations</div>
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('cfb-enrich', '')">
-              <i class="bi bi-buildings me-1"></i>NYC (CFB)
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">NYC Campaign Finance Board — city race donations</div>
+            <div class="text-muted mt-1" style="font-size:.75rem">Re-downloads all source files first, then processes all three</div>
           </div>
         </div>
-        <div id="log-donors"></div>
       </div>
     </div>
+
+    <!-- BOE -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white py-2">
+        <h6 class="fw-bold mb-0"><i class="bi bi-building me-1"></i>BOE — NY State Campaign Finance</h6>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          NY Board of Elections bulk filings: state &amp; county candidate and committee contributions.
+          Uses a Playwright headless browser to bypass the BOE download portal.
+          <strong>Steps:</strong> Download ZIPs → Load into DB &amp; classify parties → Enrich voter file.
+        </p>
+        <div class="row g-2 mb-3">
+          <!-- Step 1 -->
+          <div class="col-md-4">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download</div>
+              <div class="text-muted small mb-2">Scrapes BOE site via Playwright and saves 4 bulk ZIP files (~200–400 MB each). Skips unchanged files unless forced.</div>
+              <div class="form-check form-check-sm mb-2">
+                <input class="form-check-input" type="checkbox" id="boeForce">
+                <label class="form-check-label small" for="boeForce">Force re-download</label>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-download', document.getElementById('boeForce').checked ? '--force' : '')">
+                <i class="bi bi-cloud-download me-1"></i>Download BOE
+              </button>
+            </div>
+          </div>
+          <!-- Step 2 -->
+          <div class="col-md-4">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Load &amp; Classify</div>
+              <div class="text-muted small mb-2">Loads ZIP contents into <code>boe_donors</code> DB, then classifies each contribution as D/R/U using filer keywords and candidate cross-reference.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('boe-load', '')">
+                <i class="bi bi-database-up me-1"></i>Load &amp; Classify BOE
+              </button>
+            </div>
+          </div>
+          <!-- Step 3 -->
+          <div class="col-md-4">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Enrich Voter File</div>
+              <div class="text-muted small mb-2">Merges <code>boe_donor_summary</code> into <code>voter_file</code> — writes BOE total/D/R amounts, counts, last gift date and filer per voter.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-enrich-only', '')">
+                <i class="bi bi-person-vcard me-1"></i>Enrich Voter File ← BOE
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('boe-enrich', '--no-refresh')">
+            <i class="bi bi-arrow-repeat me-1"></i>All BOE (skip download)
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('boe-enrich', '--refresh')">
+            <i class="bi bi-cloud-arrow-down me-1"></i>All BOE + Download
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- FEC -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white py-2">
+        <h6 class="fw-bold mb-0"><i class="bi bi-flag me-1"></i>FEC — Federal Campaign Finance</h6>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Federal Election Commission individual contribution files — 6 election cycles (~10 years).
+          Each step is independent so you can resume from any point if a step fails.
+          <strong>Steps:</strong> Download ZIPs → Extract → Load &amp; Classify → Enrich voter file.
+        </p>
+        <div class="row g-2 mb-3">
+          <!-- Step 1 -->
+          <div class="col-md-3">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download</div>
+              <div class="text-muted small mb-2">Downloads 6 cycles of FEC bulk ZIPs from <code>fec.gov</code> (~100–500 MB each). Hash-checked — skips unchanged cycles.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-download', '')">
+                <i class="bi bi-cloud-download me-1"></i>Download FEC
+              </button>
+            </div>
+          </div>
+          <!-- Step 2 -->
+          <div class="col-md-3">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Extract</div>
+              <div class="text-muted small mb-2">Unzips downloaded FEC archives into per-cycle subdirectories. Safe to re-run — overwrites existing extracted files.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-extract', '')">
+                <i class="bi bi-file-zip me-1"></i>Extract FEC
+              </button>
+            </div>
+          </div>
+          <!-- Step 3 -->
+          <div class="col-md-3">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Load &amp; Classify</div>
+              <div class="text-muted small mb-2">Bulk-loads FEC <code>.txt</code> files into <code>National_Donors</code> DB via <code>LOAD DATA INFILE</code>, then classifies ~6K committees as D/R/Unknown.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-load', '')">
+                <i class="bi bi-database-up me-1"></i>Load &amp; Classify FEC
+              </button>
+            </div>
+          </div>
+          <!-- Step 4 -->
+          <div class="col-md-3">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">4</span>Enrich Voter File</div>
+              <div class="text-muted small mb-2">Matches FEC contributions to voter_file by name+zip, writes national donation totals, D/R amounts, and <code>is_national_donor</code> flag.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-enrich', '')">
+                <i class="bi bi-person-vcard me-1"></i>Enrich Voter File ← FEC
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('national-enrich', '--no-refresh')">
+            <i class="bi bi-arrow-repeat me-1"></i>All FEC (skip download)
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('national-enrich', '--refresh')">
+            <i class="bi bi-cloud-arrow-down me-1"></i>All FEC + Download
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CFB -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white py-2">
+        <h6 class="fw-bold mb-0"><i class="bi bi-buildings me-1"></i>CFB — NYC Campaign Finance</h6>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          NYC Campaign Finance Board individual contributions across 4 election cycles (2017, 2021, 2023, 2025).
+          <strong>Steps:</strong> Download CSVs → Load &amp; Enrich voter file (CFB load also writes directly to voter_file).
+        </p>
+        <div class="row g-2 mb-3">
+          <!-- Step 1 -->
+          <div class="col-md-6">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download</div>
+              <div class="text-muted small mb-2">Downloads 4 CSV files from NYC CFB data library. Uses HTTP HEAD + MD5 to skip unchanged cycles.</div>
+              <div class="form-check form-check-sm mb-2">
+                <input class="form-check-input" type="checkbox" id="cfbForce">
+                <label class="form-check-label small" for="cfbForce">Force re-download</label>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('cfb-download', document.getElementById('cfbForce').checked ? '--force' : '')">
+                <i class="bi bi-cloud-download me-1"></i>Download CFB
+              </button>
+            </div>
+          </div>
+          <!-- Step 2 -->
+          <div class="col-md-6">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Load &amp; Enrich</div>
+              <div class="text-muted small mb-2">Loads CSVs into <code>cfb_donors</code> DB and matches contributions to voter_file by name+zip. Writes per-cycle amounts and totals. Force-reload re-processes even if file hash is unchanged.</div>
+              <div class="form-check form-check-sm mb-2">
+                <input class="form-check-input" type="checkbox" id="cfbLoadForce">
+                <label class="form-check-label small" for="cfbLoadForce">Force re-load (ignore hash)</label>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('cfb-load', document.getElementById('cfbLoadForce').checked ? '--force' : '')">
+                <i class="bi bi-database-up me-1"></i>Load &amp; Enrich CFB
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="d-flex gap-2 align-items-center">
+          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('cfb-enrich', '--no-refresh')">
+            <i class="bi bi-arrow-repeat me-1"></i>All CFB (skip download)
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('cfb-enrich', '--refresh')">
+            <i class="bi bi-cloud-arrow-down me-1"></i>All CFB + Download
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Advanced: Data Reset -->
+    <div class="card shadow-sm border-danger-subtle mb-3">
+      <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0 text-danger"><i class="bi bi-exclamation-triangle me-1"></i>Advanced: Data Reset</h6>
+        <button class="btn btn-sm btn-outline-secondary" type="button"
+                data-bs-toggle="collapse" data-bs-target="#resetSection">
+          <i class="bi bi-chevron-down"></i>
+        </button>
+      </div>
+      <div class="collapse" id="resetSection">
+        <div class="card-body">
+          <p class="text-muted small mb-3">
+            <strong class="text-danger">Destructive operation.</strong>
+            Drops the <code>boe_donors</code>, <code>National_Donors</code>, and <code>cfb_donors</code> databases
+            and NULLs all enrichment columns on <code>voter_file</code>.
+            Use <em>DB only</em> to drop and clear without re-running — useful before a full re-download.
+          </p>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-outline-danger" onclick="confirmReset(false)">
+              <i class="bi bi-trash me-1"></i>Drop DBs Only
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="confirmReset(true)">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>Drop &amp; Rebuild
+            </button>
+          </div>
+          <div class="text-muted mt-1" style="font-size:.75rem">
+            <em>DB only</em> — drops databases and clears voter_file columns, stops there. &nbsp;|&nbsp;
+            <em>Drop &amp; Rebuild</em> — drops then re-runs the full donor pipeline (very long).
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="log-donors"></div>
   </div>
 
   <!-- ── ENRICH ─────────────────────────────────────────────────────────── -->
@@ -199,30 +390,58 @@
           <span class="text-muted">Note: this is different from <strong>CRM Sync → Match to Voter File</strong>,
           which enriches your <em>CRM contacts</em> with voter data.</span>
         </p>
-        <div class="row g-2 mb-3">
-          <div class="col-auto">
-            <button class="btn btn-primary" onclick="vpRun('ethnicity', '')">
-              <i class="bi bi-people me-1"></i>Build Ethnicity Model
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Runs name-based probability model to predict ethnicity for every voter record</div>
+        <div class="row g-3 mb-3">
+          <!-- Ethnicity -->
+          <div class="col-md-6 col-lg-3">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><i class="bi bi-people me-1"></i>Build Ethnicity Model</div>
+              <div class="text-muted small mb-2">BISG name-probability model predicts ethnicity for every voter. First run takes 30–60 min. Subsequent runs fill only NULLs.</div>
+              <div class="form-check form-check-sm mb-1">
+                <input class="form-check-input" type="checkbox" id="ethRebuild">
+                <label class="form-check-label small" for="ethRebuild">Rebuild all (clear + recompute)</label>
+              </div>
+              <div class="input-group input-group-sm mb-2">
+                <span class="input-group-text small">Batch size</span>
+                <input type="number" class="form-control form-control-sm" id="ethBatch" value="50000" min="1000" max="500000" style="max-width:90px">
+              </div>
+              <button class="btn btn-sm btn-primary w-100" onclick="runEthnicity()">
+                <i class="bi bi-people me-1"></i>Build Ethnicity
+              </button>
+            </div>
           </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('enrich-derived', '')">
-              <i class="bi bi-calculator me-1"></i>Enrich Derived
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Computes age ranges, voting frequency scores, and other calculated fields</div>
+          <!-- Enrich Derived -->
+          <div class="col-md-6 col-lg-3">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><i class="bi bi-calculator me-1"></i>Enrich Derived</div>
+              <div class="text-muted small mb-2">Computes registration recency, turnout scores, donor cross-level flags, and household clustering. Default fills NULLs only.</div>
+              <div class="form-check form-check-sm mb-2">
+                <input class="form-check-input" type="checkbox" id="derivedRefresh">
+                <label class="form-check-label small" for="derivedRefresh">Full refresh (clear + recompute all)</label>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('enrich-derived', document.getElementById('derivedRefresh').checked ? '--refresh' : '')">
+                <i class="bi bi-calculator me-1"></i>Enrich Derived
+              </button>
+            </div>
           </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('district-scores', '')">
-              <i class="bi bi-bar-chart me-1"></i>District Scores
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Calculates per-district voter engagement and turnout scores</div>
+          <!-- District Scores -->
+          <div class="col-md-6 col-lg-3">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><i class="bi bi-bar-chart me-1"></i>District Scores</div>
+              <div class="text-muted small mb-2">Builds the <code>district_scores</code> table — partisan lean, competitiveness category (Safe D → Safe R), average turnout, and donor participation rate per CD/SD/LD.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('district-scores', '')">
+                <i class="bi bi-bar-chart me-1"></i>Build District Scores
+              </button>
+            </div>
           </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('party-snapshot', '')">
-              <i class="bi bi-camera me-1"></i>Party Snapshot
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Records a point-in-time snapshot of current party registrations for trend tracking</div>
+          <!-- Party Snapshot -->
+          <div class="col-md-6 col-lg-3">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><i class="bi bi-camera me-1"></i>Party Snapshot</div>
+              <div class="text-muted small mb-2">Records today's party registrations and compares to the previous snapshot to detect switchers. Stamps <code>is_party_switcher</code>, <code>prior_party</code>, and <code>party_change_date</code>.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('party-snapshot', '')">
+                <i class="bi bi-camera me-1"></i>Party Snapshot
+              </button>
+            </div>
           </div>
         </div>
         <!-- ── Facebook Audience Push ──────────────────────────────────────── -->
@@ -313,8 +532,12 @@ const CMD_TAB = {
   'export':'export', 'voter-contact':'export',
   'crm-sync':'crm', 'hubspot-sync':'crm', 'cm-sync':'crm',
   'crm-enrich':'crm', 'crm-phone':'crm',
-  'donors':'donors', 'boe-enrich':'donors',
-  'national-enrich':'donors', 'cfb-enrich':'donors',
+  'donors':'donors',
+  'boe-enrich':'donors', 'boe-download':'donors', 'boe-load':'donors', 'boe-enrich-only':'donors',
+  'national-enrich':'donors', 'fec-download':'donors', 'fec-extract':'donors',
+  'fec-load':'donors', 'fec-enrich':'donors',
+  'cfb-enrich':'donors', 'cfb-download':'donors', 'cfb-load':'donors',
+  'reset':'donors',
   'ethnicity':'enrich', 'enrich-derived':'enrich',
   'district-scores':'enrich', 'party-snapshot':'enrich',
   'fb-audiences':'enrich', 'fb-push':'enrich',
@@ -533,6 +756,27 @@ async function runCrmStream(cmd, extra) {
   } catch (err) {
     pre.textContent += '\n[Error: ' + err.message + ']';
   }
+}
+
+/* ── Ethnicity helper (assembles --rebuild and --batch-size flags) ───────── */
+function runEthnicity() {
+  const rebuild = document.getElementById('ethRebuild').checked;
+  const batch   = document.getElementById('ethBatch').value || '50000';
+  let extra = '--batch-size ' + batch;
+  if (rebuild) extra += ' --rebuild';
+  vpRun('ethnicity', extra);
+}
+
+/* ── Reset confirmation ──────────────────────────────────────────────────── */
+function confirmReset(fullRebuild) {
+  const action = fullRebuild
+    ? 'DROP all donor databases AND clear voter_file enrichment columns, then RE-RUN the full donor pipeline'
+    : 'DROP all donor databases AND clear voter_file enrichment columns (no re-run)';
+  const msg = `⚠ DESTRUCTIVE OPERATION ⚠\n\nThis will ${action}.\n\nThis cannot be undone. Type "YES" to confirm.`;
+  const ans = prompt(msg);
+  if (ans !== 'YES') { alert('Reset cancelled.'); return; }
+  const extra = fullRebuild ? '--yes' : '--yes --db-only';
+  vpRun('reset', extra);
 }
 
 /* ── Pipeline Health stats ───────────────────────────────────────────────── */

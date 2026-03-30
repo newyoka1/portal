@@ -179,7 +179,7 @@ def district_args(args):
     sys.exit(1)
 
 
-def run_reset(db_only=False, verbosity='normal'):
+def run_reset(db_only=False, verbosity='normal', yes=False):
     """
     Drop all donor databases and clear enrichment columns on voter_file.
     Optionally re-run the full donor pipeline from scratch afterward.
@@ -229,14 +229,17 @@ def run_reset(db_only=False, verbosity='normal'):
     print("  Downloaded source zips/CSVs will NOT be deleted.")
     print()
 
-    try:
-        ans = input("  Type YES to confirm reset: ").strip()
-    except (EOFError, KeyboardInterrupt):
-        print("\n  Reset cancelled.")
-        return
-    if ans != "YES":
-        print("  Reset cancelled (type exactly YES to confirm).")
-        return
+    if yes:
+        print("  [--yes] Confirmation bypassed — proceeding with reset.")
+    else:
+        try:
+            ans = input("  Type YES to confirm reset: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n  Reset cancelled.")
+            return
+        if ans != "YES":
+            print("  Reset cancelled (type exactly YES to confirm).")
+            return
 
     print()
     conn = pymysql.connect(
@@ -410,6 +413,42 @@ def main():
     p_boe_dl = sub.add_parser("boe-download", help="Download BOE bulk files (requires playwright)")
     p_boe_dl.add_argument("--force", action="store_true")
 
+    # boe-load  (load + classify, no download, no enrich)
+    sub.add_parser("boe-load",
+        help="Load BOE ZIPs into boe_donors DB and classify parties (no download, no voter enrich)")
+
+    # boe-enrich-only  (just the voter_file enrichment step)
+    sub.add_parser("boe-enrich-only",
+        help="Enrich voter_file from boe_donor_summary (skips download and load steps)")
+
+    # fec-download  (step 1 only)
+    sub.add_parser("fec-download",
+        help="Download FEC bulk contribution ZIP files (6 cycles)")
+
+    # fec-extract  (step 2 only)
+    sub.add_parser("fec-extract",
+        help="Extract downloaded FEC ZIP files")
+
+    # fec-load  (steps 3 + 4: load + classify)
+    sub.add_parser("fec-load",
+        help="Load FEC data into National_Donors DB and classify committee parties")
+
+    # fec-enrich  (just voter_file enrichment)
+    sub.add_parser("fec-enrich",
+        help="Enrich voter_file from FEC contributions (skips download/extract/load steps)")
+
+    # cfb-download  (download only)
+    p_cfb_dl = sub.add_parser("cfb-download",
+        help="Download NYC CFB contribution CSVs (4 cycles)")
+    p_cfb_dl.add_argument("--force", action="store_true",
+        help="Re-download even if files are unchanged")
+
+    # cfb-load  (load + enrich, no download)
+    p_cfb_load = sub.add_parser("cfb-load",
+        help="Load NYC CFB CSVs into cfb_donors DB and enrich voter_file (no download)")
+    p_cfb_load.add_argument("--force", action="store_true",
+        help="Force re-load even if file hash is unchanged")
+
     # ethnicity
     p_eth = sub.add_parser("ethnicity", help="Build ModeledEthnicity column")
     p_eth.add_argument("--dry-run",    action="store_true")
@@ -436,6 +475,8 @@ def main():
         help="Drop all donor DBs + clear voter enrichment columns, then re-run everything")
     p_reset.add_argument("--db-only", action="store_true",
         help="Drop DBs and clear columns only — do NOT re-run the pipeline")
+    p_reset.add_argument("--yes", action="store_true",
+        help="Skip the interactive YES confirmation (required for non-interactive / portal use)")
 
     # hubspot-sync
     p_hs = sub.add_parser("hubspot-sync",
@@ -684,6 +725,42 @@ def _dispatch(args, verbosity):
         extra = ["--force"] if args.force else []
         run("download_boe.py", extra, verbosity_level=verbosity)
 
+    # ── boe-load ──────────────────────────────────────────────────────────────
+    elif args.command == "boe-load":
+        run("load_raw_boe.py", verbosity_level=verbosity)
+        run("classify_boe_parties.py", verbosity_level=verbosity)
+
+    # ── boe-enrich-only ───────────────────────────────────────────────────────
+    elif args.command == "boe-enrich-only":
+        run("pipeline/enrich_boe_donors.py", verbosity_level=verbosity)
+
+    # ── fec-download ──────────────────────────────────────────────────────────
+    elif args.command == "fec-download":
+        run("step1_download_fec.py", verbosity_level=verbosity)
+
+    # ── fec-extract ───────────────────────────────────────────────────────────
+    elif args.command == "fec-extract":
+        run("step2_extract_fec.py", verbosity_level=verbosity)
+
+    # ── fec-load ──────────────────────────────────────────────────────────────
+    elif args.command == "fec-load":
+        run("step3_load_fec.py", verbosity_level=verbosity)
+        run("step4_classify_parties.py", verbosity_level=verbosity)
+
+    # ── fec-enrich ────────────────────────────────────────────────────────────
+    elif args.command == "fec-enrich":
+        run("pipeline/enrich_fec_donors.py", verbosity_level=verbosity)
+
+    # ── cfb-download ──────────────────────────────────────────────────────────
+    elif args.command == "cfb-download":
+        extra = ["--force"] if args.force else []
+        run("download_cfb.py", extra, verbosity_level=verbosity)
+
+    # ── cfb-load ──────────────────────────────────────────────────────────────
+    elif args.command == "cfb-load":
+        extra = ["--force"] if args.force else ["--skip-raw"]
+        run("load_cfb_contributions.py", extra, verbosity_level=verbosity)
+
     # ── ethnicity ─────────────────────────────────────────────────────────────
     elif args.command == "ethnicity":
         extra = []
@@ -778,7 +855,7 @@ def _dispatch(args, verbosity):
 
     # ── reset ─────────────────────────────────────────────────────────────────
     elif args.command == "reset":
-        run_reset(db_only=args.db_only, verbosity=verbosity)
+        run_reset(db_only=args.db_only, verbosity=verbosity, yes=getattr(args, 'yes', False))
 
 
 
