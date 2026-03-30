@@ -11,6 +11,114 @@
 </div>
 {% else %}
 
+<!-- ── Run-Order Guide ───────────────────────────────────────────────────── -->
+<div class="card shadow-sm mb-3 border-info-subtle">
+  <div class="card-header py-2 d-flex justify-content-between align-items-center"
+       style="background:#f0f7ff;cursor:pointer" data-bs-toggle="collapse"
+       data-bs-target="#runOrderBody" id="runOrderHeader">
+    <span class="fw-semibold text-info-emphasis">
+      <i class="bi bi-info-circle me-1"></i>How to build a complete database — run order guide
+    </span>
+    <i class="bi bi-chevron-down text-muted" id="runOrderChevron"></i>
+  </div>
+  <div class="collapse" id="runOrderBody">
+    <div class="card-body py-3" style="font-size:.875rem">
+
+      <p class="text-muted mb-3">Each phase depends on the one before it. Run top-to-bottom for a full rebuild; for routine weekly updates only phases 2–4 are needed.</p>
+
+      <!-- Phase 1 -->
+      <div class="d-flex gap-2 mb-3 align-items-start">
+        <span class="badge bg-primary fs-6 px-2 py-1 flex-shrink-0">1</span>
+        <div>
+          <div class="fw-semibold">Voter File <span class="text-muted fw-normal">— the foundation everything joins to</span></div>
+          <div class="text-muted small mb-1">Run once per NYS file release (~every few months). Loads 13 M voter records and computes name-cleaning columns used by all matching passes.</div>
+          <span class="badge bg-light text-dark border me-1"><i class="bi bi-box-arrow-in-right me-1"></i>Main tab → Pipeline</span>
+        </div>
+      </div>
+
+      <!-- Phase 2 -->
+      <div class="d-flex gap-2 mb-3 align-items-start">
+        <span class="badge bg-success fs-6 px-2 py-1 flex-shrink-0">2</span>
+        <div>
+          <div class="fw-semibold">Donor Data <span class="text-muted fw-normal">— enriches voter_file rows with giving history</span></div>
+          <div class="text-muted small mb-1">BOE, FEC, and CFB are independent — run in any order. Each adds donation columns (<code>boe_total_amt</code>, <code>cfb_total_amt</code>, etc.) to voter_file that are then copied onto matched CRM contacts.</div>
+          <div class="mb-1">
+            <span class="badge bg-light text-dark border me-1">Donors → BOE: Download → Load &amp; Classify → Enrich VF</span>
+          </div>
+          <div class="mb-1">
+            <span class="badge bg-light text-dark border me-1">Donors → FEC: Download → Extract → Load &amp; Classify → Enrich VF</span>
+          </div>
+          <div>
+            <span class="badge bg-light text-dark border me-1">Donors → CFB: Download → Load &amp; Classify → Enrich VF</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 3 -->
+      <div class="d-flex gap-2 mb-3 align-items-start">
+        <span class="badge bg-warning text-dark fs-6 px-2 py-1 flex-shrink-0">3</span>
+        <div>
+          <div class="fw-semibold">CRM Sync <span class="text-muted fw-normal">— pull contacts from HubSpot &amp; Campaign Monitor</span></div>
+          <div class="text-muted small mb-1">Merges all contact sources into <code>crm_unified.contacts</code>. Must run before matching so there are contacts to match against.</div>
+          <span class="badge bg-light text-dark border me-1"><i class="bi bi-arrow-repeat me-1"></i>CRM tab → All CRM</span>
+        </div>
+      </div>
+
+      <!-- Phase 4 -->
+      <div class="d-flex gap-2 mb-3 align-items-start">
+        <span class="badge bg-danger fs-6 px-2 py-1 flex-shrink-0">4</span>
+        <div>
+          <div class="fw-semibold">CRM → Voter Matching <span class="text-muted fw-normal">— run in this exact order</span></div>
+          <div class="text-muted small mb-1">Each pass only processes contacts the previous pass missed. Running out of order wastes time but causes no data errors.</div>
+          <div class="row g-2 mt-1">
+            <div class="col-md-4">
+              <div class="border rounded p-2 h-100">
+                <div class="fw-semibold small">① Match to Voter File</div>
+                <div class="text-muted" style="font-size:.78rem">Exact name + zip. Covers ~60–70% of contacts.</div>
+                <div class="mt-1"><span class="badge bg-light text-dark border" style="font-size:.7rem">CRM tab → Match to Voter File</span></div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="border rounded p-2 h-100">
+                <div class="fw-semibold small">② Phone Match</div>
+                <div class="text-muted" style="font-size:.78rem">Phone number lookup against voter_file. Catches ~5–10% more.</div>
+                <div class="mt-1"><span class="badge bg-light text-dark border" style="font-size:.7rem">CRM tab → Phone Match</span></div>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="border rounded p-2 h-100">
+                <div class="fw-semibold small">③ Extended Match</div>
+                <div class="text-muted" style="font-size:.78rem">Hyphenated surnames, compound first names, inactive voters.</div>
+                <div class="mt-1"><span class="badge bg-light text-dark border" style="font-size:.7rem">CRM tab → Extended Match</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Phase 5 -->
+      <div class="d-flex gap-2 mb-2 align-items-start">
+        <span class="badge bg-secondary fs-6 px-2 py-1 flex-shrink-0">5</span>
+        <div>
+          <div class="fw-semibold">Derived Enrichment <span class="text-muted fw-normal">— computed fields on matched data</span></div>
+          <div class="text-muted small mb-1">Runs last because it depends on voter match results and donor data both being present.</div>
+          <span class="badge bg-light text-dark border me-1">Enrich tab → Ethnicity</span>
+          <span class="badge bg-light text-dark border me-1">Enrich tab → Derived Fields</span>
+          <span class="badge bg-light text-dark border me-1">Enrich tab → District Scores</span>
+        </div>
+      </div>
+
+      <hr class="my-3">
+      <div class="text-muted small">
+        <i class="bi bi-lightning-charge me-1 text-warning"></i>
+        <strong>Routine updates (weekly):</strong> Only phases 2–4 are needed — all steps are incremental and skip unchanged data automatically.
+        The voter file pipeline (phase 1) only needs re-running when NYS publishes a new extract.
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <!-- ── Pipeline Health Dashboard ─────────────────────────────────────────── -->
 <div class="card shadow-sm mb-3" id="stats-card">
   <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
@@ -1008,6 +1116,27 @@ async function runStream(cmd, extra, tab, triggerBtn) {
 }
 
 // Auto-load stats when the page is ready
-document.addEventListener('DOMContentLoaded', loadStats);
+document.addEventListener('DOMContentLoaded', () => {
+  loadStats();
+
+  // Run-order guide: restore last open/closed state, animate chevron
+  const runOrderEl  = document.getElementById('runOrderBody');
+  const chevronEl   = document.getElementById('runOrderChevron');
+  const STORAGE_KEY = 'vp_runorder_open';
+
+  if (localStorage.getItem(STORAGE_KEY) === '1') {
+    runOrderEl.classList.add('show');
+    chevronEl.style.transform = 'rotate(180deg)';
+  }
+
+  runOrderEl.addEventListener('show.bs.collapse', () => {
+    chevronEl.style.transform = 'rotate(180deg)';
+    localStorage.setItem(STORAGE_KEY, '1');
+  });
+  runOrderEl.addEventListener('hide.bs.collapse', () => {
+    chevronEl.style.transform = 'rotate(0deg)';
+    localStorage.setItem(STORAGE_KEY, '0');
+  });
+});
 </script>
 {% endblock %}
