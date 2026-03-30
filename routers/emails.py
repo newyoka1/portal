@@ -1,7 +1,7 @@
 """Email queue, detail, assignment, and Gmail poll trigger."""
 import os
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -91,7 +91,7 @@ def assign_email(
 
     if client_id:
         email.client_id   = int(client_id)
-        email.assigned_at = datetime.utcnow()
+        email.assigned_at = datetime.now(timezone.utc)
         email.status      = "in_review"
 
         # Create an Approval row for each configured approver on this client
@@ -132,7 +132,7 @@ def vote(
     if approval and decision in ("approved", "rejected"):
         approval.decision   = decision
         approval.note       = note.strip()
-        approval.decided_at = datetime.utcnow()
+        approval.decided_at = datetime.now(timezone.utc)
         db.flush()
 
         # Mirror the note into the comment thread so the team sees it inline
@@ -145,7 +145,7 @@ def vote(
             ))
 
         # Recalculate overall email status
-        _recalculate_status(email_id, db)
+        recalculate_status(email_id, db)
         db.commit()
 
     return RedirectResponse(f"/emails/{email_id}", status_code=302)
@@ -177,7 +177,7 @@ def send_for_approval(
     approval_pairs = [(a.user, a.token) for a in pending_approvals]
     sent           = send_approval_requests(email, approval_pairs, app_url)
 
-    email.sent_for_approval_at = datetime.utcnow()
+    email.sent_for_approval_at = datetime.now(timezone.utc)
     db.commit()
 
     return RedirectResponse(
@@ -185,7 +185,7 @@ def send_for_approval(
     )
 
 
-def _recalculate_status(email_id: int, db: Session) -> None:
+def recalculate_status(email_id: int, db: Session) -> None:
     """Update email.status based on required approver decisions."""
     approvals = db.query(Approval).filter(Approval.email_id == email_id).all()
     required  = [a for a in approvals if a.required]

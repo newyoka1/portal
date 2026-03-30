@@ -6,7 +6,7 @@ Pulls sent/sending campaigns and their HTML content.
 API ref: https://mailchimp.com/developer/marketing/api/campaigns/
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 from sqlalchemy.orm import Session
@@ -80,9 +80,9 @@ def _process_campaign(campaign: dict, base: str, auth: tuple, db: Session, clien
 
     send_time = campaign.get("send_time", "")
     try:
-        received_at = datetime.strptime(send_time, "%Y-%m-%dT%H:%M:%S+00:00") if send_time else datetime.utcnow()
+        received_at = datetime.strptime(send_time, "%Y-%m-%dT%H:%M:%S+00:00") if send_time else datetime.now(timezone.utc)
     except ValueError:
-        received_at = datetime.utcnow()
+        received_at = datetime.now(timezone.utc)
 
     html_body = _fetch_html(mc_id, base, auth)
 

@@ -6,7 +6,7 @@ Campaign Monitor Client ID to pull sent campaigns and their HTML content.
 API ref: https://www.campaignmonitor.com/api/v3-3/campaigns/
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 from sqlalchemy.orm import Session
@@ -68,9 +68,9 @@ def _process_campaign(campaign: dict, auth: tuple, db: Session, client_id: int) 
 
     sent_date = campaign.get("SentDate", "")
     try:
-        received_at = datetime.strptime(sent_date, "%Y-%m-%d %H:%M:%S") if sent_date else datetime.utcnow()
+        received_at = datetime.strptime(sent_date, "%Y-%m-%d %H:%M:%S") if sent_date else datetime.now(timezone.utc)
     except ValueError:
-        received_at = datetime.utcnow()
+        received_at = datetime.now(timezone.utc)
 
     html_body = _fetch_html(cm_id, auth)
 

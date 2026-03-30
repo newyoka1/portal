@@ -6,9 +6,10 @@ import json as _json
 import logging
 import os
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -17,18 +18,31 @@ from sqlalchemy.orm import Session
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from auth import get_current_user, require_user
+from auth import get_current_user, purge_expired_sessions, require_user
 from database import Base, engine, get_db
 from gmail_poller import fetch_and_store_emails
 from models import Approval, Comment, Email, PortalSetting, User   # noqa: F401 — ensure models are imported before create_all
 from routers import auth, clients, comments, emails, fb_ad_approval, fb_receipts, integrations, settings, users, voter_pipeline
+from routers.emails import recalculate_status
 
 logging.basicConfig(level=logging.INFO)
+
+
+# ---------------------------------------------------------------------------
+# Lifespan: startup + shutdown
+# ---------------------------------------------------------------------------
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler = _startup()
+    yield
+    scheduler.shutdown(wait=False)
+    logging.info("Scheduler shut down.")
+
 
 # ---------------------------------------------------------------------------
 # App setup
 # ---------------------------------------------------------------------------
-app = FastAPI(title="Politika Portal", docs_url=None, redoc_url=None)
+app = FastAPI(title="Politika Portal", docs_url=None, redoc_url=None, lifespan=lifespan)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
@@ -60,8 +74,8 @@ app.include_router(fb_ad_approval.router)
 # ---------------------------------------------------------------------------
 # Database init + background scheduler
 # ---------------------------------------------------------------------------
-@app.on_event("startup")
-def startup():
+def _startup() -> BackgroundScheduler:
+    """Initialise DB, run migrations, start scheduler. Returns the scheduler."""
     # Create all tables if they don't exist yet
     Base.metadata.create_all(bind=engine)
 
@@ -175,7 +189,11 @@ def startup():
             "Voter nightly sync scheduled at %02d:30 server time", _sync_hour
         )
 
+    # Purge expired sessions from the in-memory store every hour
+    scheduler.add_job(purge_expired_sessions, "interval", hours=1, id="session_cleanup")
+
     scheduler.start()
+    return scheduler
 
 
 # ---------------------------------------------------------------------------
@@ -206,11 +224,15 @@ def dashboard(
 # ---------------------------------------------------------------------------
 # Email Queue
 # ---------------------------------------------------------------------------
+PER_PAGE = 50
+
+
 @app.get("/emails", response_class=HTMLResponse)
 def queue(
     request: Request,
     status: str = "",
     client: int = 0,
+    page: int = 1,
     polled: str = "",
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user),
@@ -221,7 +243,15 @@ def queue(
     if client:
         query = query.filter(Email.client_id == client)
 
-    email_list = query.order_by(Email.received_at.desc()).all()
+    total = query.count()
+    page = max(1, page)
+    total_pages = max(1, (total + PER_PAGE - 1) // PER_PAGE)
+    email_list = (
+        query.order_by(Email.received_at.desc())
+        .offset((page - 1) * PER_PAGE)
+        .limit(PER_PAGE)
+        .all()
+    )
 
     # Tab counts
     from sqlalchemy import func
@@ -250,6 +280,8 @@ def queue(
         "counts":        counts,
         "current_user":  current_user,
         "flash":         flash,
+        "page":          page,
+        "total_pages":   total_pages,
     })
 
 
@@ -279,20 +311,6 @@ def approval_log(
 # ---------------------------------------------------------------------------
 # Public token-based approval (no login required)
 # ---------------------------------------------------------------------------
-def _recalculate_status(email_id: int, db: Session) -> None:
-    approvals = db.query(Approval).filter(Approval.email_id == email_id).all()
-    required  = [a for a in approvals if a.required]
-    email     = db.query(Email).filter(Email.id == email_id).first()
-    if not email:
-        return
-    if any(a.decision == "rejected" for a in required):
-        email.status = "rejected"
-    elif required and all(a.decision == "approved" for a in required):
-        email.status = "approved"
-    else:
-        email.status = "in_review"
-
-
 @app.get("/approve/{token}", response_class=HTMLResponse)
 def approve_page(token: str, request: Request, db: Session = Depends(get_db)):
     approval = db.query(Approval).filter(Approval.token == token).first()
@@ -325,7 +343,7 @@ def approve_submit(
     if decision in ("approved", "rejected"):
         approval.decision   = decision
         approval.note       = note.strip()
-        approval.decided_at = datetime.utcnow()
+        approval.decided_at = datetime.now(timezone.utc)
         approval.token      = None   # invalidate — one-time use
 
         if note.strip():
@@ -336,7 +354,7 @@ def approve_submit(
                 body=f"[{label}] {note.strip()}",
             ))
 
-        _recalculate_status(approval.email_id, db)
+        recalculate_status(approval.email_id, db)
         db.commit()
 
     return templates.TemplateResponse(request, "approve_token.html", {

@@ -1,6 +1,6 @@
 """Session-based auth helpers."""
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
@@ -30,7 +30,7 @@ def create_session(user_id: int) -> str:
     token = secrets.token_urlsafe(32)
     _sessions[token] = {
         "user_id": user_id,
-        "expires": datetime.utcnow() + timedelta(hours=SESSION_TTL_HOURS),
+        "expires": datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS),
     }
     return token
 
@@ -39,11 +39,20 @@ def delete_session(token: str) -> None:
     _sessions.pop(token, None)
 
 
+def purge_expired_sessions() -> int:
+    """Remove expired sessions from the in-memory store. Returns count removed."""
+    now = datetime.now(timezone.utc)
+    expired = [k for k, v in _sessions.items() if now > v["expires"]]
+    for k in expired:
+        del _sessions[k]
+    return len(expired)
+
+
 def _resolve_token(token: Optional[str]) -> Optional[int]:
     if not token or token not in _sessions:
         return None
     session = _sessions[token]
-    if datetime.utcnow() > session["expires"]:
+    if datetime.now(timezone.utc) > session["expires"]:
         _sessions.pop(token, None)
         return None
     return session["user_id"]

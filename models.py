@@ -1,5 +1,5 @@
 """SQLAlchemy ORM models."""
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (
     Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Enum
 )
@@ -40,7 +40,7 @@ class User(Base):
     email         = Column(String(200), unique=True, nullable=False, index=True)
     password_hash = Column(String(200), nullable=False)
     is_admin      = Column(Boolean, default=False)
-    created_at    = Column(DateTime, default=datetime.utcnow)
+    created_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     approvals     = relationship("Approval", back_populates="user")
     comments      = relationship("Comment",  back_populates="user")
@@ -56,7 +56,7 @@ class Client(Base):
     id         = Column(Integer, primary_key=True, index=True)
     name       = Column(String(200), nullable=False)
     slug       = Column(String(100), unique=True, index=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     emails       = relationship("Email", back_populates="client")
     approvers    = relationship("ClientApprover", back_populates="client", cascade="all, delete-orphan")
@@ -80,7 +80,7 @@ class ClientIntegration(Base):
     extra_config   = Column(Text, default="{}")
     enabled        = Column(Boolean, default=True)
     last_synced_at = Column(DateTime, nullable=True)
-    created_at     = Column(DateTime, default=datetime.utcnow)
+    created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     client = relationship("Client", back_populates="integrations")
 
@@ -171,7 +171,7 @@ class Comment(Base):
     email_id   = Column(Integer, ForeignKey("emails.id"), nullable=False)
     user_id    = Column(Integer, ForeignKey("users.id"),  nullable=False)
     body       = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     parent_id  = Column(Integer, ForeignKey("comments.id"), nullable=True)
 
     email      = relationship("Email",   back_populates="comments")

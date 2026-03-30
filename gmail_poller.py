@@ -7,7 +7,8 @@ import base64
 import email
 import logging
 import os
-from datetime import datetime
+import time as _time
+from datetime import datetime, timezone
 from email.utils import parseaddr, parsedate_to_datetime
 
 from googleapiclient.discovery import build
@@ -23,15 +24,27 @@ logger = logging.getLogger(__name__)
 
 SCOPES = ["https://mail.google.com/"]
 
+# Cached Gmail API service — avoids re-downloading the discovery document on
+# every poll cycle.  Refreshed every 30 minutes to pick up credential changes.
+_gmail_svc = None
+_gmail_svc_ts: float = 0
+_GMAIL_SVC_TTL = 1800  # 30 minutes
+
 
 def _gmail_service():
-    """Build an authenticated Gmail API service impersonating GMAIL_ADDRESS."""
+    """Return a (cached) authenticated Gmail API service."""
+    global _gmail_svc, _gmail_svc_ts
+    now = _time.time()
+    if _gmail_svc and now - _gmail_svc_ts < _GMAIL_SVC_TTL:
+        return _gmail_svc
     from portal_config import get_setting
     impersonate = get_setting("GMAIL_ADDRESS")
     if not impersonate:
         raise RuntimeError("GMAIL_ADDRESS must be set in Settings or .env")
     creds = build_credentials(SCOPES, impersonate)
-    return build("gmail", "v1", credentials=creds, cache_discovery=False)
+    _gmail_svc = build("gmail", "v1", credentials=creds, cache_discovery=False)
+    _gmail_svc_ts = now
+    return _gmail_svc
 
 
 def fetch_and_store_emails() -> int:
@@ -113,7 +126,7 @@ def _process_message(service, msg_id: str, db: Session) -> int:
     try:
         received_at = parsedate_to_datetime(date_header).replace(tzinfo=None)
     except Exception:
-        received_at = datetime.utcnow()
+        received_at = datetime.now(timezone.utc)
 
     db.add(Email(
         gmail_message_id = gmail_uid,

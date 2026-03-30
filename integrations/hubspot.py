@@ -6,7 +6,7 @@ Uses a Private App token (Bearer auth).
 API ref: https://developers.hubspot.com/docs/api/marketing/marketing-emails
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import requests
 from sqlalchemy.orm import Session
@@ -136,9 +136,9 @@ def _process_crm_campaign(item: dict, state: str, db: Session, client_id: int) -
 
     ts = props.get("hs_updated_at") or props.get("hs_created_at")
     try:
-        received_at = datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None) if ts else datetime.utcnow()
+        received_at = datetime.fromisoformat(ts.replace("Z", "+00:00")).replace(tzinfo=None) if ts else datetime.now(timezone.utc)
     except (TypeError, ValueError):
-        received_at = datetime.utcnow()
+        received_at = datetime.now(timezone.utc)
 
     existing = db.query(Email).filter(Email.gmail_message_id == dedup_id).first()
     if existing:
@@ -179,9 +179,9 @@ def _process_campaign(campaign: dict, state: str, headers: dict, db: Session, cl
     # Use updatedAt for drafts so re-syncing reflects edits made in HubSpot
     ts = campaign.get("updatedAt") or campaign.get("createdAt")
     try:
-        received_at = datetime.utcfromtimestamp(int(ts) / 1000) if ts else datetime.utcnow()
+        received_at = datetime.utcfromtimestamp(int(ts) / 1000) if ts else datetime.now(timezone.utc)
     except (TypeError, ValueError):
-        received_at = datetime.utcnow()
+        received_at = datetime.now(timezone.utc)
 
     existing = db.query(Email).filter(Email.gmail_message_id == dedup_id).first()
 

@@ -1,7 +1,7 @@
 """Per-client email platform integration routes (admin only)."""
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
@@ -135,7 +135,7 @@ def sync_integration(
             count = campaign_monitor.fetch(integration.api_key, cm_client_id, db, client_id)
 
         db.commit()
-        integration.last_synced_at = datetime.utcnow()
+        integration.last_synced_at = datetime.now(timezone.utc)
         db.commit()
         logger.info("Synced %s for client %d: %d new email(s)", integration.platform, client_id, count)
 

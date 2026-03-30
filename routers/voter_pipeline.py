@@ -1,8 +1,13 @@
 """Voter Pipeline — CRM sync, Aiven sync, export (cloud-safe ops only)."""
+import csv
+import io
 import os
 import sys
+import time as _time
+from datetime import date, datetime
 from pathlib import Path
 
+import pymysql
 from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
@@ -16,6 +21,22 @@ templates = Jinja2Templates(directory="templates")
 
 PORTAL_DIR  = Path(__file__).parent.parent
 VOTER_DIR   = PORTAL_DIR / "voter_pipeline"
+
+
+def _crm_connect(env: dict, **overrides) -> pymysql.Connection:
+    """Open a PyMySQL connection to crm_unified (or another db via overrides)."""
+    return pymysql.connect(
+        host=env.get("MYSQL_HOST", env.get("DB_HOST", "127.0.0.1")),
+        port=int(env.get("MYSQL_PORT", env.get("DB_PORT", "3306"))),
+        user=env.get("MYSQL_USER", env.get("DB_USER", "root")),
+        password=env.get("MYSQL_PASSWORD", env.get("DB_PASSWORD", "")),
+        database="crm_unified",
+        charset="utf8mb4",
+        connect_timeout=10,
+        read_timeout=30,
+        autocommit=True,
+        **overrides,
+    )
 
 
 @router.get("", response_class=HTMLResponse)
@@ -51,24 +72,11 @@ def _build_env() -> dict:
 @router.get("/stats")
 def voter_stats(current_user: User = Depends(require_user)):
     """Return CRM pipeline health statistics as JSON."""
-    import pymysql
-    from fastapi.responses import JSONResponse as _JSONResponse
     env = _build_env()
     try:
-        conn = pymysql.connect(
-            host=env.get("MYSQL_HOST", env.get("DB_HOST", "127.0.0.1")),
-            port=int(env.get("MYSQL_PORT", env.get("DB_PORT", "3306"))),
-            user=env.get("MYSQL_USER", env.get("DB_USER", "root")),
-            password=env.get("MYSQL_PASSWORD", env.get("DB_PASSWORD", "")),
-            database="crm_unified",
-            charset="utf8mb4",
-            connect_timeout=10,
-            read_timeout=30,
-            autocommit=True,
-        )
+        conn = _crm_connect(env)
     except Exception as exc:
-        from fastapi.responses import JSONResponse as _JSONResponse
-        return _JSONResponse({"error": f"DB connect failed: {exc}"}, status_code=500)
+        return JSONResponse({"error": f"DB connect failed: {exc}"}, status_code=500)
 
     try:
         cur = conn.cursor()
@@ -151,8 +159,7 @@ def voter_stats(current_user: User = Depends(require_user)):
         last_sync = cur.fetchone()[0]
         conn.close()
 
-        from fastapi.responses import JSONResponse as _JSONResponse
-        return _JSONResponse({
+        return JSONResponse({
             "total":               total,
             "matched":             matched,
             "pct":                 round(matched / total * 100, 1) if total else 0,
@@ -166,30 +173,17 @@ def voter_stats(current_user: User = Depends(require_user)):
         })
     except Exception as exc:
         conn.close()
-        from fastapi.responses import JSONResponse as _JSONResponse
-        return _JSONResponse({"error": str(exc)}, status_code=500)
+        return JSONResponse({"error": str(exc)}, status_code=500)
 
 
 @router.get("/export-unmatched")
 def export_unmatched(current_user: User = Depends(require_user)):
     """Download unmatched CRM contacts as a CSV file."""
-    import csv
-    import io
-    import pymysql
-    from datetime import date
     env = _build_env()
 
     def _generate():
         try:
-            conn = pymysql.connect(
-                host=env.get("MYSQL_HOST", env.get("DB_HOST", "127.0.0.1")),
-                port=int(env.get("MYSQL_PORT", env.get("DB_PORT", "3306"))),
-                user=env.get("MYSQL_USER", env.get("DB_USER", "root")),
-                password=env.get("MYSQL_PASSWORD", env.get("DB_PASSWORD", "")),
-                database="crm_unified",
-                charset="utf8mb4",
-                autocommit=True,
-            )
+            conn = _crm_connect(env)
             cur = conn.cursor()
             cur.execute("""
                 SELECT id, email_1, first_name, last_name,
@@ -219,7 +213,6 @@ def export_unmatched(current_user: User = Depends(require_user)):
         except Exception as exc:
             yield f"ERROR,{exc}\n"
 
-    from datetime import date
     filename = f"unmatched_contacts_{date.today().isoformat()}.csv"
     return StreamingResponse(
         _generate(),
@@ -231,10 +224,7 @@ def export_unmatched(current_user: User = Depends(require_user)):
 @router.get("/data-status")
 def voter_data_status(current_user: User = Depends(require_user)):
     """Return structured file status for all donor source data files."""
-    import time
-    from fastapi.responses import JSONResponse as _JSONResponse
-
-    now = time.time()
+    now = _time.time()
 
     def _file_info(p: Path) -> dict:
         if not p.exists():
@@ -254,8 +244,7 @@ def voter_data_status(current_user: User = Depends(require_user)):
         elif age < 86400:   age_str = f"{age/3600:.1f}h ago"
         elif age < 86400*7: age_str = f"{age/86400:.0f}d ago"
         else:
-            from datetime import datetime as _dt
-            age_str = _dt.fromtimestamp(mtime).strftime("%-d %b %Y")
+            age_str = datetime.fromtimestamp(mtime).strftime("%-d %b %Y")
         return {
             "name":        p.name,
             "exists":      True,
@@ -265,9 +254,7 @@ def voter_data_status(current_user: User = Depends(require_user)):
             "mtime":       mtime,
         }
 
-    # Reconstruct the same file lists as voter_pipeline/main.py
-    import datetime as _datetime
-    _cur_year  = _datetime.datetime.now().year
+    _cur_year  = datetime.now().year
     _cur_cycle = _cur_year if _cur_year % 2 == 0 else _cur_year + 1
     fec_cycles = [_cur_cycle - (i * 2) for i in range(6)]
 
@@ -304,7 +291,7 @@ def voter_data_status(current_user: User = Depends(require_user)):
         },
     ]
 
-    return _JSONResponse({"groups": groups})
+    return JSONResponse({"groups": groups})
 
 
 # ── Voter file chunked upload ──────────────────────────────────────────────────
@@ -350,9 +337,6 @@ async def voter_file_finalize(
 @router.get("/voter-file-status")
 def voter_file_status(current_user: User = Depends(require_user)):
     """Return current voter ZIP files and voter_file row count."""
-    import time as _time
-    from fastapi.responses import JSONResponse as _J
-
     zipped = ZIPPED_DIR if ZIPPED_DIR.exists() else None
     files  = []
     if zipped:
@@ -363,8 +347,7 @@ def voter_file_status(current_user: User = Depends(require_user)):
             elif age < 86400:   age_str = f"{age/3600:.1f}h ago"
             elif age < 86400*7: age_str = f"{age/86400:.0f}d ago"
             else:
-                from datetime import datetime as _dt
-                age_str = _dt.fromtimestamp(stat.st_mtime).strftime("%-d %b %Y")
+                age_str = datetime.fromtimestamp(stat.st_mtime).strftime("%-d %b %Y")
             files.append({"name": f.name, "size_mb": round(stat.st_size/1_048_576, 1), "age_str": age_str})
         # also report any in-progress uploads
         for f in sorted(zipped.glob("*.uploading")):
@@ -373,16 +356,8 @@ def voter_file_status(current_user: User = Depends(require_user)):
 
     row_count = None
     try:
-        import pymysql
-        from dotenv import load_dotenv
-        load_dotenv(VOTER_DIR / ".env")
-        conn = pymysql.connect(
-            host=os.getenv("DB_HOST", os.getenv("MYSQL_HOST", "127.0.0.1")),
-            port=int(os.getenv("DB_PORT", os.getenv("MYSQL_PORT", "3306"))),
-            user=os.getenv("DB_USER", os.getenv("MYSQL_USER", "root")),
-            password=os.getenv("DB_PASSWORD", os.getenv("MYSQL_PASSWORD", "")),
-            database="nys_voter_tagging", charset="utf8mb4", connect_timeout=5,
-        )
+        env = _build_env()
+        conn = _crm_connect(env, database="nys_voter_tagging", connect_timeout=5, read_timeout=10)
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*) FROM voter_file")
             row_count = cur.fetchone()[0]
@@ -390,7 +365,14 @@ def voter_file_status(current_user: User = Depends(require_user)):
     except Exception:
         pass
 
-    return _J({"files": files, "row_count": row_count})
+    return JSONResponse({"files": files, "row_count": row_count})
+
+
+ALLOWED_CMDS = frozenset({
+    "status", "pipeline", "export", "donors", "hubspot-sync", "cm-sync",
+    "crm-sync", "crm-enrich", "crm-phone", "ethnicity", "fb-audiences",
+    "fb-push", "reset", "sync",
+})
 
 
 @router.post("/run")
@@ -400,6 +382,8 @@ async def voter_run_stream(
     current_user: User = Depends(require_user),
 ):
     """Stream output for any voter-pipeline main.py subcommand."""
+    if cmd not in ALLOWED_CMDS:
+        return JSONResponse({"error": f"invalid command: {cmd}"}, status_code=400)
     args = [sys.executable, str(VOTER_DIR / "main.py"), cmd]
     if extra:
         args += extra.split()   # e.g. "--ld 63" or "--full"
