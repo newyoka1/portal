@@ -27,6 +27,9 @@ for zf in zip_files:
             z.extractall(sub_dir)
             for txt in sub_dir.glob("*.txt"):
                 print(f"  ✓ {txt.name}: {txt.stat().st_size/1024/1024:.1f} MB")
+        size_mb = zf.stat().st_size / 1024 / 1024
+        zf.unlink()
+        print(f"  🗑  Deleted {zf.name} ({size_mb:.0f} MB freed)")
     except Exception as e:
         print(f"  ✗ Error: {e}")
 

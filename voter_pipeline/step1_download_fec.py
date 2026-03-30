@@ -36,13 +36,24 @@ print("="*70)
 print("FEC BULK DATA DOWNLOAD")
 print("="*70)
 
+EXTRACT_DIR = DATA_DIR / "extracted"
+
+def already_done(dest):
+    """Skip if ZIP exists or was already extracted (and ZIP deleted to save space)."""
+    if dest.exists():
+        return True
+    extracted = EXTRACT_DIR / dest.stem
+    if extracted.exists() and any(extracted.iterdir()):
+        return True
+    return False
+
 for cycle in CYCLES:
     year = str(cycle)[-2:]
     fname = f"indiv{year}.zip"
     url = f"{FEC_BASE_URL}/{cycle}/{fname}"
     dest = DATA_DIR / fname
-    if dest.exists():
-        print(f"\n✓ Exists: {fname}")
+    if already_done(dest):
+        print(f"\n✓ Exists/extracted: {fname}")
         continue
     download_file(url, dest)
 
@@ -52,8 +63,8 @@ for cycle in CYCLES:
         fname = f"{prefix}{yr}.zip"
         url   = f"{FEC_BASE_URL}/{cycle}/{fname}"
         dest  = DATA_DIR / fname
-        if dest.exists():
-            print(f"\n  Exists: {fname}")
+        if already_done(dest):
+            print(f"\n  Exists/extracted: {fname}")
             continue
         download_file(url, dest)
 
