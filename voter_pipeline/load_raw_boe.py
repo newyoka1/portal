@@ -161,7 +161,7 @@ def load_raw_table(cur, table_name, tmp_path):
             f" ({COL_LIST})"
         )
     except Exception as e:
-        if "local_infile" in str(e).lower() or "1148" in str(e):
+        if "local_infile" in str(e).lower() or "1148" in str(e) or "3948" in str(e) or "loading local data is disabled" in str(e).lower():
             print(f"    LOAD DATA not available — using batch INSERT fallback...")
             _batch_insert_csv(cur, table_name, tmp_path)
         else:
