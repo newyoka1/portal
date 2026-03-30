@@ -15,7 +15,7 @@
   <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-export">Export</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-crm">CRM Sync</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-donors">Donors</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-enrich">Enrich</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-enrich">Voter File Enrich</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-status">Status</a></li>
 </ul>
 
@@ -25,7 +25,11 @@
   <div class="tab-pane fade show active" id="tab-export">
     <div class="card shadow-sm">
       <div class="card-body">
-        <p class="text-muted small mb-3">Generate Excel exports by district. Files are uploaded to the server for download.</p>
+        <p class="text-muted small mb-3">
+          Generates an Excel file of all voter records in a given district, enriched with
+          donor history, CRM match status, party, ethnicity model, and voting frequency scores.
+          Run <strong>CRM Sync → Match to Voter File</strong> and <strong>Donors</strong> first for complete data.
+        </p>
         <div class="row g-3 mb-3">
           <div class="col-md-4">
             <label class="form-label fw-semibold">District type</label>
@@ -44,6 +48,7 @@
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="vcFormat">
               <label class="form-check-label" for="vcFormat">Voter-contact format</label>
+              <div class="text-muted" style="font-size:.75rem">Condensed layout optimised for phone/canvass lists</div>
             </div>
           </div>
         </div>
@@ -59,17 +64,42 @@
   <div class="tab-pane fade" id="tab-crm">
     <div class="card shadow-sm">
       <div class="card-body">
+        <p class="text-muted small mb-3">
+          Pulls contacts and deals from your CRM platforms into the local database, then
+          optionally links each contact to their NYS voter record.
+          <strong>Typical order:</strong> HubSpot → Campaign Monitor → Match to Voter File.
+        </p>
         <div class="form-check mb-3">
           <input class="form-check-input" type="checkbox" id="fullSync">
-          <label class="form-check-label" for="fullSync">Full re-sync (slower, re-processes all records)</label>
+          <label class="form-check-label" for="fullSync">Full re-sync
+            <span class="text-muted fw-normal">(deletes and reloads all records — use if data looks stale)</span>
+          </label>
         </div>
-        <div class="d-flex flex-wrap gap-2 mb-3">
-          <button class="btn btn-primary" onclick="vpRunFull('crm-sync')">
-            <i class="bi bi-arrow-repeat me-1"></i>All CRM
-          </button>
-          <button class="btn btn-outline-secondary" onclick="vpRunFull('hubspot-sync')">HubSpot</button>
-          <button class="btn btn-outline-secondary" onclick="vpRunFull('cm-sync')">Campaign Monitor</button>
-          <button class="btn btn-outline-secondary" onclick="vpRunFull('crm-enrich')">Enrich Contacts</button>
+        <div class="row g-2 mb-1">
+          <div class="col-auto">
+            <button class="btn btn-primary" onclick="vpRunFull('crm-sync')">
+              <i class="bi bi-arrow-repeat me-1"></i>All CRM
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">HubSpot + Campaign Monitor + voter match in one go</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRunFull('hubspot-sync')">
+              <i class="bi bi-cloud-download me-1"></i>HubSpot
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Sync contacts &amp; deals from all HubSpot accounts</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRunFull('cm-sync')">
+              <i class="bi bi-cloud-download me-1"></i>Campaign Monitor
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Sync subscribers from all Campaign Monitor accounts</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRunFull('crm-enrich')">
+              <i class="bi bi-person-check me-1"></i>Match to Voter File
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Look up each contact in the voter file — copies party, district, voting history &amp; demographics onto the contact record</div>
+          </div>
         </div>
 
         <!-- Per-account progress cards -->
@@ -91,18 +121,42 @@
   <div class="tab-pane fade" id="tab-donors">
     <div class="card shadow-sm">
       <div class="card-body">
-        <p class="text-muted small mb-3">Downloads donor data from government sources and enriches the voter file.</p>
+        <p class="text-muted small mb-3">
+          Downloads campaign finance data from government sources and matches donors to voter records.
+          After this runs, each matched voter gains donation totals, R/D splits, and last-gift details.
+          Run individual sources to update just one dataset without re-downloading all three.
+        </p>
         <div class="form-check mb-3">
           <input class="form-check-input" type="checkbox" id="donorRefresh">
-          <label class="form-check-label" for="donorRefresh">Download fresh data (re-download from source)</label>
+          <label class="form-check-label" for="donorRefresh">Download fresh data
+            <span class="text-muted fw-normal">(re-downloads source files — skip if already downloaded recently)</span>
+          </label>
         </div>
-        <div class="d-flex flex-wrap gap-2">
-          <button class="btn btn-primary" onclick="vpRun('donors', document.getElementById('donorRefresh').checked ? '--refresh' : '--no-refresh')">
-            <i class="bi bi-currency-dollar me-1"></i>All Donors
-          </button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('boe-enrich', '')">State (BOE)</button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('national-enrich', '')">National (FEC)</button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('cfb-enrich', '')">NYC (CFB)</button>
+        <div class="row g-2">
+          <div class="col-auto">
+            <button class="btn btn-primary" onclick="vpRun('donors', document.getElementById('donorRefresh').checked ? '--refresh' : '--no-refresh')">
+              <i class="bi bi-currency-dollar me-1"></i>All Donors
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Runs BOE + FEC + CFB in sequence</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRun('boe-enrich', '')">
+              <i class="bi bi-building me-1"></i>State (BOE)
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">NY Board of Elections — state &amp; local race donations</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRun('national-enrich', '')">
+              <i class="bi bi-flag me-1"></i>National (FEC)
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Federal Election Commission — federal race donations</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRun('cfb-enrich', '')">
+              <i class="bi bi-buildings me-1"></i>NYC (CFB)
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">NYC Campaign Finance Board — city race donations</div>
+          </div>
         </div>
         <div id="log-donors"></div>
       </div>
@@ -113,19 +167,45 @@
   <div class="tab-pane fade" id="tab-enrich">
     <div class="card shadow-sm">
       <div class="card-body">
-        <p class="text-muted small mb-3">Database enrichment operations — adds computed columns to the voter file.</p>
-        <div class="d-flex flex-wrap gap-2 mb-3">
-          <button class="btn btn-primary" onclick="vpRun('ethnicity', '')">
-            <i class="bi bi-people me-1"></i>Build Ethnicity Model
-          </button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('enrich-derived', '')">Enrich Derived</button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('district-scores', '')">District Scores</button>
-          <button class="btn btn-outline-secondary" onclick="vpRun('party-snapshot', '')">Party Snapshot</button>
+        <p class="text-muted small mb-3">
+          Adds computed and modelled columns <em>directly to the voter file</em> — these are derived from
+          data already in the database, not downloaded from external sources.
+          <span class="text-muted">Note: this is different from <strong>CRM Sync → Match to Voter File</strong>,
+          which enriches your <em>CRM contacts</em> with voter data.</span>
+        </p>
+        <div class="row g-2 mb-3">
+          <div class="col-auto">
+            <button class="btn btn-primary" onclick="vpRun('ethnicity', '')">
+              <i class="bi bi-people me-1"></i>Build Ethnicity Model
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Runs name-based probability model to predict ethnicity for every voter record</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRun('enrich-derived', '')">
+              <i class="bi bi-calculator me-1"></i>Enrich Derived
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Computes age ranges, voting frequency scores, and other calculated fields</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRun('district-scores', '')">
+              <i class="bi bi-bar-chart me-1"></i>District Scores
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Calculates per-district voter engagement and turnout scores</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRun('party-snapshot', '')">
+              <i class="bi bi-camera me-1"></i>Party Snapshot
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Records a point-in-time snapshot of current party registrations for trend tracking</div>
+          </div>
         </div>
-        <div class="d-flex flex-wrap gap-2">
-          <button class="btn btn-outline-secondary" onclick="vpRun('fb-audiences', '--list-audiences')">
-            <i class="bi bi-facebook me-1"></i>List FB Audiences
-          </button>
+        <div class="row g-2">
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRun('fb-audiences', '--list-audiences')">
+              <i class="bi bi-meta me-1"></i>List FB Audiences
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Shows all configured Facebook custom audiences and their current sizes</div>
+          </div>
         </div>
         <div id="log-enrich"></div>
       </div>
