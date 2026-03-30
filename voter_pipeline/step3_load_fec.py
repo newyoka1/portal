@@ -9,7 +9,7 @@ Hash-based change detection: skips if extracted files are unchanged.
 
 Called by: python main.py national-enrich --refresh
 """
-import csv, os, time, sys, hashlib
+import csv, io, os, time, sys, hashlib, tempfile
 from pathlib import Path
 from datetime import datetime
 
@@ -107,6 +107,74 @@ def parse_name(n):
 
 
 # ---------------------------------------------------------------------------
+# LOAD DATA LOCAL INFILE helper
+# ---------------------------------------------------------------------------
+def _load_data_infile(cur, conn, tmp_path: Path, table: str, columns: str,
+                      ignore: bool = True):
+    """
+    LOAD DATA LOCAL INFILE from tmp_path into table.
+    Falls back to batch INSERT if local_infile is disabled.
+    Returns number of rows affected.
+    """
+    infile = str(tmp_path).replace('\\', '/')
+    ignore_kw = "IGNORE" if ignore else ""
+    try:
+        cur.execute(f"""
+            LOAD DATA LOCAL INFILE '{infile}'
+            {ignore_kw} INTO TABLE {table}
+            CHARACTER SET utf8mb4
+            FIELDS TERMINATED BY ','  OPTIONALLY ENCLOSED BY '"'
+            LINES TERMINATED BY '\\n'
+            ({columns})
+        """)
+        conn.commit()
+        return cur.rowcount
+    except Exception as e:
+        es = str(e)
+        if ("local_infile" in es.lower() or "1148" in es or "3948" in es
+                or "loading local data is disabled" in es.lower()):
+            print(f"    LOAD DATA not available — using batch INSERT fallback...")
+            return _batch_insert_csv(cur, conn, tmp_path, table, columns)
+        raise
+
+
+def _batch_insert_csv(cur, conn, csv_path: Path, table: str, columns: str,
+                      batch_size: int = 5000) -> int:
+    """Batch INSERT fallback used when LOAD DATA LOCAL INFILE is unavailable."""
+    col_list = [c.strip() for c in columns.split(',')]
+    placeholders = ','.join(['%s'] * len(col_list))
+    sql = f"INSERT IGNORE INTO {table} ({columns}) VALUES ({placeholders})"
+    total = 0
+    batch = []
+    with open(csv_path, newline='', encoding='utf-8') as f:
+        for row in csv.reader(f):
+            row = [None if v == '' else v for v in row]
+            batch.append(row)
+            if len(batch) >= batch_size:
+                cur.executemany(sql, batch)
+                conn.commit()
+                total += len(batch)
+                batch = []
+    if batch:
+        cur.executemany(sql, batch)
+        conn.commit()
+        total += len(batch)
+    return total
+
+
+def _write_csv_rows(rows: list) -> Path:
+    """Write rows to a temp CSV file, return the Path."""
+    tmp = tempfile.NamedTemporaryFile(
+        mode='w', suffix='.csv', delete=False,
+        newline='', encoding='utf-8'
+    )
+    w = csv.writer(tmp)
+    w.writerows(rows)
+    tmp.close()
+    return Path(tmp.name)
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 def main():
@@ -117,9 +185,15 @@ def main():
 
     print(f"Cycles ({len(CYCLES)} total, ~10 years): {', '.join(map(str, CYCLES))}")
 
-    # Connect without a default database so we can CREATE it if needed
-    conn = get_conn(database=None, autocommit=False)
+    # Connect with local_infile enabled
+    conn = get_conn(database=None, autocommit=False, local_infile=True)
     cur  = conn.cursor()
+
+    # Try to enable server-side local_infile (may fail on restricted servers)
+    try:
+        cur.execute("SET GLOBAL local_infile = 1")
+    except Exception:
+        pass
 
     print("\nCreating National_Donors database...")
     cur.execute("CREATE DATABASE IF NOT EXISTS National_Donors CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci")
@@ -211,30 +285,28 @@ CREATE TABLE IF NOT EXISTS committee_to_candidate (
     if cm_files:
         for cm_file in cm_files:
             print(f"  {cm_file.parent.name}...")
-            batch, cnt = [], 0
+            rows = []
             with open(cm_file, 'r', encoding='latin-1', errors='replace') as f:
                 for row in csv.reader(f, delimiter='|'):
                     if len(row) < 10:
                         continue
-                    cnt += 1
-                    batch.append((
+                    rows.append((
                         row[0][:9],
                         row[1][:200],
                         row[10][:3] if len(row) > 10 else None,
                         row[9][:1],
+                        None,  # classified_party
                     ))
-                    if len(batch) >= 5000:
-                        cur.executemany(
-                            "INSERT IGNORE INTO fec_committees VALUES (%s,%s,%s,%s,%s)",
-                            [b + (None,) for b in batch])
-                        conn.commit()
-                        batch = []
-                if batch:
-                    cur.executemany(
-                        "INSERT IGNORE INTO fec_committees VALUES (%s,%s,%s,%s,%s)",
-                        [b + (None,) for b in batch])
-                    conn.commit()
-            print(f"    {cnt:,} committees")
+            if rows:
+                tmp = _write_csv_rows(rows)
+                try:
+                    n = _load_data_infile(
+                        cur, conn, tmp, "fec_committees",
+                        "committee_id,committee_name,party_affiliation,committee_type,classified_party"
+                    )
+                    print(f"    {len(rows):,} committees ({n:,} inserted)")
+                finally:
+                    tmp.unlink(missing_ok=True)
     else:
         print("  WARNING: No committee files found")
 
@@ -244,25 +316,22 @@ CREATE TABLE IF NOT EXISTS committee_to_candidate (
     if cn_files:
         for cn_file in cn_files:
             print(f"  {cn_file.parent.name}...")
-            batch, cnt = [], 0
+            rows = []
             with open(cn_file, 'r', encoding='latin-1', errors='replace') as f:
                 for row in csv.reader(f, delimiter='|'):
                     if len(row) < 5:
                         continue
-                    cnt += 1
-                    batch.append((row[0][:9], row[1][:200], row[2][:3], row[4][:1]))
-                    if len(batch) >= 5000:
-                        cur.executemany(
-                            "INSERT IGNORE INTO fec_candidates VALUES (%s,%s,%s,%s)",
-                            batch)
-                        conn.commit()
-                        batch = []
-                if batch:
-                    cur.executemany(
-                        "INSERT IGNORE INTO fec_candidates VALUES (%s,%s,%s,%s)",
-                        batch)
-                    conn.commit()
-            print(f"    {cnt:,} candidates")
+                    rows.append((row[0][:9], row[1][:200], row[2][:3], row[4][:1]))
+            if rows:
+                tmp = _write_csv_rows(rows)
+                try:
+                    n = _load_data_infile(
+                        cur, conn, tmp, "fec_candidates",
+                        "candidate_id,candidate_name,party,office"
+                    )
+                    print(f"    {len(rows):,} candidates ({n:,} inserted)")
+                finally:
+                    tmp.unlink(missing_ok=True)
     else:
         print("  WARNING: No candidate files found")
 
@@ -270,12 +339,13 @@ CREATE TABLE IF NOT EXISTS committee_to_candidate (
     # itpas2.txt layout: col0=CMTE_ID, col16=CAND_ID, col13=DATE, col14=AMT
     print("\nLoading committee-to-candidate disbursements (pas2)...")
     cur.execute("TRUNCATE TABLE committee_to_candidate")
+    conn.commit()
     pas2_files = sorted(EXTRACT_DIR.glob("pas2*/itpas2.txt"))
     if pas2_files:
         total_pas2 = 0
         for pas2_file in pas2_files:
             print(f"  {pas2_file.parent.name}...")
-            batch, cnt = [], 0
+            rows = []
             with open(pas2_file, 'r', encoding='latin-1', errors='replace') as f:
                 for row in csv.reader(f, delimiter='|'):
                     if len(row) < 17:
@@ -290,24 +360,22 @@ CREATE TABLE IF NOT EXISTS committee_to_candidate (
                         amt = 0.0
                     if amt <= 0:
                         continue
-                    cnt += 1
-                    batch.append((
+                    rows.append((
                         cmte_id, cand_id, amt,
                         parse_date(row[13] if len(row) > 13 else ''),
                     ))
-                    if len(batch) >= 5000:
-                        cur.executemany(
-                            "INSERT IGNORE INTO committee_to_candidate VALUES (%s,%s,%s,%s)",
-                            batch)
-                        conn.commit()
-                        batch = []
-            if batch:
-                cur.executemany(
-                    "INSERT IGNORE INTO committee_to_candidate VALUES (%s,%s,%s,%s)",
-                    batch)
-                conn.commit()
-            total_pas2 += cnt
-            print(f"    {cnt:,} disbursements")
+            if rows:
+                tmp = _write_csv_rows(rows)
+                try:
+                    n = _load_data_infile(
+                        cur, conn, tmp, "committee_to_candidate",
+                        "committee_id,candidate_id,contribution_amount,transaction_date",
+                        ignore=False
+                    )
+                    total_pas2 += len(rows)
+                    print(f"    {len(rows):,} disbursements ({n:,} inserted)")
+                finally:
+                    tmp.unlink(missing_ok=True)
         print(f"  Total: {total_pas2:,} committee-to-candidate records")
     else:
         print("  WARNING: No pas2 files found - run step1 with pas2 in cycle list")
@@ -325,8 +393,9 @@ CREATE TABLE IF NOT EXISTS committee_to_candidate (
             continue
 
         print(f"\n{cycle} ({cycle-1}-{cycle})...")
-        batch, ny, tot = [], 0, 0
         start = time.time()
+        ny = tot = 0
+        rows = []
 
         try:
             with open(itc, 'r', encoding='latin-1', errors='replace') as f:
@@ -344,11 +413,10 @@ CREATE TABLE IF NOT EXISTS committee_to_candidate (
                         amt = float(row[14]) if len(row) > 14 and row[14] else 0.0
                     except Exception:
                         amt = 0.0
-
                     if amt <= 0:
                         continue
 
-                    batch.append((
+                    rows.append((
                         row[0][:9]  if row[0]  else None,
                         last, first,
                         row[8][:100]  if len(row) > 8  else None,
@@ -359,32 +427,29 @@ CREATE TABLE IF NOT EXISTS committee_to_candidate (
                         cycle,
                     ))
 
-                    if len(batch) >= 5000:
-                        cur.executemany(
-                            "INSERT IGNORE INTO fec_contributions "
-                            "(committee_id, contributor_last_name, contributor_first_name, "
-                            " contributor_city, contributor_state, contributor_zip, "
-                            " contribution_amount, contribution_date, transaction_id, cycle) "
-                            "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                            batch)
-                        conn.commit()
-                        rate = ny / (time.time() - start) if (time.time() - start) > 0 else 0
-                        print(f"\r  {ny:,} NY ({tot:,} scanned, {rate:.0f}/sec)",
+                    if tot % 500_000 == 0:
+                        elapsed = time.time() - start or 0.001
+                        print(f"\r  Scanning: {tot // 1_000_000:.1f}M rows, "
+                              f"{ny:,} NY kept ({tot/elapsed:.0f}/sec)  ",
                               end='', flush=True)
-                        batch = []
 
-            if batch:
-                cur.executemany(
-                    "INSERT IGNORE INTO fec_contributions "
-                    "(committee_id, contributor_last_name, contributor_first_name, "
-                    " contributor_city, contributor_state, contributor_zip, "
-                    " contribution_amount, contribution_date, transaction_id, cycle) "
-                    "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                    batch)
-                conn.commit()
+            print(f"\r  Scanned {tot:,} rows, {ny:,} NY contributors kept  ")
 
-            print(f"\n  {ny:,} NY contributions")
-            total_loaded += ny
+            if rows:
+                print(f"  Writing temp CSV ({len(rows):,} rows)...")
+                tmp = _write_csv_rows(rows)
+                try:
+                    n = _load_data_infile(
+                        cur, conn, tmp, "fec_contributions",
+                        "committee_id,contributor_last_name,contributor_first_name,"
+                        "contributor_city,contributor_state,contributor_zip,"
+                        "contribution_amount,contribution_date,transaction_id,cycle"
+                    )
+                    elapsed = time.time() - start
+                    print(f"  {n:,} rows inserted in {elapsed:.0f}s")
+                    total_loaded += n
+                finally:
+                    tmp.unlink(missing_ok=True)
 
         except Exception as e:
             print(f"\n  Error loading {cycle}: {e}")
