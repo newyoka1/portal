@@ -285,6 +285,7 @@ def main():
 
     conn = connect()
     cur  = conn.cursor()
+    cur.execute(f"USE {CRM_DB}")   # TEMPORARY TABLEs require a default database
     columns = discover_voter_columns(cur)
 
     if args.stats:
