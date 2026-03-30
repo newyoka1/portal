@@ -216,14 +216,16 @@ def run(force: bool = False):
                     results.append((fname, "UNCHANGED", fmt_size(csv_dest.stat().st_size) if csv_dest.exists() else ""))
                 else:
                     # Extract nested CSV: outer ZIP → inner ZIP (BytesIO) → CSV
-                    print(f"  Extracting {csv_nm}...")
-                    t1 = time.time()
                     with zipfile.ZipFile(tmp_path) as outer:
                         inner_bytes = io.BytesIO(outer.read(inner_zip))
                     with zipfile.ZipFile(inner_bytes) as inner:
-                        info    = inner.getinfo(csv_nm)
-                        total_b = info.file_size
-                        written = 0
+                        total_b = inner.getinfo(csv_nm).file_size
+                    # Emit the "-> filename  (N MB expected)" marker the JS bar detects
+                    print(f"  -> {csv_nm}  ({total_b // 1_000_000} MB expected)")
+                    t1 = time.time()
+                    written = 0
+                    inner_bytes.seek(0)  # rewind BytesIO before second open
+                    with zipfile.ZipFile(inner_bytes) as inner:
                         with inner.open(csv_nm) as src, open(csv_dest, "wb") as dst:
                             while True:
                                 buf = src.read(4 * 1024 * 1024)
@@ -231,18 +233,19 @@ def run(force: bool = False):
                                     break
                                 dst.write(buf)
                                 written += len(buf)
-                                if total_b > 100_000_000:
-                                    pct = written / total_b * 100
-                                    print(f"\r    {written/1e9:.2f}/{total_b/1e9:.2f} GB ({pct:.0f}%)", end="", flush=True)
-                    if total_b > 100_000_000:
-                        print()
+                                elapsed_x = time.time() - t1 or 0.001
+                                mb  = written / 1_000_000
+                                spd = mb / elapsed_x
+                                print(f"\r    {mb:.1f} MB  ({spd:.1f} MB/s)    ", end="", flush=True)
+                    elapsed_x = time.time() - t1 or 0.001
+                    mb  = written / 1_000_000
+                    spd = mb / elapsed_x
+                    print(f"\r    {mb:.1f} MB in {elapsed_x:.0f}s  ({spd:.1f} MB/s)    ")
                     # Delete outer ZIP, save MD5 sidecar for next-run change detection
                     tmp_path.unlink()
                     md5_file.write_text(new_hash)
-                    csv_size = csv_dest.stat().st_size
-                    print(f"  ✓ {csv_nm}: {fmt_size(csv_size)}  ({time.time()-t1:.0f}s)")
                     print(f"  🗑  Deleted {fname} ({fmt_size(zip_size)} freed)")
-                    results.append((fname, "UPDATED" if old_hash else "NEW", fmt_size(csv_size)))
+                    results.append((fname, "UPDATED" if old_hash else "NEW", fmt_size(written)))
 
             except PWTimeout:
                 print(f"  ERROR: download timed out (10 min limit)")
