@@ -37,8 +37,23 @@ Column layout (58 cols, verified):
 import os, io, zipfile, hashlib, tempfile, time, datetime, subprocess, sys
 from pathlib import Path
 
+import pymysql
 sys.path.insert(0, str(Path(__file__).parent))
 from utils.db import get_conn
+
+
+def _drop_and_create(cur, table_name, create_sql):
+    """DROP + CREATE with retry if InnoDB DDL purge lags behind."""
+    cur.execute(f"DROP TABLE IF EXISTS {table_name}")
+    try:
+        cur.execute(create_sql)
+    except pymysql.err.OperationalError as e:
+        if e.args[0] == 1050:
+            time.sleep(1)
+            cur.execute(f"DROP TABLE IF EXISTS {table_name}")
+            cur.execute(create_sql)
+        else:
+            raise
 
 
 def _auto_download_boe():
@@ -110,8 +125,7 @@ def get_stored_hash(cur):
 
 
 def store_hash(cur, file_hash, total_raw, total_contribs, total_donors):
-    cur.execute("DROP TABLE IF EXISTS load_metadata")
-    cur.execute("""CREATE TABLE load_metadata (
+    _drop_and_create(cur, "load_metadata", """CREATE TABLE load_metadata (
         id INT AUTO_INCREMENT PRIMARY KEY,
         load_type VARCHAR(50), file_hash VARCHAR(32),
         total_raw_rows INT, total_contributions INT, total_donors INT,
@@ -150,11 +164,12 @@ def stream_extract_csv(outer_zip_path, inner_zip_name, csv_name, tmp_path):
 
 
 def load_raw_table(cur, table_name, tmp_path):
-    cur.execute(f"DROP TABLE IF EXISTS {table_name}")
-    cur.execute(f"""CREATE TABLE {table_name} (
-        id BIGINT AUTO_INCREMENT PRIMARY KEY,
-        {COL_DEFS}
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci""")
+    _drop_and_create(cur, table_name,
+        f"CREATE TABLE {table_name} ("
+        f"  id BIGINT AUTO_INCREMENT PRIMARY KEY,"
+        f"  {COL_DEFS}"
+        f") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci"
+    )
     infile = Path(tmp_path).as_posix()
     # Ensure the connection won't time out on large files
     cur.execute("SET SESSION net_read_timeout = 600")
@@ -348,8 +363,7 @@ print(f"OK: {total_raw_rows:,} total raw rows loaded\n")
 # Step 3: Contributions
 # --------------------------------------------------
 print(f"Step 3: Building contributions table (Sched A, Individual, {YEAR_MIN}-{YEAR_MAX})...")
-cur.execute("DROP TABLE IF EXISTS contributions")
-cur.execute("""CREATE TABLE contributions (
+_drop_and_create(cur, "contributions", """CREATE TABLE contributions (
     id        BIGINT AUTO_INCREMENT PRIMARY KEY,
     filer_id  INT,
     year      INT,
@@ -388,8 +402,7 @@ print(f"OK: {total_contributions:,} total individual contributions\n")
 # Step 4: Match to voter_file
 # --------------------------------------------------
 print("Step 4: Matching to voter_file (name + zip5)...")
-cur.execute("DROP TABLE IF EXISTS voter_contribs")
-cur.execute("""CREATE TABLE voter_contribs (
+_drop_and_create(cur, "voter_contribs", """CREATE TABLE voter_contribs (
     StateVoterId VARCHAR(50),
     year         INT,
     party        CHAR(1),
@@ -457,8 +470,7 @@ for yr in YEARS:
         f"y{yr}_U_count INT DEFAULT 0",
     ]
 
-cur.execute("DROP TABLE IF EXISTS boe_donor_summary")
-cur.execute(
+_drop_and_create(cur, "boe_donor_summary",
     "CREATE TABLE boe_donor_summary (\n"
     "    StateVoterId  VARCHAR(50) PRIMARY KEY,\n"
     "    " + ",\n    ".join(year_col_defs) + ",\n"
@@ -526,8 +538,7 @@ print(f"  Setting last_date and last_filer...")
 # Use a regular (non-TEMPORARY) work table so MySQL can reference it
 # multiple times in the same statement — TEMPORARY tables cannot be
 # opened twice in a single query (MySQL bug #14521).
-cur.execute("DROP TABLE IF EXISTS _boe_last_donation")
-cur.execute("""
+_drop_and_create(cur, "_boe_last_donation", """
     CREATE TABLE _boe_last_donation (
         StateVoterId VARCHAR(50) PRIMARY KEY,
         last_date    DATE,
