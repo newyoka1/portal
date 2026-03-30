@@ -74,8 +74,13 @@ async def _stream(args: list[str], cwd: str, env: dict | None = None):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
-        async for line in proc.stdout:
-            yield line.decode("utf-8", errors="replace")
+        # Read in chunks (not lines) so \r progress prints flush through nginx
+        # without waiting for a \n — avoids proxy_read_timeout on long syncs.
+        while True:
+            chunk = await proc.stdout.read(4096)
+            if not chunk:
+                break
+            yield chunk.decode("utf-8", errors="replace")
         await proc.wait()
         yield f"\n[Exit code: {proc.returncode}]\n"
     except Exception as exc:
