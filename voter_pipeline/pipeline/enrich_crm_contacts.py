@@ -137,6 +137,21 @@ def ensure_columns(cur):
                 resized += 1
                 print(f"  ~ Resized column: {crm_col} ({current} -> {sql_type})")
 
+    # Base tracking columns the incremental logic depends on
+    if "created_at" not in existing:
+        cur.execute(
+            f"ALTER TABLE {CRM_DB}.contacts "
+            "ADD COLUMN `created_at` DATETIME DEFAULT CURRENT_TIMESTAMP")
+        added += 1
+        print("  + Added column: created_at")
+    if "updated_at" not in existing:
+        cur.execute(
+            f"ALTER TABLE {CRM_DB}.contacts "
+            "ADD COLUMN `updated_at` DATETIME "
+            "DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP")
+        added += 1
+        print("  + Added column: updated_at")
+
     # Enrichment timestamp
     if ENRICHED_AT_COL not in existing:
         cur.execute(f"ALTER TABLE {CRM_DB}.contacts ADD COLUMN `{ENRICHED_AT_COL}` DATETIME DEFAULT NULL")
@@ -265,8 +280,13 @@ def enrich(cur, columns, full=False):
     else:
         watermark = get_watermark(cur)
         if watermark:
-            # New rows since last run OR previously unmatched
-            where = (f"(c.updated_at > '{watermark}' OR c.`{ENRICHED_AT_COL}` IS NULL)")
+            # New rows since last run OR previously unmatched.
+            # updated_at may be NULL on rows that predate the column addition —
+            # COALESCE treats those as epoch so they don't block processing.
+            where = (
+                f"(COALESCE(c.updated_at, '1970-01-01') > '{watermark}'"
+                f" OR c.`{ENRICHED_AT_COL}` IS NULL)"
+            )
             print(f"  Mode: INCREMENTAL (since {watermark})")
         else:
             where = "1=1"
