@@ -363,6 +363,9 @@ def main():
     # pipeline
     sub.add_parser("pipeline", help="Load all voters + match all audiences (statewide)")
 
+    # voter-file-load  (alias for pipeline — for portal UI)
+    sub.add_parser("voter-file-load", help="Load voter file ZIPs from data/zipped/ into MySQL")
+
     # export
     p_exp = sub.add_parser("export", help="Export district to Excel")
     p_exp.add_argument("--ld");     p_exp.add_argument("--sd")
@@ -621,8 +624,8 @@ def _dispatch(args, verbosity):
                 print(f"    {Path(f).name:<45} {file_age_str(f)}")
         print()
 
-    # ── pipeline ──────────────────────────────────────────────────────────────
-    elif args.command == "pipeline":
+    # ── pipeline / voter-file-load ────────────────────────────────────────────
+    elif args.command in ("pipeline", "voter-file-load"):
         run("pipeline/pipeline.py", verbosity_level=verbosity)
 
     # ── export ────────────────────────────────────────────────────────────────

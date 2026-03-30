@@ -3,8 +3,8 @@ import os
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
+from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
 from auth import require_user
@@ -305,6 +305,92 @@ def voter_data_status(current_user: User = Depends(require_user)):
     ]
 
     return _JSONResponse({"groups": groups})
+
+
+# ── Voter file chunked upload ──────────────────────────────────────────────────
+
+ZIPPED_DIR = VOTER_DIR / "data" / "zipped"
+
+@router.post("/voter-file-chunk")
+async def voter_file_chunk(
+    chunk:    UploadFile = File(...),
+    offset:   int        = Form(...),
+    filename: str        = Form(...),
+    current_user: User   = Depends(require_user),
+):
+    """Receive one chunk of a voter file ZIP and write it at the correct offset."""
+    ZIPPED_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = Path(filename).name          # strip any path traversal
+    tmp       = ZIPPED_DIR / (safe_name + ".uploading")
+    data      = await chunk.read()
+    mode      = "r+b" if tmp.exists() and offset > 0 else "wb"
+    with open(tmp, mode) as f:
+        f.seek(offset)
+        f.write(data)
+    return JSONResponse({"ok": True, "offset": offset, "written": len(data)})
+
+
+@router.post("/voter-file-finalize")
+async def voter_file_finalize(
+    request:      Request,
+    current_user: User = Depends(require_user),
+):
+    """Rename the completed .uploading temp file to its final name."""
+    body     = await request.json()
+    filename = Path(body["filename"]).name
+    tmp      = ZIPPED_DIR / (filename + ".uploading")
+    dst      = ZIPPED_DIR / filename
+    if not tmp.exists():
+        return JSONResponse({"ok": False, "error": "temp file not found"}, status_code=400)
+    tmp.rename(dst)
+    size_mb = round(dst.stat().st_size / 1_048_576, 1)
+    return JSONResponse({"ok": True, "path": str(dst), "size_mb": size_mb})
+
+
+@router.get("/voter-file-status")
+def voter_file_status(current_user: User = Depends(require_user)):
+    """Return current voter ZIP files and voter_file row count."""
+    import time as _time
+    from fastapi.responses import JSONResponse as _J
+
+    zipped = ZIPPED_DIR if ZIPPED_DIR.exists() else None
+    files  = []
+    if zipped:
+        for f in sorted(zipped.glob("*.zip")):
+            stat = f.stat()
+            age  = _time.time() - stat.st_mtime
+            if age < 3600:      age_str = f"{int(age/60)}m ago"
+            elif age < 86400:   age_str = f"{age/3600:.1f}h ago"
+            elif age < 86400*7: age_str = f"{age/86400:.0f}d ago"
+            else:
+                from datetime import datetime as _dt
+                age_str = _dt.fromtimestamp(stat.st_mtime).strftime("%-d %b %Y")
+            files.append({"name": f.name, "size_mb": round(stat.st_size/1_048_576, 1), "age_str": age_str})
+        # also report any in-progress uploads
+        for f in sorted(zipped.glob("*.uploading")):
+            stat = f.stat()
+            files.append({"name": f.name + " (uploading…)", "size_mb": round(stat.st_size/1_048_576, 1), "age_str": "in progress"})
+
+    row_count = None
+    try:
+        import pymysql
+        from dotenv import load_dotenv
+        load_dotenv(VOTER_DIR / ".env")
+        conn = pymysql.connect(
+            host=os.getenv("DB_HOST", os.getenv("MYSQL_HOST", "127.0.0.1")),
+            port=int(os.getenv("DB_PORT", os.getenv("MYSQL_PORT", "3306"))),
+            user=os.getenv("DB_USER", os.getenv("MYSQL_USER", "root")),
+            password=os.getenv("DB_PASSWORD", os.getenv("MYSQL_PASSWORD", "")),
+            database="nys_voter_tagging", charset="utf8mb4", connect_timeout=5,
+        )
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM voter_file")
+            row_count = cur.fetchone()[0]
+        conn.close()
+    except Exception:
+        pass
+
+    return _J({"files": files, "row_count": row_count})
 
 
 @router.post("/run")

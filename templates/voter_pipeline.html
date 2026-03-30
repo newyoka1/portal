@@ -139,6 +139,7 @@
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-crm">CRM Sync</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-donors">Donors</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-enrich">Voter File Enrich</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-voterfile">Voter File</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-status">Status</a></li>
 </ul>
 
@@ -647,6 +648,84 @@
     </div>
   </div>
 
+  <!-- ── VOTER FILE ───────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="tab-voterfile">
+
+    <!-- Status row -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold">Voter File Status</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadVoterFileStatus()">
+          <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+        </button>
+      </div>
+      <div class="card-body" id="vf-status-body">
+        <div class="text-muted small">Click Refresh to load status.</div>
+      </div>
+    </div>
+
+    <!-- Upload card -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white py-2">
+        <span class="fw-semibold"><i class="bi bi-upload me-1"></i>Upload Voter File ZIP</span>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Select the NYS voter file ZIP from your local machine. The file is uploaded in
+          50 MB chunks directly to <code>data/zipped/</code> on the server — no size limit.
+          After upload completes, click <strong>Load Voter File</strong> below.
+        </p>
+        <div class="mb-3">
+          <input class="form-control" type="file" id="vfFileInput" accept=".zip">
+        </div>
+        <!-- Upload progress (hidden until started) -->
+        <div id="vf-upload-progress" class="d-none mb-3">
+          <div class="d-flex justify-content-between small text-muted mb-1">
+            <span id="vf-upload-label">Uploading…</span>
+            <span id="vf-upload-stats" class="text-info font-monospace"></span>
+          </div>
+          <div class="progress" style="height:6px">
+            <div id="vf-upload-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width:0%"></div>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="vf-upload-btn" onclick="uploadVoterFile()">
+          <i class="bi bi-cloud-upload me-1"></i>Upload
+        </button>
+        <span id="vf-upload-status" class="ms-3 small text-muted"></span>
+      </div>
+    </div>
+
+    <!-- Load card -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white py-2">
+        <span class="fw-semibold"><i class="bi bi-database-up me-1"></i>Load Voter File into MySQL</span>
+      </div>
+      <div class="card-body">
+        <p class="text-muted small mb-3">
+          Extracts ZIP(s) from <code>data/zipped/</code>, loads all ~13M voter records into
+          <code>nys_voter_tagging.voter_file</code>, and rebuilds audience tables.
+          This takes 20–40 minutes on first load.
+        </p>
+        <button class="btn btn-primary" onclick="vpRun('voter-file-load', '', this)">
+          <i class="bi bi-play-fill me-1"></i>Load Voter File
+        </button>
+      </div>
+    </div>
+
+    <!-- Terminal output -->
+    <div id="log-voterfile-wrap" class="d-none">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
+          <span class="small" id="log-voterfile-label"><i class="bi bi-terminal me-1"></i>Output</span>
+          <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-voterfile-wrap').classList.add('d-none')">×</button>
+        </div>
+        <div id="log-voterfile" class="bg-dark text-light p-3 rounded-bottom small"
+             style="max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
+      </div>
+    </div>
+
+  </div>
+
   <!-- ── STATUS ──────────────────────────────────────────────────────────── -->
   <div class="tab-pane fade" id="tab-status">
     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -682,6 +761,7 @@ const CMD_TAB = {
   'ethnicity':'enrich', 'enrich-derived':'enrich',
   'district-scores':'enrich', 'party-snapshot':'enrich',
   'fb-audiences':'enrich', 'fb-push':'enrich',
+  'voter-file-load':'voterfile',
 };
 
 const CRM_CMDS = new Set(['crm-sync','hubspot-sync','cm-sync','crm-enrich','crm-phone','crm-extended-match']);
@@ -1296,6 +1376,110 @@ async function runStream(cmd, extra, tab, triggerBtn) {
   }
 }
 
+/* ── Voter File: status ──────────────────────────────────────────────────── */
+async function loadVoterFileStatus() {
+  const body = document.getElementById('vf-status-body');
+  body.innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Loading…</div>';
+  try {
+    const d = await (await fetch('/voter-pipeline/voter-file-status')).json();
+
+    let html = '<div class="row g-3">';
+
+    // MySQL row count
+    const rowBadge = d.row_count != null
+      ? `<span class="badge bg-success">${Number(d.row_count).toLocaleString()} rows loaded</span>`
+      : `<span class="badge bg-secondary">Not loaded</span>`;
+    html += `<div class="col-auto"><div class="small text-muted mb-1">voter_file (MySQL)</div>${rowBadge}</div>`;
+
+    // ZIP files
+    if (d.files && d.files.length) {
+      html += '<div class="col-12"><div class="small text-muted mb-1">data/zipped/</div><ul class="list-unstyled mb-0">';
+      d.files.forEach(f => {
+        html += `<li class="small"><i class="bi bi-file-zip me-1 text-warning"></i>
+          <strong>${f.name}</strong> &nbsp;${f.size_mb} MB &nbsp;
+          <span class="text-muted">${f.age_str}</span></li>`;
+      });
+      html += '</ul></div>';
+    } else {
+      html += '<div class="col-12"><div class="small text-muted mb-1">data/zipped/</div><span class="badge bg-warning text-dark">No ZIP files found</span></div>';
+    }
+
+    html += '</div>';
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = `<div class="text-danger small">Error: ${e.message}</div>`;
+  }
+}
+
+/* ── Voter File: chunked upload ──────────────────────────────────────────── */
+async function uploadVoterFile() {
+  const input  = document.getElementById('vfFileInput');
+  const btn    = document.getElementById('vf-upload-btn');
+  const status = document.getElementById('vf-upload-status');
+  const prog   = document.getElementById('vf-upload-progress');
+  const bar    = document.getElementById('vf-upload-bar');
+  const label  = document.getElementById('vf-upload-label');
+  const stats  = document.getElementById('vf-upload-stats');
+
+  if (!input.files.length) { alert('Please select a ZIP file first.'); return; }
+  const file     = input.files[0];
+  const CHUNK    = 50 * 1024 * 1024;   // 50 MB per chunk
+  const total    = file.size;
+  const filename = file.name;
+
+  btn.disabled  = true;
+  prog.classList.remove('d-none');
+  label.textContent = filename;
+  status.textContent = '';
+
+  const t0 = Date.now();
+  let offset = 0;
+
+  try {
+    while (offset < total) {
+      const slice = file.slice(offset, offset + CHUNK);
+      const fd    = new FormData();
+      fd.append('chunk',    slice, filename);
+      fd.append('offset',   offset);
+      fd.append('filename', filename);
+
+      const resp = await fetch('/voter-pipeline/voter-file-chunk', { method: 'POST', body: fd });
+      if (!resp.ok) throw new Error(`Chunk upload failed: ${resp.status}`);
+      offset += slice.size;
+
+      const pct     = Math.min(100, (offset / total * 100)).toFixed(1);
+      const elapsed = (Date.now() - t0) / 1000 || 0.001;
+      const mbDone  = (offset / 1_000_000).toFixed(0);
+      const mbTotal = (total  / 1_000_000).toFixed(0);
+      const spd     = (offset / 1_000_000 / elapsed).toFixed(1);
+      bar.style.width        = pct + '%';
+      stats.textContent      = `${mbDone} / ${mbTotal} MB · ${spd} MB/s`;
+    }
+
+    // Finalise
+    const fin = await fetch('/voter-pipeline/voter-file-finalize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename }),
+    });
+    const res = await fin.json();
+    if (!res.ok) throw new Error(res.error || 'Finalize failed');
+
+    bar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+    bar.classList.add('bg-success');
+    bar.style.width   = '100%';
+    stats.textContent = `${res.size_mb} MB — complete`;
+    status.innerHTML  = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>Upload complete — click Load Voter File to continue.</span>';
+    loadVoterFileStatus();
+  } catch(e) {
+    status.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${e.message}</span>`;
+    bar.classList.add('bg-danger');
+    bar.classList.remove('progress-bar-animated');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 // Auto-load stats when the page is ready
 document.addEventListener('DOMContentLoaded', () => {
   loadStats();
@@ -1304,6 +1488,12 @@ document.addEventListener('DOMContentLoaded', () => {
   let dataStatusLoaded = false;
   document.querySelector('a[href="#tab-status"]')?.addEventListener('shown.bs.tab', () => {
     if (!dataStatusLoaded) { dataStatusLoaded = true; loadDataStatus(); }
+  });
+
+  // Auto-load voter file status when that tab is first clicked
+  let vfStatusLoaded = false;
+  document.querySelector('a[href="#tab-voterfile"]')?.addEventListener('shown.bs.tab', () => {
+    if (!vfStatusLoaded) { vfStatusLoaded = true; loadVoterFileStatus(); }
   });
 
   // Run-order guide: restore last open/closed state, animate chevron
