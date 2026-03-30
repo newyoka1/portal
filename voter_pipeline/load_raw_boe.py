@@ -58,8 +58,9 @@ def _auto_download_boe():
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-BOE_DIR  = Path(__file__).parent / "data" / "boe_donors"
-TEMP_DIR = Path(tempfile.gettempdir())
+BOE_DIR     = Path(__file__).parent / "data" / "boe_donors"
+EXTRACT_DIR = BOE_DIR / "extracted"
+TEMP_DIR    = Path(tempfile.gettempdir())
 
 SOURCES = [
     ("ALL_REPORTS_StateCandidate.zip",  "STATE_CANDIDATE.zip",  "STATE_CANDIDATE.csv",  "raw_state_candidate",  "SC"),
@@ -260,15 +261,23 @@ print("OK: boe_donors database ready\n")
 # Step 1: Hash check
 # --------------------------------------------------
 print("Step 1: Checking for changes...")
-zip_files = [BOE_DIR / s[0] for s in SOURCES]
-missing = [f for f in zip_files if not f.exists()]
-if missing:
+# Prefer extracted CSVs (ZIPs deleted after extraction); fall back to legacy ZIPs
+csv_files = [EXTRACT_DIR / s[2] for s in SOURCES]
+zip_files  = [BOE_DIR    / s[0] for s in SOURCES]
+
+if all(f.exists() for f in csv_files):
+    source_files = csv_files
+elif all(f.exists() for f in zip_files):
+    source_files = zip_files
+else:
+    missing = [f for f in csv_files if not f.exists()]
     for f in missing:
         print(f"  ERROR: Missing source file: {f}")
+    print("  Run: python main.py boe-download")
     conn.close()
     exit(1)
 
-current_hash = calculate_hash(zip_files)
+current_hash = calculate_hash(source_files)
 print(f"  Hash: {current_hash}")
 
 stored_hash = get_stored_hash(cur)
@@ -293,22 +302,35 @@ print("  NOTE: Committee files are 2-5 GB uncompressed - allow several minutes\n
 
 total_raw_rows = 0
 for outer_name, inner_zip, csv_name, raw_table, src_code in SOURCES:
-    outer_path = BOE_DIR / outer_name
-    tmp_path = TEMP_DIR / f"boe_{raw_table}.csv"
-
     print(f"  [{src_code}] {csv_name}")
     t0 = time.time()
 
-    print(f"    Extracting...", end='', flush=True)
-    bytes_written = stream_extract_csv(outer_path, inner_zip, csv_name, tmp_path)
-    print(f" {bytes_written / 1e6:.1f} MB  ({time.time() - t0:.1f}s)")
+    extracted_csv = EXTRACT_DIR / csv_name
+    outer_path    = BOE_DIR / outer_name
+    tmp_path      = None
+
+    if extracted_csv.exists():
+        # Fast path: CSV already extracted by download_boe.py
+        load_path = extracted_csv
+        print(f"    Using extracted CSV: {extracted_csv.stat().st_size/1e6:.0f} MB")
+    elif outer_path.exists():
+        # Legacy fallback: extract from nested ZIP on the fly
+        tmp_path = TEMP_DIR / f"boe_{raw_table}.csv"
+        print(f"    Extracting from ZIP...", end='', flush=True)
+        bytes_written = stream_extract_csv(outer_path, inner_zip, csv_name, tmp_path)
+        print(f" {bytes_written/1e6:.1f} MB  ({time.time()-t0:.1f}s)")
+        load_path = tmp_path
+    else:
+        print(f"    ERROR: neither {extracted_csv} nor {outer_path} found")
+        exit(1)
 
     print(f"    Loading into {raw_table}...", end='', flush=True)
     t1 = time.time()
-    row_count = load_raw_table(cur, raw_table, tmp_path)
-    tmp_path.unlink(missing_ok=True)
+    row_count = load_raw_table(cur, raw_table, load_path)
+    if tmp_path:
+        tmp_path.unlink(missing_ok=True)
     total_raw_rows += row_count
-    print(f" {row_count:,} rows  ({time.time() - t1:.1f}s)\n")
+    print(f" {row_count:,} rows  ({time.time()-t1:.1f}s)\n")
 
 print(f"OK: {total_raw_rows:,} total raw rows loaded\n")
 

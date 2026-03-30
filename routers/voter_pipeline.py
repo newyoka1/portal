@@ -277,13 +277,13 @@ def voter_data_status(current_user: User = Depends(require_user)):
 
     groups = [
         {
-            "label": "BOE State Campaign Finance",
+            "label": "BOE State Campaign Finance (extracted)",
             "key":   "boe",
-            "files": [_file_info(boe_dir / f) for f in [
-                "ALL_REPORTS_StateCandidate.zip",
-                "ALL_REPORTS_CountyCandidate.zip",
-                "ALL_REPORTS_StateCommittee.zip",
-                "ALL_REPORTS_CountyCommittee.zip",
+            "files": [_file_info(boe_dir / "extracted" / f) for f in [
+                "STATE_CANDIDATE.csv",
+                "COUNTY_CANDIDATE.csv",
+                "STATE_COMMITTEE.csv",
+                "COUNTY_COMMITTEE.csv",
             ]],
         },
         {

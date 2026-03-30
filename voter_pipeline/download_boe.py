@@ -16,18 +16,30 @@ Run:
 
 import argparse
 import hashlib
+import io
 import os
 import shutil
 import sys
 import time
+import zipfile
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
-BOE_DIR = Path(__file__).parent / "data" / "boe_donors"
+BOE_DIR     = Path(__file__).parent / "data" / "boe_donors"
+EXTRACT_DIR = BOE_DIR / "extracted"
 BOE_DIR.mkdir(parents=True, exist_ok=True)
+EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Maps outer ZIP filename → (inner ZIP name, CSV name)
+UNPACK = {
+    "ALL_REPORTS_StateCandidate.zip":  ("STATE_CANDIDATE.zip",  "STATE_CANDIDATE.csv"),
+    "ALL_REPORTS_CountyCandidate.zip": ("COUNTY_CANDIDATE.zip", "COUNTY_CANDIDATE.csv"),
+    "ALL_REPORTS_StateCommittee.zip":  ("STATE_COMMITTEE.zip",  "STATE_COMMITTEE.csv"),
+    "ALL_REPORTS_CountyCommittee.zip": ("COUNTY_COMMITTEE.zip", "COUNTY_COMMITTEE.csv"),
+}
 
 BASE_URL   = "https://publicreporting.elections.ny.gov"
 PAGE_URL   = f"{BASE_URL}/DownloadCampaignFinanceData/DownloadCampaignFinanceData"
@@ -120,19 +132,22 @@ def run(force: bool = False):
         results = []
 
         for i, dl in enumerate(DOWNLOADS, 1):
-            fname    = dl["filename"]
-            dest     = BOE_DIR / fname
-            tmp_dir  = BOE_DIR / "_tmp"
+            fname             = dl["filename"]
+            inner_zip, csv_nm = UNPACK[fname]
+            csv_dest          = EXTRACT_DIR / csv_nm
+            md5_file          = EXTRACT_DIR / (csv_nm + ".md5")
+            tmp_dir           = BOE_DIR / "_tmp"
             tmp_dir.mkdir(exist_ok=True)
 
             print(f"[{i}/{len(DOWNLOADS)}] {fname}")
 
-            # Hash existing file for change detection
-            old_hash = file_md5(dest) if dest.exists() else None
-            if dest.exists():
-                print(f"  Existing file: {fmt_size(dest.stat().st_size)}  md5={old_hash[:8]}...")
+            # Change detection: compare MD5 of last downloaded outer ZIP
+            # (stored as a tiny sidecar file so we don't need to keep the ZIP)
+            old_hash = md5_file.read_text().strip() if md5_file.exists() else None
+            if csv_dest.exists():
+                print(f"  Extracted CSV: {fmt_size(csv_dest.stat().st_size)}")
 
-            if dest.exists() and not force:
+            if csv_dest.exists() and not force:
                 print("  Checking server for updates...")
 
             # Step 1: POST SetSessions via fetch() inside the browser page
@@ -189,24 +204,45 @@ def run(force: bool = False):
                     results.append((fname, "FAILED", "empty download"))
                     continue
 
-                new_size = tmp_path.stat().st_size
+                zip_size = tmp_path.stat().st_size
                 new_hash = file_md5(tmp_path)
 
-                print(f"  Downloaded: {fmt_size(new_size)}  in {elapsed:.0f}s")
+                print(f"  Downloaded: {fmt_size(zip_size)}  in {elapsed:.0f}s")
 
-                # Change detection
-                if old_hash and old_hash == new_hash:
-                    print(f"  UNCHANGED - skipping replace")
+                # Change detection vs stored MD5 of last outer ZIP
+                if old_hash and old_hash == new_hash and not force:
+                    print(f"  UNCHANGED - skipping extract")
                     tmp_path.unlink()
-                    results.append((fname, "UNCHANGED", fmt_size(new_size)))
+                    results.append((fname, "UNCHANGED", fmt_size(csv_dest.stat().st_size) if csv_dest.exists() else ""))
                 else:
-                    # Replace existing
-                    shutil.move(str(tmp_path), str(dest))
-                    if old_hash:
-                        print(f"  UPDATED  (md5 changed)")
-                    else:
-                        print(f"  SAVED  (new file)")
-                    results.append((fname, "UPDATED" if old_hash else "NEW", fmt_size(new_size)))
+                    # Extract nested CSV: outer ZIP → inner ZIP (BytesIO) → CSV
+                    print(f"  Extracting {csv_nm}...")
+                    t1 = time.time()
+                    with zipfile.ZipFile(tmp_path) as outer:
+                        inner_bytes = io.BytesIO(outer.read(inner_zip))
+                    with zipfile.ZipFile(inner_bytes) as inner:
+                        info    = inner.getinfo(csv_nm)
+                        total_b = info.file_size
+                        written = 0
+                        with inner.open(csv_nm) as src, open(csv_dest, "wb") as dst:
+                            while True:
+                                buf = src.read(4 * 1024 * 1024)
+                                if not buf:
+                                    break
+                                dst.write(buf)
+                                written += len(buf)
+                                if total_b > 100_000_000:
+                                    pct = written / total_b * 100
+                                    print(f"\r    {written/1e9:.2f}/{total_b/1e9:.2f} GB ({pct:.0f}%)", end="", flush=True)
+                    if total_b > 100_000_000:
+                        print()
+                    # Delete outer ZIP, save MD5 sidecar for next-run change detection
+                    tmp_path.unlink()
+                    md5_file.write_text(new_hash)
+                    csv_size = csv_dest.stat().st_size
+                    print(f"  ✓ {csv_nm}: {fmt_size(csv_size)}  ({time.time()-t1:.0f}s)")
+                    print(f"  🗑  Deleted {fname} ({fmt_size(zip_size)} freed)")
+                    results.append((fname, "UPDATED" if old_hash else "NEW", fmt_size(csv_size)))
 
             except PWTimeout:
                 print(f"  ERROR: download timed out (10 min limit)")
