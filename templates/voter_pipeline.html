@@ -183,7 +183,16 @@
           <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export Unmatched Contacts
         </button>
         <div class="text-muted mt-1" style="font-size:.75rem">Downloads all CRM contacts not yet matched to the voter file as CSV — useful for manual lookup or sending to a data vendor</div>
-        <div id="log-export"></div>
+        <div id="log-export-wrap" class="d-none mt-3">
+          <div class="card shadow-sm border-0">
+            <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
+              <span class="small" id="log-export-label"><i class="bi bi-terminal me-1"></i>Output</span>
+              <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-export-wrap').classList.add('d-none')">×</button>
+            </div>
+            <div id="log-export" class="bg-dark text-light p-3 rounded-bottom small"
+                 style="max-height:350px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -634,7 +643,16 @@
             </button>
           </div>
         </div>
-        <div id="log-enrich"></div>
+        <div id="log-enrich-wrap" class="d-none mt-3">
+          <div class="card shadow-sm border-0">
+            <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
+              <span class="small" id="log-enrich-label"><i class="bi bi-terminal me-1"></i>Output</span>
+              <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-enrich-wrap').classList.add('d-none')">×</button>
+            </div>
+            <div id="log-enrich" class="bg-dark text-light p-3 rounded-bottom small"
+                 style="max-height:350px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -778,6 +796,27 @@ function _setBadge(acctName, state) {
   badge.className = 'badge ' + cls;
 }
 
+/* ── Terminal buffer: handles \r carriage-return in-place progress lines ──── */
+function makeTermState(initText) {
+  return { stable: initText || '', current: '' };
+}
+function termAppend(state, container, chunk) {
+  for (let i = 0; i < chunk.length; i++) {
+    const ch = chunk[i];
+    if (ch === '\r' && chunk[i + 1] === '\n') {
+      state.stable += state.current + '\n'; state.current = ''; i++;
+    } else if (ch === '\n') {
+      state.stable += state.current + '\n'; state.current = '';
+    } else if (ch === '\r') {
+      state.current = '';            // overwrite current line (no newline)
+    } else {
+      state.current += ch;
+    }
+  }
+  container.textContent = state.stable + state.current;
+  container.scrollTop   = container.scrollHeight;
+}
+
 async function runCrmStream(cmd, extra) {
   const progressEl = document.getElementById('crm-progress');
   const logWrap    = document.getElementById('log-crm-wrap');
@@ -877,12 +916,12 @@ async function runCrmStream(cmd, extra) {
     }
     const reader = resp.body.getReader();
     const dec    = new TextDecoder();
+    const term   = makeTermState();
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       const chunk = dec.decode(value);
-      pre.textContent += chunk;
-      pre.scrollTop    = pre.scrollHeight;
+      termAppend(term, pre, chunk);
 
       // Parse line by line (split on \n or \r)
       lineBuffer += chunk;
@@ -1079,21 +1118,22 @@ function toggleFbDist() {
 }
 
 async function loadFbAudiences() {
-  const select = document.getElementById('fbAudience');
+  const select  = document.getElementById('fbAudience');
   select.innerHTML = '<option value="">Loading…</option>';
-  select.disabled = true;
+  select.disabled  = true;
 
-  const logEl = document.getElementById('log-enrich');
-  const pre   = document.createElement('pre');
-  pre.className = 'bg-dark text-light p-3 rounded small mt-2';
-  pre.style     = 'max-height:180px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;';
-  logEl.innerHTML = '';
-  logEl.appendChild(pre);
+  const wrap    = document.getElementById('log-enrich-wrap');
+  const labelEl = document.getElementById('log-enrich-label');
+  const logEl   = document.getElementById('log-enrich');
+  if (wrap)    { wrap.classList.remove('d-none'); wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  if (labelEl) labelEl.innerHTML = '<i class="bi bi-terminal me-1"></i>fb-push --list-audiences';
+  logEl.textContent = '▶ Loading audiences…\n';
 
   const fd = new FormData();
   fd.append('cmd',   'fb-push');
   fd.append('extra', '--list-audiences');
 
+  const term = makeTermState(logEl.textContent);
   let fullText = '';
   try {
     const resp   = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
@@ -1102,12 +1142,12 @@ async function loadFbAudiences() {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      fullText += dec.decode(value);
-      pre.textContent  = fullText;
-      pre.scrollTop    = pre.scrollHeight;
+      const chunk = dec.decode(value);
+      fullText += chunk;
+      termAppend(term, logEl, chunk);
     }
   } catch (err) {
-    pre.textContent += '\n[Error: ' + err.message + ']';
+    logEl.textContent += '\n[Error: ' + err.message + ']';
   }
 
   // Parse output lines like:  "  NYS_HARD_DEM                               57,123"
@@ -1178,6 +1218,66 @@ async function runStream(cmd, extra, tab, triggerBtn) {
   fd.append('cmd', cmd);
   fd.append('extra', extra || '');
 
+  // ── Download progress bar state ────────────────────────────────────────────
+  let dlBar   = null;   // injected <div> element
+  let dlTotal = 0;      // expected MB (from "(N MB expected)" line)
+
+  function _ensureDlBar() {
+    if (dlBar) return dlBar;
+    dlBar = document.createElement('div');
+    dlBar.className = 'border border-secondary rounded p-2 mb-1';
+    dlBar.style.background = '#1a1d21';
+    dlBar.innerHTML =
+      '<div class="d-flex justify-content-between align-items-center small mb-1">' +
+        '<span class="dl-fname text-light fw-semibold font-monospace"></span>' +
+        '<span class="dl-stats text-info font-monospace"></span>' +
+      '</div>' +
+      '<div class="progress" style="height:6px">' +
+        '<div class="progress-bar progress-bar-striped progress-bar-animated bg-info dl-fill" style="width:0%"></div>' +
+      '</div>';
+    container.parentNode.insertBefore(dlBar, container);
+    return dlBar;
+  }
+
+  function _updateDlBar(chunk) {
+    // New file: "-> filename.csv  (87 MB expected)"
+    const newDl = chunk.match(/-> ([\w._-]+)\s+\((\d+)\s+MB expected\)/);
+    if (newDl) {
+      dlTotal = parseFloat(newDl[2]);
+      const bar = _ensureDlBar();
+      bar.querySelector('.dl-fname').textContent = newDl[1];
+      bar.querySelector('.dl-stats').textContent = '0 / ' + dlTotal + ' MB';
+      const fill = bar.querySelector('.dl-fill');
+      fill.style.width = '0%';
+      fill.className = 'progress-bar progress-bar-striped progress-bar-animated bg-info dl-fill';
+      return;
+    }
+    if (!dlBar || dlTotal <= 0) return;
+
+    // Final line: "\r  77.6 MB in 9s  (8.1 MB/s)"
+    const done = chunk.match(/\r\s*([\d.]+)\s+MB in (\d+)s\s+\(([\d.]+)\s+MB\/s\)/);
+    if (done) {
+      const mb = parseFloat(done[1]), s = parseInt(done[2]), spd = parseFloat(done[3]);
+      dlBar.querySelector('.dl-stats').textContent =
+        mb.toFixed(1) + ' MB in ' + s + 's · ' + spd.toFixed(1) + ' MB/s';
+      const fill = dlBar.querySelector('.dl-fill');
+      fill.style.width = '100%';
+      fill.className = 'progress-bar bg-success dl-fill';
+      dlTotal = 0;
+      return;
+    }
+
+    // Progress: "\r  77.6 MB  (8.1 MB/s)"
+    const prog = chunk.match(/\r\s*([\d.]+)\s+MB\s+\(([\d.]+)\s+MB\/s\)/);
+    if (prog) {
+      const cur = parseFloat(prog[1]), spd = parseFloat(prog[2]);
+      const pct = Math.min(100, (cur / dlTotal) * 100).toFixed(1);
+      dlBar.querySelector('.dl-stats').textContent =
+        cur.toFixed(1) + ' / ' + dlTotal + ' MB · ' + spd.toFixed(1) + ' MB/s';
+      dlBar.querySelector('.dl-fill').style.width = pct + '%';
+    }
+  }
+
   try {
     const resp = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
     const ct   = resp.headers.get('content-type') || '';
@@ -1188,11 +1288,13 @@ async function runStream(cmd, extra, tab, triggerBtn) {
     }
     const reader = resp.body.getReader();
     const dec    = new TextDecoder();
+    const term   = makeTermState(container.textContent);
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      container.textContent += dec.decode(value);
-      container.scrollTop    = container.scrollHeight;
+      const chunk = dec.decode(value);
+      termAppend(term, container, chunk);
+      _updateDlBar(chunk);
     }
   } catch (err) {
     container.textContent += '\n[Error: ' + err.message + ']';
