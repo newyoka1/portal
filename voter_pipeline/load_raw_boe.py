@@ -151,6 +151,9 @@ def load_raw_table(cur, table_name, tmp_path):
         {COL_DEFS}
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci""")
     infile = Path(tmp_path).as_posix()
+    # Ensure the connection won't time out on large files
+    cur.execute("SET SESSION net_read_timeout = 600")
+    cur.execute("SET SESSION net_write_timeout = 600")
     try:
         cur.execute(
             f"LOAD DATA LOCAL INFILE '{infile}'"
@@ -161,7 +164,9 @@ def load_raw_table(cur, table_name, tmp_path):
             f" ({COL_LIST})"
         )
     except Exception as e:
-        if "local_infile" in str(e).lower() or "1148" in str(e) or "3948" in str(e) or "loading local data is disabled" in str(e).lower():
+        if ("local_infile" in str(e).lower() or "1148" in str(e) or "3948" in str(e)
+                or "loading local data is disabled" in str(e).lower()
+                or "input stream" in str(e).lower()):
             print(f"    LOAD DATA not available — using batch INSERT fallback...")
             _batch_insert_csv(cur, table_name, tmp_path)
         else:
