@@ -240,6 +240,10 @@ def enrich(cur, columns, full=False):
     """
     t0 = time.time()
 
+    # Give each statement up to 10 min to acquire locks — the contacts table
+    # can be held by lingering uvicorn connections or prior crashed runs.
+    cur.execute("SET SESSION innodb_lock_wait_timeout = 600")
+
     # Build SELECT/SET clauses from available columns
     vf_select = ", ".join([f"v.`{vf_col}`" for vf_col, _, _ in columns])
     set_clauses = ", ".join([f"c.`{crm_col}` = v.`{vf_col}`" for vf_col, crm_col, _ in columns])
