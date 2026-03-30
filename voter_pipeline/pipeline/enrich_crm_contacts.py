@@ -281,14 +281,16 @@ def enrich(cur, columns, full=False):
     # registration date (most likely the active record).
     print("  Matching: clean_last + clean_first + zip5 ...")
 
-    # Step 1: For each unmatched contact, find best voter match via temp table
+    # Step 1: For each unmatched contact, find best voter match via temp table.
+    # voter_file has LastName/FirstName (not pre-cleaned), so apply the same
+    # REGEXP_REPLACE(UPPER(...), '[^A-Z]', '') transform used by clean_name().
     cur.execute(f"""
         CREATE TEMPORARY TABLE _crm_vf_match AS
         SELECT c.id AS contact_id,
                (SELECT v.StateVoterId
                 FROM {VOTER_DB}.{VOTER_TBL} v
-                WHERE v.clean_last  = c.clean_last
-                  AND v.clean_first = c.clean_first
+                WHERE REGEXP_REPLACE(UPPER(v.LastName),  '[^A-Z]', '') = c.clean_last
+                  AND REGEXP_REPLACE(UPPER(v.FirstName), '[^A-Z]', '') = c.clean_first
                   AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5
                   AND v.RegistrationStatus = 'Active/Registered'
                 ORDER BY v.RegistrationDate DESC
