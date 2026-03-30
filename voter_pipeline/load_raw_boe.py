@@ -42,6 +42,16 @@ sys.path.insert(0, str(Path(__file__).parent))
 from utils.db import get_conn
 
 
+def _column_exists(cur, database, table, column):
+    """Check if a column exists in the given table (safe for optional enrichment cols)."""
+    cur.execute(
+        "SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s",
+        (database, table, column),
+    )
+    return cur.fetchone() is not None
+
+
 def _drop_and_create(cur, table_name, create_sql):
     """DROP + CREATE with retry if InnoDB DDL purge lags behind."""
     cur.execute(f"DROP TABLE IF EXISTS {table_name}")
@@ -431,25 +441,30 @@ exact = cur.rowcount
 print(f"  Exact: {exact:,} matched  ({time.time() - t0:.1f}s)")
 
 # Pass 2: hyphenated last-name fallback — two separate queries (avoids OR)
+# Requires clean_last_h1/h2 columns (created by 'python main.py pipeline')
 t0 = time.time()
 hyph = 0
-for part_label, part_col in [("h1", "clean_last_h1"), ("h2", "clean_last_h2")]:
-    cur.execute(
-        "INSERT IGNORE INTO voter_contribs (StateVoterId, year, party, total, count)"
-        " SELECT v.StateVoterId, c.year, c.party, SUM(c.amount), COUNT(*)"
-        " FROM nys_voter_tagging.voter_file v"
-        " JOIN boe_donors.contributions c"
-        f"   ON v.{part_col}  = c.last"
-        "  AND v.clean_first = c.first"
-        "  AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5"
-        f" WHERE v.{part_col} IS NOT NULL"
-        "  AND c.zip5 != ''"
-        " GROUP BY v.StateVoterId, c.year, c.party"
-    )
-    n = cur.rowcount
-    hyph += n
-    print(f"  Hyphenated ({part_label}): {n:,} additional  ({time.time() - t0:.1f}s)")
-    t0 = time.time()
+_has_hyph = _column_exists(cur, "nys_voter_tagging", "voter_file", "clean_last_h1")
+if _has_hyph:
+    for part_label, part_col in [("h1", "clean_last_h1"), ("h2", "clean_last_h2")]:
+        cur.execute(
+            "INSERT IGNORE INTO voter_contribs (StateVoterId, year, party, total, count)"
+            " SELECT v.StateVoterId, c.year, c.party, SUM(c.amount), COUNT(*)"
+            " FROM nys_voter_tagging.voter_file v"
+            " JOIN boe_donors.contributions c"
+            f"   ON v.{part_col}  = c.last"
+            "  AND v.clean_first = c.first"
+            "  AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5"
+            f" WHERE v.{part_col} IS NOT NULL"
+            "  AND c.zip5 != ''"
+            " GROUP BY v.StateVoterId, c.year, c.party"
+        )
+        n = cur.rowcount
+        hyph += n
+        print(f"  Hyphenated ({part_label}): {n:,} additional  ({time.time() - t0:.1f}s)")
+        t0 = time.time()
+else:
+    print("  Hyphenated: skipped (clean_last_h1/h2 not yet populated — run 'pipeline' first)")
 matched = exact + hyph
 print(f"OK: {matched:,} total matched records  ({time.time() - t0_total:.1f}s)\n")
 
@@ -561,20 +576,21 @@ cur.execute("""
     ON DUPLICATE KEY UPDATE last_date = VALUES(last_date)
 """)
 # Step A2: hyphenated fallback — two separate queries (avoids OR)
-for part_col in ["clean_last_h1", "clean_last_h2"]:
-    cur.execute(f"""
-        INSERT INTO _boe_last_donation (StateVoterId, last_date)
-        SELECT v.StateVoterId, MAX(c.date)
-        FROM nys_voter_tagging.voter_file v
-        JOIN boe_donors.contributions c
-          ON v.{part_col}  = c.last
-         AND v.clean_first = c.first
-         AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5
-        WHERE v.{part_col} IS NOT NULL
-          AND c.zip5 != '' AND c.date IS NOT NULL
-        GROUP BY v.StateVoterId
-        ON DUPLICATE KEY UPDATE last_date = GREATEST(last_date, VALUES(last_date))
-    """)
+if _has_hyph:
+    for part_col in ["clean_last_h1", "clean_last_h2"]:
+        cur.execute(f"""
+            INSERT INTO _boe_last_donation (StateVoterId, last_date)
+            SELECT v.StateVoterId, MAX(c.date)
+            FROM nys_voter_tagging.voter_file v
+            JOIN boe_donors.contributions c
+              ON v.{part_col}  = c.last
+             AND v.clean_first = c.first
+             AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5
+            WHERE v.{part_col} IS NOT NULL
+              AND c.zip5 != '' AND c.date IS NOT NULL
+            GROUP BY v.StateVoterId
+            ON DUPLICATE KEY UPDATE last_date = GREATEST(last_date, VALUES(last_date))
+        """)
 
 # Step B: filer at that max date (MIN for determinism on ties)
 # Regular table can be joined twice without the "Can't reopen" error.
@@ -597,24 +613,25 @@ cur.execute("""
     SET t.last_filer = x.filer
 """)
 # Hyphenated filer fallback
-for part_col in ["clean_last_h1", "clean_last_h2"]:
-    cur.execute(f"""
-        UPDATE _boe_last_donation t
-        JOIN (
-            SELECT v.StateVoterId, MIN(c.filer) AS filer
-            FROM nys_voter_tagging.voter_file v
-            JOIN boe_donors.contributions c
-              ON v.{part_col}  = c.last
-             AND v.clean_first = c.first
-             AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5
-            JOIN _boe_last_donation t2 ON v.StateVoterId = t2.StateVoterId
-            WHERE v.{part_col} IS NOT NULL
-              AND c.zip5 != ''
-              AND c.date = t2.last_date
-            GROUP BY v.StateVoterId
-        ) x ON t.StateVoterId = x.StateVoterId
-        SET t.last_filer = COALESCE(t.last_filer, x.filer)
-    """)
+if _has_hyph:
+    for part_col in ["clean_last_h1", "clean_last_h2"]:
+        cur.execute(f"""
+            UPDATE _boe_last_donation t
+            JOIN (
+                SELECT v.StateVoterId, MIN(c.filer) AS filer
+                FROM nys_voter_tagging.voter_file v
+                JOIN boe_donors.contributions c
+                  ON v.{part_col}  = c.last
+                 AND v.clean_first = c.first
+                 AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5
+                JOIN _boe_last_donation t2 ON v.StateVoterId = t2.StateVoterId
+                WHERE v.{part_col} IS NOT NULL
+                  AND c.zip5 != ''
+                  AND c.date = t2.last_date
+                GROUP BY v.StateVoterId
+            ) x ON t.StateVoterId = x.StateVoterId
+            SET t.last_filer = COALESCE(t.last_filer, x.filer)
+        """)
 
 # Apply to summary
 cur.execute("""
