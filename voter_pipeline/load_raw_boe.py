@@ -2,19 +2,24 @@
 """
 Load BOE Bulk Reports - Full audit trail.
 
-Sources (data/boe_donors/):
-  ALL_REPORTS_StateCandidate.zip   -> raw_state_candidate   (source='SC')
-  ALL_REPORTS_CountyCandidate.zip  -> raw_county_candidate  (source='CC')
-  ALL_REPORTS_StateCommittee.zip   -> raw_state_committee   (source='SM')
-  ALL_REPORTS_CountyCommittee.zip  -> raw_county_committee  (source='CM')
+Sources (data/boe_donors/extracted/):
+  STATE_CANDIDATE.csv   -> raw_state_candidate   (source='SC')
+  COUNTY_CANDIDATE.csv  -> raw_county_candidate  (source='CC')
+  STATE_COMMITTEE.csv   -> raw_state_committee   (source='SM')
+  COUNTY_COMMITTEE.csv  -> raw_county_committee  (source='CM')
+
+CSVs are produced by download_boe.py, which downloads the 4 outer ZIPs from the
+BOE site, extracts the nested CSV from each, and deletes the ZIPs.
+Legacy fallback: if extracted CSVs don't exist, stream-extracts from the outer ZIPs.
 
 Flow:
-  1. Hash check  - skip if all 4 zips unchanged
-  2. Stream-extract each CSV -> temp file -> LOAD DATA LOCAL INFILE -> raw_* table
+  1. download_boe.py — download ZIPs, extract CSVs, delete ZIPs (called automatically)
+  2. Hash check  - skip if all 4 CSVs unchanged
+  3. LOAD DATA LOCAL INFILE each CSV -> raw_* table
      (raw tables = complete audit trail, all years, all schedule types)
-  3. Build contributions (Sched A + Individual, last 10 years) from raw tables via SQL
-  4. Add indexes, match to voter_file
-  5. Build boe_donor_summary:
+  4. Build contributions (Sched A + Individual, last 10 years) from raw tables via SQL
+  5. Add indexes, match to voter_file
+  6. Build boe_donor_summary:
        - D/R/U amount + count per year (rolling 10 years)
        - Grand total D/R/U amount + count
        - Overall total amount + count
