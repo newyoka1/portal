@@ -26,7 +26,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-BOE_DIR = Path(r"D:\git\nys-voter-pipeline\data\boe_donors")
+BOE_DIR = Path(__file__).parent / "data" / "boe_donors"
 BOE_DIR.mkdir(parents=True, exist_ok=True)
 
 BASE_URL   = "https://publicreporting.elections.ny.gov"
