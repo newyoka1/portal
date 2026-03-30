@@ -240,21 +240,29 @@ def voter_data_status(current_user: User = Depends(require_user)):
         if not p.exists():
             return {"name": p.name, "exists": False, "size_mb": None,
                     "age_seconds": None, "age_str": "missing", "mtime": None}
-        stat = p.stat()
-        age  = now - stat.st_mtime
-        if age < 3600:    age_str = f"{int(age/60)}m ago"
-        elif age < 86400: age_str = f"{age/3600:.1f}h ago"
+        if p.is_dir():
+            files   = list(p.rglob("*"))
+            total   = sum(f.stat().st_size for f in files if f.is_file())
+            mtime   = max((f.stat().st_mtime for f in files if f.is_file()), default=p.stat().st_mtime)
+            size_mb = round(total / 1_048_576, 1)
+        else:
+            stat    = p.stat()
+            mtime   = stat.st_mtime
+            size_mb = round(stat.st_size / 1_048_576, 1)
+        age = now - mtime
+        if age < 3600:      age_str = f"{int(age/60)}m ago"
+        elif age < 86400:   age_str = f"{age/3600:.1f}h ago"
         elif age < 86400*7: age_str = f"{age/86400:.0f}d ago"
         else:
             from datetime import datetime as _dt
-            age_str = _dt.fromtimestamp(stat.st_mtime).strftime("%-d %b %Y")
+            age_str = _dt.fromtimestamp(mtime).strftime("%-d %b %Y")
         return {
-            "name":       p.name,
-            "exists":     True,
-            "size_mb":    round(stat.st_size / 1_048_576, 1),
+            "name":        p.name,
+            "exists":      True,
+            "size_mb":     size_mb,
             "age_seconds": int(age),
-            "age_str":    age_str,
-            "mtime":      stat.st_mtime,
+            "age_str":     age_str,
+            "mtime":       mtime,
         }
 
     # Reconstruct the same file lists as voter_pipeline/main.py
@@ -279,9 +287,9 @@ def voter_data_status(current_user: User = Depends(require_user)):
             ]],
         },
         {
-            "label": "FEC Federal Contributions",
+            "label": "FEC Federal Contributions (extracted)",
             "key":   "fec",
-            "files": [_file_info(fec_dir / f"indiv{str(c)[-2:]}.zip")
+            "files": [_file_info(fec_dir / "extracted" / f"indiv{str(c)[-2:]}")
                       for c in fec_cycles],
         },
         {

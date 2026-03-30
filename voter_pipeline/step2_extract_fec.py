@@ -12,9 +12,9 @@ EXTRACT_DIR.mkdir(exist_ok=True)
 zip_files = list(DATA_DIR.glob("*.zip"))
 
 if not zip_files:
-    print("\n❌ No zip files found")
-    print("   Run: python step1_download_fec.py")
-    exit(1)
+    print("\n✓ No ZIP files found — already extracted by step1 (download+extract)")
+    print("="*70)
+    exit(0)
 
 print(f"\nExtracting {len(zip_files)} files...")
 

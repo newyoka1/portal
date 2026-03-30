@@ -90,9 +90,9 @@ _current_year  = datetime.now().year
 _current_cycle = _current_year if _current_year % 2 == 0 else _current_year + 1
 FEC_CYCLES = [_current_cycle - (i * 2) for i in range(6)]
 
-# FEC zip hints for ask_refresh display
+# FEC extracted-dir hints for ask_refresh display (ZIPs deleted after extraction)
 FEC_FILES = [
-    os.path.join(BASE, "data", "fec_downloads", f"indiv{str(c)[-2:]}.zip")
+    os.path.join(BASE, "data", "fec_downloads", "extracted", f"indiv{str(c)[-2:]}")
     for c in FEC_CYCLES
 ]
 
@@ -120,9 +120,8 @@ class PipelineError(Exception):
 
 
 def run_fec_pipeline():
-    """Download, extract, load, and classify FEC data (4 steps)."""
+    """Download+extract, load, and classify FEC data (step1 now handles extraction)."""
     run("step1_download_fec.py")
-    run("step2_extract_fec.py")
     run("step3_load_fec.py")
     run("step4_classify_parties.py")
 
