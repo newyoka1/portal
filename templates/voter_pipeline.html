@@ -379,43 +379,33 @@
         <p class="text-muted small mb-3">
           Federal Election Commission individual contribution files — 6 election cycles (~10 years).
           Each step is independent so you can resume from any point if a step fails.
-          <strong>Steps:</strong> Download ZIPs → Extract → Load &amp; Classify → Enrich voter file.
+          <strong>Steps:</strong> Download &amp; Extract → Load &amp; Classify → Enrich voter file.
         </p>
         <div class="row g-2 mb-3">
           <!-- Step 1 -->
-          <div class="col-md-3">
+          <div class="col-md-4">
             <div class="border rounded p-2 h-100">
-              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download</div>
-              <div class="text-muted small mb-2">Downloads 6 cycles of FEC bulk ZIPs from <code>fec.gov</code> (~100–500 MB each). Hash-checked — skips unchanged cycles.</div>
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download &amp; Extract</div>
+              <div class="text-muted small mb-2">Downloads 6 cycles of FEC bulk ZIPs from <code>fec.gov</code>, extracts them immediately, then deletes the ZIPs. Hash-checked — skips unchanged cycles.</div>
               <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-download', '', this)">
-                <i class="bi bi-cloud-download me-1"></i>Download FEC
+                <i class="bi bi-cloud-download me-1"></i>Download &amp; Extract FEC
               </button>
             </div>
           </div>
           <!-- Step 2 -->
-          <div class="col-md-3">
+          <div class="col-md-4">
             <div class="border rounded p-2 h-100">
-              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Extract</div>
-              <div class="text-muted small mb-2">Unzips downloaded FEC archives into per-cycle subdirectories. Safe to re-run — overwrites existing extracted files.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-extract', '', this)">
-                <i class="bi bi-file-zip me-1"></i>Extract FEC
-              </button>
-            </div>
-          </div>
-          <!-- Step 3 -->
-          <div class="col-md-3">
-            <div class="border rounded p-2 h-100">
-              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Load &amp; Classify</div>
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Load &amp; Classify</div>
               <div class="text-muted small mb-2">Bulk-loads FEC <code>.txt</code> files into <code>National_Donors</code> DB via <code>LOAD DATA INFILE</code>, then classifies ~6K committees as D/R/Unknown.</div>
               <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-load', '', this)">
                 <i class="bi bi-database-up me-1"></i>Load &amp; Classify FEC
               </button>
             </div>
           </div>
-          <!-- Step 4 -->
-          <div class="col-md-3">
+          <!-- Step 3 -->
+          <div class="col-md-4">
             <div class="border rounded p-2 h-100">
-              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">4</span>Enrich Voter File</div>
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Enrich Voter File</div>
               <div class="text-muted small mb-2">Matches FEC contributions to voter_file by name+zip, writes national donation totals, D/R amounts, and <code>is_national_donor</code> flag.</div>
               <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-enrich', '', this)">
                 <i class="bi bi-person-vcard me-1"></i>Enrich Voter File ← FEC
@@ -685,7 +675,7 @@ const CMD_TAB = {
   'crm-enrich':'crm', 'crm-phone':'crm', 'crm-extended-match':'crm',
   'donors':'donors',
   'boe-enrich':'donors', 'boe-download':'donors', 'boe-load':'donors', 'boe-enrich-only':'donors',
-  'national-enrich':'donors', 'fec-download':'donors', 'fec-extract':'donors',
+  'national-enrich':'donors', 'fec-download':'donors',
   'fec-load':'donors', 'fec-enrich':'donors',
   'cfb-enrich':'donors', 'cfb-download':'donors', 'cfb-load':'donors',
   'reset':'donors',
