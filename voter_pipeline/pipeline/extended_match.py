@@ -392,6 +392,7 @@ def main():
 
     conn = connect()
     cur = conn.cursor()
+    cur.execute(f"USE {CRM_DB}")   # TEMPORARY TABLEs require a default database
     cur.execute("SET SESSION innodb_lock_wait_timeout = 600")
 
     columns = discover_voter_columns(cur)
