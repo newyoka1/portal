@@ -647,7 +647,8 @@
         <button class="btn btn-primary" onclick="vpRun('status', '', this)">
           <i class="bi bi-arrow-clockwise me-1"></i>Check Status
         </button>
-        <div id="log-status"></div>
+        <pre id="log-status" class="bg-dark text-light rounded small mt-3 p-3 d-none"
+             style="white-space:pre-wrap;word-break:break-all;max-height:500px;overflow-y:auto;"></pre>
       </div>
     </div>
   </div>
@@ -1085,7 +1086,8 @@ async function runStream(cmd, extra, tab, triggerBtn) {
     wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  // Show immediate feedback in container
+  // Show immediate feedback in container (unhide if it starts hidden)
+  container.classList.remove('d-none');
   container.textContent = `▶ Running: ${cmd}${extra ? ' ' + extra : ''}\n`;
   if (!wrap) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
