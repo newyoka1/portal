@@ -867,7 +867,12 @@ async function runCrmStream(cmd, extra) {
   }
 
   try {
-    const resp   = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
+    const resp = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
+    const ct   = resp.headers.get('content-type') || '';
+    if (!ct.includes('text/plain')) {
+      pre.textContent += '\n[Session expired — please refresh the page to log in again]\n';
+      return;
+    }
     const reader = resp.body.getReader();
     const dec    = new TextDecoder();
     while (true) {
@@ -1096,7 +1101,13 @@ async function runStream(cmd, extra, tab, triggerBtn) {
   fd.append('extra', extra || '');
 
   try {
-    const resp   = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
+    const resp = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
+    const ct   = resp.headers.get('content-type') || '';
+    if (!ct.includes('text/plain')) {
+      // Session expired — fetch followed a redirect to the login page (HTML)
+      container.textContent += '\n[Session expired — please refresh the page to log in again]\n';
+      return;
+    }
     const reader = resp.body.getReader();
     const dec    = new TextDecoder();
     while (true) {
