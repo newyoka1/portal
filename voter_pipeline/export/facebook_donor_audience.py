@@ -16,8 +16,8 @@ You will be prompted step-by-step for:
   5. Create new audience, append to existing, or replace existing
 
 Credentials: reads META_ACCESS_TOKEN and META_BUSINESS_IDS from either
-  - D:/git/nys-voter-pipeline/.env        (add them here to override)
-  - D:/git/facebook-receipt-automation/.env  (used as automatic fallback)
+  - voter_pipeline/.env        (add them here to override)
+  - portal .env / portal settings DB  (used as automatic fallback)
 """
 
 import hashlib
@@ -754,8 +754,8 @@ def main():
     if not token:
         sys.exit(
             '\nERROR: META_ACCESS_TOKEN not set.\n'
-            '  Add it to D:/git/nys-voter-pipeline/.env  OR\n'
-            '  ensure D:/git/facebook-receipt-automation/.env is present and has it.\n'
+            '  Add META_ACCESS_TOKEN to voter_pipeline/.env  OR\n'
+            '  set it in the portal Settings page (Meta section).\n'
             '  Get a System User token from: Meta Business Manager → Settings → System Users'
         )
     if not business_ids:

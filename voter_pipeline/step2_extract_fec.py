@@ -1,7 +1,7 @@
 ﻿import zipfile
 from pathlib import Path
 
-DATA_DIR = Path(r"D:\git\nys-voter-pipeline\data\fec_downloads")
+DATA_DIR = Path(__file__).parent / "data" / "fec_downloads"
 EXTRACT_DIR = DATA_DIR / "extracted"
 
 print("="*70)

@@ -33,7 +33,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import pymysql
 
-LOG_FILE = Path(r"D:\git\nys-voter-pipeline\data\cfb\load_out.txt")
+LOG_FILE = Path(__file__).parent / "data" / "cfb" / "load_out.txt"
 
 class Tee:
     def __init__(self, *files):
