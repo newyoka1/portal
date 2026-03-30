@@ -1,19 +1,18 @@
 import subprocess, sys
 from pathlib import Path
 
-GIT  = r"C:\Program Files\Git\cmd\git.exe"
-BASE = Path(r"D:\git\nys-voter-pipeline")
+BASE = Path(__file__).parent
 
 lines = []
 
 # Git log
-r = subprocess.run([GIT, "-C", str(BASE), "log", "--oneline", "-10"],
+r = subprocess.run(["git", "-C", str(BASE), "log", "--oneline", "-10"],
                    capture_output=True, text=True)
 lines.append("=== Git log (last 10) ===")
 lines.append(r.stdout.strip())
 
 # Git status
-r2 = subprocess.run([GIT, "-C", str(BASE), "status", "-sb"],
+r2 = subprocess.run(["git", "-C", str(BASE), "status", "-sb"],
                     capture_output=True, text=True)
 lines.append("")
 lines.append("=== Git status ===")
@@ -51,5 +50,5 @@ else:
 conn.close()
 
 out = "\n".join(lines)
-with open(r"D:\git\nys-voter-pipeline\_session_state_out.txt", "w", encoding="utf-8") as fh:
+with open(BASE / "_session_state_out.txt", "w", encoding="utf-8") as fh:
     fh.write(out + "\n")

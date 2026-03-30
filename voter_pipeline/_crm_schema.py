@@ -1,8 +1,9 @@
 """Check crm_unified schema."""
 import sys, traceback
-sys.path.insert(0, r"D:\git\nys-voter-pipeline")
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent))
 
-OUT = r"D:\git\nys-voter-pipeline\_crm_schema_out.txt"
+OUT = Path(__file__).parent / "_crm_schema_out.txt"
 
 lines = []
 try:

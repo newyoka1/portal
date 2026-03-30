@@ -40,6 +40,8 @@ out["all_ziogas_hits"] = len(rows2)
 
 conn.close()
 
-with open("D:\\git\\nys-voter-pipeline\\logs\\ziogas_boe.json","w") as f:
+_out = __import__('pathlib').Path(__file__).parent / "logs" / "ziogas_boe.json"
+_out.parent.mkdir(exist_ok=True)
+with open(_out, "w") as f:
     json.dump(out, f, indent=2, default=str)
 print(json.dumps(out, indent=2, default=str))
