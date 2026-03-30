@@ -228,6 +228,77 @@ def export_unmatched(current_user: User = Depends(require_user)):
     )
 
 
+@router.get("/data-status")
+def voter_data_status(current_user: User = Depends(require_user)):
+    """Return structured file status for all donor source data files."""
+    import time
+    from fastapi.responses import JSONResponse as _JSONResponse
+
+    now = time.time()
+
+    def _file_info(p: Path) -> dict:
+        if not p.exists():
+            return {"name": p.name, "exists": False, "size_mb": None,
+                    "age_seconds": None, "age_str": "missing", "mtime": None}
+        stat = p.stat()
+        age  = now - stat.st_mtime
+        if age < 3600:    age_str = f"{int(age/60)}m ago"
+        elif age < 86400: age_str = f"{age/3600:.1f}h ago"
+        elif age < 86400*7: age_str = f"{age/86400:.0f}d ago"
+        else:
+            from datetime import datetime as _dt
+            age_str = _dt.fromtimestamp(stat.st_mtime).strftime("%-d %b %Y")
+        return {
+            "name":       p.name,
+            "exists":     True,
+            "size_mb":    round(stat.st_size / 1_048_576, 1),
+            "age_seconds": int(age),
+            "age_str":    age_str,
+            "mtime":      stat.st_mtime,
+        }
+
+    # Reconstruct the same file lists as voter_pipeline/main.py
+    import datetime as _datetime
+    _cur_year  = _datetime.datetime.now().year
+    _cur_cycle = _cur_year if _cur_year % 2 == 0 else _cur_year + 1
+    fec_cycles = [_cur_cycle - (i * 2) for i in range(6)]
+
+    boe_dir = VOTER_DIR / "data" / "boe_donors"
+    fec_dir = VOTER_DIR / "data" / "fec_downloads"
+    cfb_dir = VOTER_DIR / "data" / "cfb"
+
+    groups = [
+        {
+            "label": "BOE State Campaign Finance",
+            "key":   "boe",
+            "files": [_file_info(boe_dir / f) for f in [
+                "ALL_REPORTS_StateCandidate.zip",
+                "ALL_REPORTS_CountyCandidate.zip",
+                "ALL_REPORTS_StateCommittee.zip",
+                "ALL_REPORTS_CountyCommittee.zip",
+            ]],
+        },
+        {
+            "label": "FEC Federal Contributions",
+            "key":   "fec",
+            "files": [_file_info(fec_dir / f"indiv{str(c)[-2:]}.zip")
+                      for c in fec_cycles],
+        },
+        {
+            "label": "NYC Campaign Finance Board (CFB)",
+            "key":   "cfb",
+            "files": [_file_info(cfb_dir / f) for f in [
+                "2017_Contributions.csv",
+                "2021_Contributions.csv",
+                "2023_Contributions.csv",
+                "2025_Contributions.csv",
+            ]],
+        },
+    ]
+
+    return _JSONResponse({"groups": groups})
+
+
 @router.post("/run")
 async def voter_run_stream(
     cmd:      str = Form(...),

@@ -641,14 +641,15 @@
 
   <!-- ── STATUS ──────────────────────────────────────────────────────────── -->
   <div class="tab-pane fade" id="tab-status">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <p class="text-muted small mb-3">Shows source file ages and last pipeline run times.</p>
-        <button class="btn btn-primary" onclick="vpRun('status', '', this)">
-          <i class="bi bi-arrow-clockwise me-1"></i>Check Status
-        </button>
-        <pre id="log-status" class="bg-dark text-light rounded small mt-3 p-3 d-none"
-             style="white-space:pre-wrap;word-break:break-all;max-height:500px;overflow-y:auto;"></pre>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="text-muted small">Source data file status — size, age, and download freshness.</span>
+      <button class="btn btn-sm btn-outline-secondary" onclick="loadDataStatus()" id="data-status-refresh">
+        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+      </button>
+    </div>
+    <div id="data-status-body">
+      <div class="text-center text-muted py-4">
+        <div class="spinner-border spinner-border-sm me-2"></div>Loading…
       </div>
     </div>
   </div>
@@ -916,6 +917,81 @@ function confirmReset(fullRebuild) {
   vpRun('reset', extra);
 }
 
+/* ── Data file status dashboard ─────────────────────────────────────────── */
+async function loadDataStatus() {
+  const body = document.getElementById('data-status-body');
+  const btn  = document.getElementById('data-status-refresh');
+  body.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading…</div>';
+  if (btn) btn.disabled = true;
+
+  try {
+    const resp = await fetch('/voter-pipeline/data-status');
+    const d    = await resp.json();
+
+    if (d.error) { body.innerHTML = `<div class="alert alert-danger">${d.error}</div>`; return; }
+
+    const groupColors = { boe: 'primary', fec: 'success', cfb: 'warning' };
+
+    const cards = (d.groups || []).map(g => {
+      const present = g.files.filter(f => f.exists).length;
+      const total   = g.files.length;
+      const allOk   = present === total;
+      const color   = groupColors[g.key] || 'secondary';
+
+      const rows = g.files.map(f => {
+        let badge, ageCls;
+        if (!f.exists) {
+          badge  = '<span class="badge bg-danger">missing</span>';
+          ageCls = 'text-danger';
+        } else if (f.age_seconds < 86400 * 7) {
+          badge  = '<span class="badge bg-success">fresh</span>';
+          ageCls = 'text-success';
+        } else if (f.age_seconds < 86400 * 60) {
+          badge  = '<span class="badge bg-warning text-dark">aging</span>';
+          ageCls = 'text-warning';
+        } else {
+          badge  = '<span class="badge bg-danger">stale</span>';
+          ageCls = 'text-danger';
+        }
+        const size = f.size_mb != null ? `${f.size_mb} MB` : '—';
+        return `<tr>
+          <td class="small">${f.name}</td>
+          <td class="small text-end text-muted">${size}</td>
+          <td class="small text-end ${ageCls}">${f.age_str}</td>
+          <td class="text-end">${badge}</td>
+        </tr>`;
+      }).join('');
+
+      const headerBadge = allOk
+        ? `<span class="badge bg-success ms-2">${present}/${total}</span>`
+        : `<span class="badge bg-danger ms-2">${present}/${total}</span>`;
+
+      return `<div class="card shadow-sm mb-3">
+        <div class="card-header py-2 bg-white d-flex justify-content-between align-items-center">
+          <span class="fw-semibold"><i class="bi bi-file-earmark-zip me-1 text-${color}"></i>${g.label}${headerBadge}</span>
+        </div>
+        <div class="card-body p-0">
+          <table class="table table-sm table-hover mb-0">
+            <thead class="table-light"><tr>
+              <th class="small fw-semibold">File</th>
+              <th class="small fw-semibold text-end">Size</th>
+              <th class="small fw-semibold text-end">Last Download</th>
+              <th class="small fw-semibold text-end">Status</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>`;
+    }).join('');
+
+    body.innerHTML = cards || '<div class="text-muted small">No file groups found.</div>';
+  } catch (err) {
+    body.innerHTML = `<div class="alert alert-danger small">Failed to load: ${err.message}</div>`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 /* ── Pipeline Health stats ───────────────────────────────────────────────── */
 async function loadStats() {
   const body = document.getElementById('stats-body');
@@ -1131,6 +1207,12 @@ async function runStream(cmd, extra, tab, triggerBtn) {
 // Auto-load stats when the page is ready
 document.addEventListener('DOMContentLoaded', () => {
   loadStats();
+
+  // Auto-load data status when the Status tab is first clicked
+  let dataStatusLoaded = false;
+  document.querySelector('a[href="#tab-status"]')?.addEventListener('shown.bs.tab', () => {
+    if (!dataStatusLoaded) { dataStatusLoaded = true; loadDataStatus(); }
+  });
 
   // Run-order guide: restore last open/closed state, animate chevron
   const runOrderEl  = document.getElementById('runOrderBody');
