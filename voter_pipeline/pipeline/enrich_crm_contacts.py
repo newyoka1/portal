@@ -268,11 +268,23 @@ def enrich(cur, columns, full=False):
         print("  Nothing to do.")
         return 0
 
-    # Clear existing voter data for contacts being reprocessed
-    null_clauses = ", ".join([f"c.`{crm_col}` = NULL" for _, crm_col, _ in columns])
-    null_clauses += f", c.`{ENRICHED_AT_COL}` = NULL"
-    cur.execute(f"UPDATE {CRM_DB}.contacts c SET {null_clauses} WHERE {where}")
-    cleared = cur.rowcount
+    # Clear existing voter data for contacts being reprocessed.
+    # Batched in chunks of 10K to avoid InnoDB lock-wait timeouts on large tables.
+    null_clauses = ", ".join([f"`{crm_col}` = NULL" for _, crm_col, _ in columns])
+    null_clauses += f", `{ENRICHED_AT_COL}` = NULL"
+    cur.execute(f"SELECT MIN(id), MAX(id) FROM {CRM_DB}.contacts WHERE {where}")
+    id_range = cur.fetchone()
+    cleared = 0
+    if id_range and id_range[0] is not None:
+        min_id, max_id = id_range
+        batch = 10_000
+        for start in range(min_id, max_id + 1, batch):
+            cur.execute(
+                f"UPDATE {CRM_DB}.contacts SET {null_clauses} "
+                f"WHERE id >= %s AND id < %s AND ({where})",
+                (start, start + batch),
+            )
+            cleared += cur.rowcount
     print(f"  Cleared {cleared:,} contacts for re-matching")
 
     # ── Match 1: clean_last + clean_first + zip5 ────────────────────────────
