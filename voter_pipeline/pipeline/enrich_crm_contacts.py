@@ -143,6 +143,15 @@ def ensure_columns(cur):
         added += 1
         print(f"  + Added column: {ENRICHED_AT_COL}")
 
+    # vf_match_method — which pass produced the match
+    if "vf_match_method" not in existing:
+        cur.execute(
+            f"ALTER TABLE {CRM_DB}.contacts "
+            "ADD COLUMN `vf_match_method` VARCHAR(30) DEFAULT NULL "
+            f"AFTER `{ENRICHED_AT_COL}`")
+        added += 1
+        print("  + Added column: vf_match_method")
+
     # Index on vf_state_voter_id for reverse lookups
     cur.execute(
         "SELECT COUNT(*) FROM information_schema.STATISTICS "
@@ -247,7 +256,7 @@ def enrich(cur, columns, full=False):
     # Build SELECT/SET clauses from available columns
     vf_select = ", ".join([f"v.`{vf_col}`" for vf_col, _, _ in columns])
     set_clauses = ", ".join([f"c.`{crm_col}` = v.`{vf_col}`" for vf_col, crm_col, _ in columns])
-    set_clauses += f", c.`{ENRICHED_AT_COL}` = NOW()"
+    set_clauses += f", c.`{ENRICHED_AT_COL}` = NOW(), c.`vf_match_method` = 'name_zip'"
 
     # Scope: which contacts to process
     if full:

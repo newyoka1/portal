@@ -126,6 +126,18 @@
             </button>
             <div class="text-muted mt-1" style="font-size:.75rem">Second-pass: matches unmatched contacts to voter file using phone numbers — recovers an estimated 30–50K additional matches</div>
           </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRun('crm-extended-match', '', this)">
+              <i class="bi bi-person-plus me-1"></i>Extended Match
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Third-pass: 3 extra high-confidence strategies — hyphenated surnames, compound first names, inactive voter records</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-sm btn-outline-info mt-1" onclick="vpRun('crm-extended-match', '--dry-run', this)">
+              <i class="bi bi-eye me-1"></i>Dry Run
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Count potential extended matches without writing</div>
+          </div>
         </div>
 
         <!-- Per-account progress cards -->
@@ -542,7 +554,7 @@ const CMD_TAB = {
   'status':'status',
   'export':'export', 'voter-contact':'export',
   'crm-sync':'crm', 'hubspot-sync':'crm', 'cm-sync':'crm',
-  'crm-enrich':'crm', 'crm-phone':'crm',
+  'crm-enrich':'crm', 'crm-phone':'crm', 'crm-extended-match':'crm',
   'donors':'donors',
   'boe-enrich':'donors', 'boe-download':'donors', 'boe-load':'donors', 'boe-enrich-only':'donors',
   'national-enrich':'donors', 'fec-download':'donors', 'fec-extract':'donors',
@@ -554,7 +566,7 @@ const CMD_TAB = {
   'fb-audiences':'enrich', 'fb-push':'enrich',
 };
 
-const CRM_CMDS = new Set(['crm-sync','hubspot-sync','cm-sync','crm-enrich','crm-phone']);
+const CRM_CMDS = new Set(['crm-sync','hubspot-sync','cm-sync','crm-enrich','crm-phone','crm-extended-match']);
 
 function vpRun(cmd, extra, btn) {
   const tab = CMD_TAB[cmd] || 'status';
@@ -819,6 +831,18 @@ async function loadStats() {
         return `<div class="small">${s.source}: <strong>${s.total.toLocaleString()}</strong>${pctBadge}</div>`;
       }).join('');
 
+    const methodColors = {
+      'name_zip': 'success', 'phone': 'primary', 'hyph_zip': 'info',
+      'first_word_zip': 'warning', 'inactive_name_zip': 'secondary', 'unlabelled': 'light'
+    };
+    const methodHtml = (d.match_methods || []).length
+      ? (d.match_methods || []).map(m => {
+          const pct2 = d.matched ? (m.count / d.matched * 100).toFixed(1) : 0;
+          const color = methodColors[m.method] || 'secondary';
+          return `<div class="small"><span class="badge bg-${color} me-1" style="font-size:.6rem">${m.method}</span><strong>${m.count.toLocaleString()}</strong> <span class="text-muted">(${pct2}%)</span></div>`;
+        }).join('')
+      : '<div class="text-muted small">Run Extended Match to see breakdown</div>';
+
     const lastSync = d.last_sync
       ? `<div class="text-muted small mt-2"><i class="bi bi-clock me-1"></i>Last contact update: ${new Date(d.last_sync).toLocaleString()}</div>`
       : '';
@@ -830,8 +854,8 @@ async function loadStats() {
           <div class="text-muted small">Match Rate</div>
           <div class="small text-muted">${d.matched.toLocaleString()} / ${d.total.toLocaleString()}</div>
         </div>
-        <div class="col-md-3 border-end px-3">
-          <div class="text-muted small fw-semibold mb-1">Unmatched Breakdown</div>
+        <div class="col-md-2 border-end px-3">
+          <div class="text-muted small fw-semibold mb-1">Unmatched</div>
           <div class="small"><i class="bi bi-search me-1 text-muted"></i>Name+Zip: <strong>${(d.unmatched_name_zip||0).toLocaleString()}</strong></div>
           <div class="small"><i class="bi bi-telephone me-1 text-muted"></i>Has mobile: <strong>${(d.has_mobile||0).toLocaleString()}</strong></div>
           <div class="small"><i class="bi bi-question-circle me-1 text-muted"></i>No zip: <strong>${(d.no_zip||0).toLocaleString()}</strong></div>
@@ -840,7 +864,11 @@ async function loadStats() {
           <div class="text-muted small fw-semibold mb-1">Party (Matched)</div>
           ${partyHtml || '<div class="text-muted small">—</div>'}
         </div>
-        <div class="col-md-4 px-3">
+        <div class="col-md-2 border-end px-3">
+          <div class="text-muted small fw-semibold mb-1">By Match Method</div>
+          ${methodHtml}
+        </div>
+        <div class="col-md-3 px-3">
           <div class="text-muted small fw-semibold mb-1">Top Sources <span class="fw-normal">(match %)</span></div>
           ${srcHtml || '<div class="text-muted small">—</div>'}
         </div>

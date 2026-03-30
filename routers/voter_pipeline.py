@@ -130,6 +130,22 @@ def voter_stats(current_user: User = Depends(require_user)):
                 "pct":     round(mat / tot * 100, 1) if tot else 0,
             })
 
+        # Match method breakdown (vf_match_method column — added by extended_match.py)
+        match_methods = []
+        try:
+            cur.execute("""
+                SELECT COALESCE(vf_match_method, 'unlabelled') AS method,
+                       COUNT(*) AS cnt
+                FROM contacts
+                WHERE vf_state_voter_id IS NOT NULL
+                GROUP BY method ORDER BY cnt DESC
+            """)
+            match_methods = [
+                {"method": r[0], "count": int(r[1])} for r in cur.fetchall()
+            ]
+        except Exception:
+            pass  # column may not exist yet — silently omit
+
         # Last contact update
         cur.execute("SELECT MAX(updated_at) FROM contacts")
         last_sync = cur.fetchone()[0]
@@ -145,6 +161,7 @@ def voter_stats(current_user: User = Depends(require_user)):
             "has_mobile":          has_mobile,
             "party":               party_data,
             "sources":             source_data,
+            "match_methods":       match_methods,
             "last_sync":           last_sync.isoformat() if last_sync else None,
         })
     except Exception as exc:

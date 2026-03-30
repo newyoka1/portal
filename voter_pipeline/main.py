@@ -518,6 +518,14 @@ def main():
     p_crm_phone.add_argument("--stats", action="store_true",
         help="Show match stats only (no matching)")
 
+    # crm-extended-match
+    p_ext = sub.add_parser("crm-extended-match",
+        help="Extended CRM voter matching: hyphenated names, first-word first name, inactive voters")
+    p_ext.add_argument("--stats",   action="store_true",
+        help="Show match-method breakdown only (no matching)")
+    p_ext.add_argument("--dry-run", action="store_true",
+        help="Count potential matches without writing any rows")
+
     # fb-push — non-interactive voter audience → Facebook Custom Audience
     p_fbpush = sub.add_parser(
         "fb-push",
@@ -829,6 +837,13 @@ def _dispatch(args, verbosity):
         if getattr(args, 'fb_audience_name', None): extra += ["--audience-name", args.fb_audience_name]
         if getattr(args, 'dry_run', False):       extra.append("--dry-run")
         run("export/facebook_donor_audience.py", extra, verbosity_level=verbosity)
+
+    # ── crm-extended-match ────────────────────────────────────────────────────
+    elif args.command == "crm-extended-match":
+        extra = []
+        if args.stats:   extra.append("--stats")
+        if args.dry_run: extra.append("--dry-run")
+        run("pipeline/extended_match.py", extra, verbosity_level=verbosity)
 
     # ── crm-phone ─────────────────────────────────────────────────────────────
     elif args.command == "crm-phone":

@@ -250,7 +250,7 @@ def phone_match(conn, columns):
     # Build SET clause from available voter columns
     set_clauses = ", ".join(
         [f"c.`{cc}` = v.`{vc}`" for vc, cc, _ in columns]
-        + [f"c.`{ENRICHED_AT_COL}` = NOW()"]
+        + [f"c.`{ENRICHED_AT_COL}` = NOW()", "c.`vf_match_method` = 'phone'"]
     )
 
     print("  Running bulk UPDATE (contacts ← voter_file via temp table)...", flush=True)
