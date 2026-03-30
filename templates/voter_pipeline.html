@@ -121,7 +121,7 @@
             <div class="text-muted mt-1" style="font-size:.75rem">Look up each contact in the voter file — copies party, district, voting history &amp; demographics onto the contact record</div>
           </div>
           <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('crm-phone', '')">
+            <button class="btn btn-outline-secondary" onclick="vpRun('crm-phone', '', this)">
               <i class="bi bi-telephone-plus me-1"></i>Phone Match
             </button>
             <div class="text-muted mt-1" style="font-size:.75rem">Second-pass: matches unmatched contacts to voter file using phone numbers — recovers an estimated 30–50K additional matches</div>
@@ -146,6 +146,18 @@
   <!-- ── DONORS ─────────────────────────────────────────────────────────── -->
   <div class="tab-pane fade" id="tab-donors">
 
+    <!-- Output panel — always visible at top of tab so clicks show feedback immediately -->
+    <div id="log-donors-wrap" class="d-none mb-3">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
+          <span class="small" id="log-donors-label"><i class="bi bi-terminal me-1"></i>Output</span>
+          <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-donors-wrap').classList.add('d-none')">×</button>
+        </div>
+        <div id="log-donors" class="bg-dark text-light p-3 rounded-bottom small"
+             style="max-height:350px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
+      </div>
+    </div>
+
     <!-- Quick actions -->
     <div class="card shadow-sm mb-3">
       <div class="card-body">
@@ -156,13 +168,13 @@
         </p>
         <div class="row g-2 align-items-center">
           <div class="col-auto">
-            <button class="btn btn-primary" onclick="vpRun('donors','--no-refresh')">
+            <button class="btn btn-primary" onclick="vpRun('donors','--no-refresh',this)">
               <i class="bi bi-currency-dollar me-1"></i>All Donors
             </button>
             <div class="text-muted mt-1" style="font-size:.75rem">BOE + FEC + CFB in sequence — skips downloads, uses existing files</div>
           </div>
           <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('donors','--refresh')">
+            <button class="btn btn-outline-secondary" onclick="vpRun('donors','--refresh',this)">
               <i class="bi bi-cloud-download me-1"></i>All Donors + Download
             </button>
             <div class="text-muted mt-1" style="font-size:.75rem">Re-downloads all source files first, then processes all three</div>
@@ -192,7 +204,7 @@
                 <input class="form-check-input" type="checkbox" id="boeForce">
                 <label class="form-check-label small" for="boeForce">Force re-download</label>
               </div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-download', document.getElementById('boeForce').checked ? '--force' : '')">
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-download', document.getElementById('boeForce').checked ? '--force' : '', this)">
                 <i class="bi bi-cloud-download me-1"></i>Download BOE
               </button>
             </div>
@@ -202,7 +214,7 @@
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Load &amp; Classify</div>
               <div class="text-muted small mb-2">Loads ZIP contents into <code>boe_donors</code> DB, then classifies each contribution as D/R/U using filer keywords and candidate cross-reference.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('boe-load', '')">
+              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('boe-load', '', this)">
                 <i class="bi bi-database-up me-1"></i>Load &amp; Classify BOE
               </button>
             </div>
@@ -212,17 +224,17 @@
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Enrich Voter File</div>
               <div class="text-muted small mb-2">Merges <code>boe_donor_summary</code> into <code>voter_file</code> — writes BOE total/D/R amounts, counts, last gift date and filer per voter.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-enrich-only', '')">
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-enrich-only', '', this)">
                 <i class="bi bi-person-vcard me-1"></i>Enrich Voter File ← BOE
               </button>
             </div>
           </div>
         </div>
         <div class="d-flex gap-2 align-items-center">
-          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('boe-enrich', '--no-refresh')">
+          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('boe-enrich', '--no-refresh', this)">
             <i class="bi bi-arrow-repeat me-1"></i>All BOE (skip download)
           </button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('boe-enrich', '--refresh')">
+          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('boe-enrich', '--refresh', this)">
             <i class="bi bi-cloud-arrow-down me-1"></i>All BOE + Download
           </button>
         </div>
@@ -246,7 +258,7 @@
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download</div>
               <div class="text-muted small mb-2">Downloads 6 cycles of FEC bulk ZIPs from <code>fec.gov</code> (~100–500 MB each). Hash-checked — skips unchanged cycles.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-download', '')">
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-download', '', this)">
                 <i class="bi bi-cloud-download me-1"></i>Download FEC
               </button>
             </div>
@@ -256,7 +268,7 @@
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Extract</div>
               <div class="text-muted small mb-2">Unzips downloaded FEC archives into per-cycle subdirectories. Safe to re-run — overwrites existing extracted files.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-extract', '')">
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-extract', '', this)">
                 <i class="bi bi-file-zip me-1"></i>Extract FEC
               </button>
             </div>
@@ -266,7 +278,7 @@
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Load &amp; Classify</div>
               <div class="text-muted small mb-2">Bulk-loads FEC <code>.txt</code> files into <code>National_Donors</code> DB via <code>LOAD DATA INFILE</code>, then classifies ~6K committees as D/R/Unknown.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-load', '')">
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-load', '', this)">
                 <i class="bi bi-database-up me-1"></i>Load &amp; Classify FEC
               </button>
             </div>
@@ -276,17 +288,17 @@
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">4</span>Enrich Voter File</div>
               <div class="text-muted small mb-2">Matches FEC contributions to voter_file by name+zip, writes national donation totals, D/R amounts, and <code>is_national_donor</code> flag.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-enrich', '')">
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-enrich', '', this)">
                 <i class="bi bi-person-vcard me-1"></i>Enrich Voter File ← FEC
               </button>
             </div>
           </div>
         </div>
         <div class="d-flex gap-2 align-items-center">
-          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('national-enrich', '--no-refresh')">
+          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('national-enrich', '--no-refresh', this)">
             <i class="bi bi-arrow-repeat me-1"></i>All FEC (skip download)
           </button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('national-enrich', '--refresh')">
+          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('national-enrich', '--refresh', this)">
             <i class="bi bi-cloud-arrow-down me-1"></i>All FEC + Download
           </button>
         </div>
@@ -313,7 +325,7 @@
                 <input class="form-check-input" type="checkbox" id="cfbForce">
                 <label class="form-check-label small" for="cfbForce">Force re-download</label>
               </div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('cfb-download', document.getElementById('cfbForce').checked ? '--force' : '')">
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('cfb-download', document.getElementById('cfbForce').checked ? '--force' : '', this)">
                 <i class="bi bi-cloud-download me-1"></i>Download CFB
               </button>
             </div>
@@ -327,17 +339,17 @@
                 <input class="form-check-input" type="checkbox" id="cfbLoadForce">
                 <label class="form-check-label small" for="cfbLoadForce">Force re-load (ignore hash)</label>
               </div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('cfb-load', document.getElementById('cfbLoadForce').checked ? '--force' : '')">
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('cfb-load', document.getElementById('cfbLoadForce').checked ? '--force' : '', this)">
                 <i class="bi bi-database-up me-1"></i>Load &amp; Enrich CFB
               </button>
             </div>
           </div>
         </div>
         <div class="d-flex gap-2 align-items-center">
-          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('cfb-enrich', '--no-refresh')">
+          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('cfb-enrich', '--no-refresh', this)">
             <i class="bi bi-arrow-repeat me-1"></i>All CFB (skip download)
           </button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('cfb-enrich', '--refresh')">
+          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('cfb-enrich', '--refresh', this)">
             <i class="bi bi-cloud-arrow-down me-1"></i>All CFB + Download
           </button>
         </div>
@@ -377,7 +389,6 @@
       </div>
     </div>
 
-    <div id="log-donors"></div>
   </div>
 
   <!-- ── ENRICH ─────────────────────────────────────────────────────────── -->
@@ -418,7 +429,7 @@
                 <input class="form-check-input" type="checkbox" id="derivedRefresh">
                 <label class="form-check-label small" for="derivedRefresh">Full refresh (clear + recompute all)</label>
               </div>
-              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('enrich-derived', document.getElementById('derivedRefresh').checked ? '--refresh' : '')">
+              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('enrich-derived', document.getElementById('derivedRefresh').checked ? '--refresh' : '', this)">
                 <i class="bi bi-calculator me-1"></i>Enrich Derived
               </button>
             </div>
@@ -428,7 +439,7 @@
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><i class="bi bi-bar-chart me-1"></i>District Scores</div>
               <div class="text-muted small mb-2">Builds the <code>district_scores</code> table — partisan lean, competitiveness category (Safe D → Safe R), average turnout, and donor participation rate per CD/SD/LD.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('district-scores', '')">
+              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('district-scores', '', this)">
                 <i class="bi bi-bar-chart me-1"></i>Build District Scores
               </button>
             </div>
@@ -438,7 +449,7 @@
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><i class="bi bi-camera me-1"></i>Party Snapshot</div>
               <div class="text-muted small mb-2">Records today's party registrations and compares to the previous snapshot to detect switchers. Stamps <code>is_party_switcher</code>, <code>prior_party</code>, and <code>party_change_date</code>.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('party-snapshot', '')">
+              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('party-snapshot', '', this)">
                 <i class="bi bi-camera me-1"></i>Party Snapshot
               </button>
             </div>
@@ -513,7 +524,7 @@
     <div class="card shadow-sm">
       <div class="card-body">
         <p class="text-muted small mb-3">Shows source file ages and last pipeline run times.</p>
-        <button class="btn btn-primary" onclick="vpRun('status', '')">
+        <button class="btn btn-primary" onclick="vpRun('status', '', this)">
           <i class="bi bi-arrow-clockwise me-1"></i>Check Status
         </button>
         <div id="log-status"></div>
@@ -545,10 +556,10 @@ const CMD_TAB = {
 
 const CRM_CMDS = new Set(['crm-sync','hubspot-sync','cm-sync','crm-enrich','crm-phone']);
 
-function vpRun(cmd, extra) {
+function vpRun(cmd, extra, btn) {
   const tab = CMD_TAB[cmd] || 'status';
   if (CRM_CMDS.has(cmd)) runCrmStream(cmd, extra);
-  else                    runStream(cmd, extra, tab);
+  else                    runStream(cmd, extra, tab, btn || null);
 }
 
 function vpRunFull(cmd) {
@@ -920,14 +931,29 @@ function pushFbAudience() {
 }
 
 /* ── Generic stream (non-CRM tabs) ──────────────────────────────────────── */
-async function runStream(cmd, extra, tab) {
+async function runStream(cmd, extra, tab, triggerBtn) {
   const container = document.getElementById('log-' + tab);
   if (!container) return;
-  const pre = document.createElement('pre');
-  pre.className = 'bg-dark text-light p-3 rounded small mt-3';
-  pre.style = 'max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;';
-  container.innerHTML = '';
-  container.appendChild(pre);
+
+  // For the donors tab: show the panel and scroll to it immediately
+  const wrap = document.getElementById('log-' + tab + '-wrap');
+  if (wrap) {
+    const labelEl = document.getElementById('log-' + tab + '-label');
+    if (labelEl) labelEl.innerHTML = `<i class="bi bi-terminal me-1"></i>${cmd}`;
+    wrap.classList.remove('d-none');
+    wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  // Show immediate feedback in container
+  container.textContent = `▶ Running: ${cmd}${extra ? ' ' + extra : ''}\n`;
+  if (!wrap) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Spinner on the triggering button
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn._origHtml = triggerBtn.innerHTML;
+    triggerBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Running…';
+  }
 
   const fd = new FormData();
   fd.append('cmd', cmd);
@@ -940,11 +966,16 @@ async function runStream(cmd, extra, tab) {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      pre.textContent += dec.decode(value);
-      pre.scrollTop    = pre.scrollHeight;
+      container.textContent += dec.decode(value);
+      container.scrollTop    = container.scrollHeight;
     }
   } catch (err) {
-    pre.textContent += '\n[Error: ' + err.message + ']';
+    container.textContent += '\n[Error: ' + err.message + ']';
+  } finally {
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.innerHTML = triggerBtn._origHtml;
+    }
   }
 }
 
