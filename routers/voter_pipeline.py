@@ -29,20 +29,21 @@ def voter_pipeline_page(
     })
 
 
-_VOTER_PREFIXES = ("HUBSPOT_TOKEN_", "CM_API_KEY_", "MAILCHIMP_KEY_")
-
 def _build_env() -> dict:
-    """Inject voter pipeline credentials from portal settings into subprocess env.
+    """Inject all portal DB settings into the subprocess environment.
 
-    Picks up any portal_settings key matching the voter prefixes, so adding
-    more token slots to portal_config.DEFAULTS requires no change here.
+    Uses os.environ as the base (so PATH, HOME etc. are inherited) then
+    overlays every non-empty portal_settings value on top. This means any
+    setting stored in the portal DB — Meta tokens, HubSpot keys, CM keys,
+    Mailchimp keys — is automatically available to all pipeline scripts
+    without needing to update this function when new settings are added.
     """
     import time
     if time.time() - portal_config._cache_ts > portal_config._CACHE_TTL:
         portal_config._refresh_cache()
     env = os.environ.copy()
     for key, val in portal_config._cache.items():
-        if val and any(key.startswith(p) for p in _VOTER_PREFIXES):
+        if val:
             env[key] = val
     return env
 
