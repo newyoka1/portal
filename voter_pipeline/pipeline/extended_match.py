@@ -80,6 +80,15 @@ def ensure_match_method_col(cur):
         print(f"  Retroactively labelled {labelled:,} existing matches as 'name_zip'")
 
 
+def _voter_col_exists(cur, col):
+    """Return True if col exists in voter_file."""
+    cur.execute(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS "
+        "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'voter_file' AND COLUMN_NAME = %s",
+        (VOTER_DB, col))
+    return cur.fetchone()[0] > 0
+
+
 def ensure_voter_indexes(cur):
     """Create idx_clean_h1 and idx_clean_h2 on voter_file if missing.
 
@@ -88,11 +97,19 @@ def ensure_voter_indexes(cur):
     The donor pipeline (classify_boe_parties, load_cfb_contributions) uses
     the same h1/h2 columns but JOINs them differently — these indexes are
     exclusively for the CRM matching direction.
+
+    If the columns don't exist yet (voter_file loaded before pipeline.py
+    add_clean_name_columns() ran), index creation is skipped gracefully.
+    Run 'python main.py pipeline' to populate clean_last_h1/h2 first.
     """
     for idx_name, part_col in [
         ("idx_clean_h1", "clean_last_h1"),
         ("idx_clean_h2", "clean_last_h2"),
     ]:
+        if not _voter_col_exists(cur, part_col):
+            print(f"  WARNING: {part_col} not found on voter_file — skipping {idx_name}.")
+            print(f"           Run 'python main.py pipeline' to compute hyphenated name columns.")
+            continue
         cur.execute(
             "SELECT COUNT(*) FROM information_schema.STATISTICS "
             "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'voter_file' AND INDEX_NAME = %s",
@@ -129,12 +146,19 @@ def pass_hyphenated(cur, columns, dry_run=False):
     surname (e.g. "Garcia-Lopez") but the CRM contact only has one half
     (e.g. "Garcia").  Uses separate index-backed queries for h1 and h2 —
     the OR equivalent would prevent index use.
+
+    Skips gracefully if clean_last_h1/h2 columns don't exist yet on voter_file.
+    Run 'python main.py pipeline' (which calls add_clean_name_columns) to
+    populate them, then re-run extended_match.
     """
     print("\n  Pass A: Hyphenated last name (h1 / h2 vs CRM clean_last)")
     set_clause = _build_set(columns, "hyph_zip")
     total_matched = 0
 
     for part_label, part_col in [("h1", "clean_last_h1"), ("h2", "clean_last_h2")]:
+        if not _voter_col_exists(cur, part_col):
+            print(f"    {part_label}: skipped — {part_col} not in voter_file yet")
+            continue
         t0 = time.time()
         cur.execute("DROP TEMPORARY TABLE IF EXISTS _ext_hyph_match")
         cur.execute(f"""
