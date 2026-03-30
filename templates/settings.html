@@ -15,7 +15,7 @@
 {% for cat_key, cat_label in categories %}
 
 {% if cat_key == 'voter' %}
-{# ── Voter: dynamic per-platform token sections ───────────────────────────── #}
+{# ── Voter: dynamic per-platform token sections + static settings ─────────── #}
 {% if voter_platforms %}
 <div class="card shadow-sm mb-3">
   <div class="card-header bg-white py-2">
@@ -56,6 +56,28 @@
       {% if not loop.last %}<hr class="my-3">{% endif %}
     </div>
     {% endfor %}
+
+    {# ── Static voter settings (VOTER_NIGHTLY_SYNC, VOTER_SYNC_HOUR, etc.) ── #}
+    {% set voter_static = grouped.get('voter', []) | selectattr('key', 'in', ['VOTER_NIGHTLY_SYNC','VOTER_SYNC_HOUR']) | list %}
+    {% if voter_static %}
+    <hr class="my-3">
+    <span class="fw-semibold text-secondary small text-uppercase" style="letter-spacing:.05em">Automation</span>
+    <div class="mt-2">
+      {% for s in voter_static %}
+      <div class="row mb-2 align-items-center">
+        <div class="col-md-4">
+          <label class="form-label fw-semibold mb-0" for="setting_{{ s.key }}">{{ s.label or s.key }}</label>
+          <div class="text-muted" style="font-size:.7rem">{{ s.key }}</div>
+        </div>
+        <div class="col-md-8">
+          <input type="text" class="form-control" id="setting_{{ s.key }}"
+                 data-key="{{ s.key }}" value="{{ s.value or '' }}">
+        </div>
+      </div>
+      {% endfor %}
+      <div class="form-text text-muted">Set <code>VOTER_NIGHTLY_SYNC</code> to <code>true</code> and restart the server to enable automatic nightly CRM sync.</div>
+    </div>
+    {% endif %}
   </div>
 </div>
 {% endif %}

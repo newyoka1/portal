@@ -11,6 +11,21 @@
 </div>
 {% else %}
 
+<!-- ── Pipeline Health Dashboard ─────────────────────────────────────────── -->
+<div class="card shadow-sm mb-3" id="stats-card">
+  <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold mb-0"><i class="bi bi-graph-up me-1"></i>Pipeline Health</h6>
+    <button class="btn btn-sm btn-outline-secondary" onclick="loadStats()" id="stats-refresh-btn">
+      <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+    </button>
+  </div>
+  <div class="card-body py-2" id="stats-body">
+    <div class="text-center text-muted py-2">
+      <div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading stats…
+    </div>
+  </div>
+</div>
+
 <ul class="nav nav-tabs mb-3" id="voterTabs">
   <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-export">Export</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-crm">CRM Sync</a></li>
@@ -55,6 +70,11 @@
         <button class="btn btn-primary" onclick="runExport()">
           <i class="bi bi-download me-1"></i>Run Export
         </button>
+        <hr class="my-3">
+        <button class="btn btn-outline-secondary" onclick="window.location='/voter-pipeline/export-unmatched'">
+          <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export Unmatched Contacts
+        </button>
+        <div class="text-muted mt-1" style="font-size:.75rem">Downloads all CRM contacts not yet matched to the voter file as CSV — useful for manual lookup or sending to a data vendor</div>
         <div id="log-export"></div>
       </div>
     </div>
@@ -99,6 +119,12 @@
               <i class="bi bi-person-check me-1"></i>Match to Voter File
             </button>
             <div class="text-muted mt-1" style="font-size:.75rem">Look up each contact in the voter file — copies party, district, voting history &amp; demographics onto the contact record</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary" onclick="vpRun('crm-phone', '')">
+              <i class="bi bi-telephone-plus me-1"></i>Phone Match
+            </button>
+            <div class="text-muted mt-1" style="font-size:.75rem">Second-pass: matches unmatched contacts to voter file using phone numbers — recovers an estimated 30–50K additional matches</div>
           </div>
         </div>
 
@@ -199,12 +225,63 @@
             <div class="text-muted mt-1" style="font-size:.75rem">Records a point-in-time snapshot of current party registrations for trend tracking</div>
           </div>
         </div>
-        <div class="row g-2">
+        <!-- ── Facebook Audience Push ──────────────────────────────────────── -->
+        <hr class="my-3">
+        <div class="d-flex align-items-center mb-2 gap-2">
+          <h6 class="fw-semibold mb-0"><i class="bi bi-meta me-1"></i>Facebook Audience Push</h6>
+          <span class="badge bg-secondary" style="font-size:.7rem">Requires FB_ACCESS_TOKEN + FB_AD_ACCOUNT_ID in Settings</span>
+        </div>
+        <p class="text-muted small mb-2">
+          Push a named voter segment directly to a Meta Custom Audience.
+          Run <strong>Load Audiences</strong> first to populate the selector, then choose a segment and click <strong>Push to Facebook</strong>.
+        </p>
+        <div class="row g-2 mb-2 align-items-end">
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold mb-1">Audience</label>
+            <select class="form-select form-select-sm" id="fbAudience">
+              <option value="">— click Load Audiences first —</option>
+            </select>
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small fw-semibold mb-1">District filter</label>
+            <select class="form-select form-select-sm" id="fbDistType" onchange="toggleFbDist()">
+              <option value="">None</option>
+              <option value="ld">Assembly LD</option>
+              <option value="sd">Senate SD</option>
+              <option value="cd">Congressional CD</option>
+              <option value="county">County</option>
+            </select>
+          </div>
+          <div class="col-md-2" id="fbDistValueWrap" style="display:none">
+            <label class="form-label small fw-semibold mb-1">Value</label>
+            <input type="text" class="form-control form-control-sm" id="fbDistValue" placeholder="63 or Nassau">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small fw-semibold mb-1">FB Audience ID <span class="text-muted fw-normal">(to update existing)</span></label>
+            <input type="text" class="form-control form-control-sm" id="fbAudienceId" placeholder="Leave blank to create new">
+          </div>
           <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('fb-audiences', '--list-audiences')">
-              <i class="bi bi-meta me-1"></i>List FB Audiences
+            <div class="form-check mb-0">
+              <input class="form-check-input" type="checkbox" id="fbReplace">
+              <label class="form-check-label small" for="fbReplace">Atomic replace</label>
+            </div>
+          </div>
+        </div>
+        <div class="row g-2 mb-2">
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary btn-sm" onclick="loadFbAudiences()">
+              <i class="bi bi-list-ul me-1"></i>Load Audiences
             </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Shows all configured Facebook custom audiences and their current sizes</div>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-primary btn-sm" onclick="pushFbAudience()">
+              <i class="bi bi-cloud-upload me-1"></i>Push to Facebook
+            </button>
+          </div>
+          <div class="col-auto">
+            <button class="btn btn-outline-secondary btn-sm" onclick="vpRun('fb-push','--dry-run --audience ' + (document.getElementById('fbAudience').value||'NONE'))">
+              <i class="bi bi-bug me-1"></i>Dry Run
+            </button>
           </div>
         </div>
         <div id="log-enrich"></div>
@@ -235,15 +312,15 @@ const CMD_TAB = {
   'status':'status',
   'export':'export', 'voter-contact':'export',
   'crm-sync':'crm', 'hubspot-sync':'crm', 'cm-sync':'crm',
-  'crm-enrich':'crm',
+  'crm-enrich':'crm', 'crm-phone':'crm',
   'donors':'donors', 'boe-enrich':'donors',
   'national-enrich':'donors', 'cfb-enrich':'donors',
   'ethnicity':'enrich', 'enrich-derived':'enrich',
   'district-scores':'enrich', 'party-snapshot':'enrich',
-  'fb-audiences':'enrich',
+  'fb-audiences':'enrich', 'fb-push':'enrich',
 };
 
-const CRM_CMDS = new Set(['crm-sync','hubspot-sync','cm-sync','crm-enrich']);
+const CRM_CMDS = new Set(['crm-sync','hubspot-sync','cm-sync','crm-enrich','crm-phone']);
 
 function vpRun(cmd, extra) {
   const tab = CMD_TAB[cmd] || 'status';
@@ -458,6 +535,146 @@ async function runCrmStream(cmd, extra) {
   }
 }
 
+/* ── Pipeline Health stats ───────────────────────────────────────────────── */
+async function loadStats() {
+  const body = document.getElementById('stats-body');
+  const btn  = document.getElementById('stats-refresh-btn');
+  body.innerHTML = '<div class="text-center text-muted py-2"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading…</div>';
+  if (btn) btn.disabled = true;
+
+  try {
+    const resp = await fetch('/voter-pipeline/stats');
+    const d    = await resp.json();
+
+    if (d.error) {
+      body.innerHTML = `<div class="text-danger small p-2"><i class="bi bi-exclamation-triangle me-1"></i>${d.error}</div>`;
+      return;
+    }
+
+    const pct      = d.pct;
+    const pctColor = pct >= 40 ? '#198754' : pct >= 20 ? '#d97706' : 'var(--pk-red)';
+
+    const partyHtml = (d.party || []).slice(0, 5)
+      .map(p => `<div class="small">${p.party}: <strong>${p.count.toLocaleString()}</strong></div>`)
+      .join('');
+
+    const srcHtml = (d.sources || []).slice(0, 6)
+      .map(s => {
+        const pctBadge = `<span class="badge bg-secondary ms-1" style="font-size:.65rem">${s.pct}%</span>`;
+        return `<div class="small">${s.source}: <strong>${s.total.toLocaleString()}</strong>${pctBadge}</div>`;
+      }).join('');
+
+    const lastSync = d.last_sync
+      ? `<div class="text-muted small mt-2"><i class="bi bi-clock me-1"></i>Last contact update: ${new Date(d.last_sync).toLocaleString()}</div>`
+      : '';
+
+    body.innerHTML = `
+      <div class="row g-2">
+        <div class="col-md-2 text-center border-end">
+          <div style="font-size:2rem;font-weight:700;color:${pctColor}">${pct}%</div>
+          <div class="text-muted small">Match Rate</div>
+          <div class="small text-muted">${d.matched.toLocaleString()} / ${d.total.toLocaleString()}</div>
+        </div>
+        <div class="col-md-3 border-end px-3">
+          <div class="text-muted small fw-semibold mb-1">Unmatched Breakdown</div>
+          <div class="small"><i class="bi bi-search me-1 text-muted"></i>Name+Zip: <strong>${(d.unmatched_name_zip||0).toLocaleString()}</strong></div>
+          <div class="small"><i class="bi bi-telephone me-1 text-muted"></i>Has mobile: <strong>${(d.has_mobile||0).toLocaleString()}</strong></div>
+          <div class="small"><i class="bi bi-question-circle me-1 text-muted"></i>No zip: <strong>${(d.no_zip||0).toLocaleString()}</strong></div>
+        </div>
+        <div class="col-md-3 border-end px-3">
+          <div class="text-muted small fw-semibold mb-1">Party (Matched)</div>
+          ${partyHtml || '<div class="text-muted small">—</div>'}
+        </div>
+        <div class="col-md-4 px-3">
+          <div class="text-muted small fw-semibold mb-1">Top Sources <span class="fw-normal">(match %)</span></div>
+          ${srcHtml || '<div class="text-muted small">—</div>'}
+        </div>
+      </div>
+      ${lastSync}`;
+  } catch (err) {
+    body.innerHTML = `<div class="text-danger small p-2">Failed to load stats: ${err.message}</div>`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/* ── Facebook Audience Push ──────────────────────────────────────────────── */
+function toggleFbDist() {
+  const type = document.getElementById('fbDistType').value;
+  const wrap = document.getElementById('fbDistValueWrap');
+  wrap.style.display = type ? '' : 'none';
+}
+
+async function loadFbAudiences() {
+  const select = document.getElementById('fbAudience');
+  select.innerHTML = '<option value="">Loading…</option>';
+  select.disabled = true;
+
+  const logEl = document.getElementById('log-enrich');
+  const pre   = document.createElement('pre');
+  pre.className = 'bg-dark text-light p-3 rounded small mt-2';
+  pre.style     = 'max-height:180px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;';
+  logEl.innerHTML = '';
+  logEl.appendChild(pre);
+
+  const fd = new FormData();
+  fd.append('cmd',   'fb-push');
+  fd.append('extra', '--list-audiences');
+
+  let fullText = '';
+  try {
+    const resp   = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
+    const reader = resp.body.getReader();
+    const dec    = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      fullText += dec.decode(value);
+      pre.textContent  = fullText;
+      pre.scrollTop    = pre.scrollHeight;
+    }
+  } catch (err) {
+    pre.textContent += '\n[Error: ' + err.message + ']';
+  }
+
+  // Parse output lines like:  "  NYS_HARD_DEM                               57,123"
+  select.innerHTML = '<option value="">— select audience —</option>';
+  fullText.split('\n').forEach(line => {
+    const m = line.match(/^\s{2}([A-Z0-9_]{3,})\s+([\d,]+)/);
+    if (m) {
+      const opt = document.createElement('option');
+      opt.value       = m[1];
+      opt.textContent = `${m[1]}  (${m[2]} voters)`;
+      select.appendChild(opt);
+    }
+  });
+  select.disabled = false;
+}
+
+function pushFbAudience() {
+  const audience = document.getElementById('fbAudience').value;
+  if (!audience) {
+    alert('Please click "Load Audiences" and select an audience first.');
+    return;
+  }
+
+  let extra = '--audience ' + audience;
+
+  const distType  = document.getElementById('fbDistType').value;
+  const distValue = document.getElementById('fbDistValue')?.value.trim();
+  if (distType && distValue) extra += ' --' + distType + ' ' + distValue;
+
+  const fbId = document.getElementById('fbAudienceId').value.trim();
+  if (fbId) extra += ' --fb-audience-id ' + fbId;
+
+  if (document.getElementById('fbReplace').checked) {
+    if (!fbId) { alert('Atomic replace requires a FB Audience ID.'); return; }
+    extra += ' --replace';
+  }
+
+  vpRun('fb-push', extra);
+}
+
 /* ── Generic stream (non-CRM tabs) ──────────────────────────────────────── */
 async function runStream(cmd, extra, tab) {
   const container = document.getElementById('log-' + tab);
@@ -486,5 +703,8 @@ async function runStream(cmd, extra, tab) {
     pre.textContent += '\n[Error: ' + err.message + ']';
   }
 }
+
+// Auto-load stats when the page is ready
+document.addEventListener('DOMContentLoaded', loadStats);
 </script>
 {% endblock %}

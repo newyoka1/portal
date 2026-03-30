@@ -5,6 +5,8 @@ Run with: uvicorn main:app --reload
 import json as _json
 import logging
 import os
+import sys
+from pathlib import Path
 
 from datetime import datetime
 from fastapi import Depends, FastAPI, Form, Request
@@ -126,6 +128,52 @@ def startup():
         scheduler.add_job(_poll_all, "interval", hours=1, id="poller")
 
     logging.info("Poller scheduled: %s", _sched)
+
+    # ── Nightly voter CRM sync (optional) ─────────────────────────────────────
+    import portal_config as _pc
+    if _pc.get_setting("VOTER_NIGHTLY_SYNC", "false").lower() == "true":
+        _sync_hour = int(_pc.get_setting("VOTER_SYNC_HOUR", "2") or "2")
+
+        _voter_dir     = Path(__file__).parent / "voter_pipeline"
+        _venv_python   = str(_voter_dir / ".venv" / "Scripts" / "python.exe")
+        _voter_python  = _venv_python if os.path.exists(_venv_python) else sys.executable
+        _voter_main    = str(_voter_dir / "main.py")
+
+        def _run_voter_nightly():
+            import subprocess
+            from routers.voter_pipeline import _build_env as _venv
+            try:
+                _env = _venv()
+            except Exception as _e:
+                logging.warning("Voter nightly: could not build env: %s", _e)
+                _env = None
+            logging.info("Voter nightly sync: crm-sync starting...")
+            r1 = subprocess.run(
+                [_voter_python, _voter_main, "crm-sync"],
+                cwd=str(_voter_dir), env=_env,
+            )
+            if r1.returncode == 0:
+                logging.info("Voter nightly sync: crm-enrich starting...")
+                r2 = subprocess.run(
+                    [_voter_python, _voter_main, "crm-enrich"],
+                    cwd=str(_voter_dir), env=_env,
+                )
+                logging.info(
+                    "Voter nightly sync: crm-enrich done (exit %d)", r2.returncode
+                )
+            else:
+                logging.error(
+                    "Voter nightly sync: crm-sync failed (exit %d)", r1.returncode
+                )
+
+        scheduler.add_job(
+            _run_voter_nightly, "cron",
+            hour=_sync_hour, minute=30,
+            id="voter_nightly",
+        )
+        logging.info(
+            "Voter nightly sync scheduled at %02d:30 server time", _sync_hour
+        )
 
     scheduler.start()
 

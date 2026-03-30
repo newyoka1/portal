@@ -48,6 +48,169 @@ def _build_env() -> dict:
     return env
 
 
+@router.get("/stats")
+def voter_stats(current_user: User = Depends(require_user)):
+    """Return CRM pipeline health statistics as JSON."""
+    import pymysql
+    from fastapi.responses import JSONResponse as _JSONResponse
+    env = _build_env()
+    try:
+        conn = pymysql.connect(
+            host=env.get("MYSQL_HOST", env.get("DB_HOST", "127.0.0.1")),
+            port=int(env.get("MYSQL_PORT", env.get("DB_PORT", "3306"))),
+            user=env.get("MYSQL_USER", env.get("DB_USER", "root")),
+            password=env.get("MYSQL_PASSWORD", env.get("DB_PASSWORD", "")),
+            database="crm_unified",
+            charset="utf8mb4",
+            connect_timeout=10,
+            read_timeout=30,
+            autocommit=True,
+        )
+    except Exception as exc:
+        from fastapi.responses import JSONResponse as _JSONResponse
+        return _JSONResponse({"error": f"DB connect failed: {exc}"}, status_code=500)
+
+    try:
+        cur = conn.cursor()
+
+        # Total + matched
+        cur.execute(
+            "SELECT COUNT(*), SUM(vf_state_voter_id IS NOT NULL) FROM contacts"
+        )
+        total, matched = cur.fetchone()
+        total   = int(total   or 0)
+        matched = int(matched or 0)
+
+        # Unmatched breakdown
+        cur.execute("""
+            SELECT
+                SUM(vf_state_voter_id IS NULL
+                    AND zip5     IS NOT NULL AND zip5     != ''
+                    AND clean_last IS NOT NULL AND clean_last != ''),
+                SUM(vf_state_voter_id IS NULL
+                    AND (zip5 IS NULL OR zip5 = '')),
+                SUM(vf_state_voter_id IS NULL
+                    AND mobile IS NOT NULL AND mobile != '')
+            FROM contacts
+        """)
+        row = cur.fetchone()
+        unmatched_name_zip = int(row[0] or 0)
+        no_zip             = int(row[1] or 0)
+        has_mobile         = int(row[2] or 0)
+
+        # Party breakdown of matched contacts
+        cur.execute("""
+            SELECT vf_party, COUNT(*) AS cnt
+            FROM contacts
+            WHERE vf_party IS NOT NULL AND vf_party != ''
+            GROUP BY vf_party ORDER BY cnt DESC
+            LIMIT 8
+        """)
+        party_data = [{"party": r[0], "count": int(r[1])} for r in cur.fetchall()]
+
+        # Source breakdown (primary source = first token in comma-separated sources)
+        cur.execute("""
+            SELECT
+                SUBSTRING_INDEX(sources, ',', 1)        AS src,
+                COUNT(*)                                 AS total,
+                SUM(vf_state_voter_id IS NOT NULL)       AS matched_cnt
+            FROM contacts
+            WHERE sources IS NOT NULL AND sources != ''
+            GROUP BY src
+            ORDER BY total DESC
+            LIMIT 15
+        """)
+        source_data = []
+        for src, tot, mat in cur.fetchall():
+            tot = int(tot);  mat = int(mat or 0)
+            source_data.append({
+                "source":  src or "unknown",
+                "total":   tot,
+                "matched": mat,
+                "pct":     round(mat / tot * 100, 1) if tot else 0,
+            })
+
+        # Last contact update
+        cur.execute("SELECT MAX(updated_at) FROM contacts")
+        last_sync = cur.fetchone()[0]
+        conn.close()
+
+        from fastapi.responses import JSONResponse as _JSONResponse
+        return _JSONResponse({
+            "total":               total,
+            "matched":             matched,
+            "pct":                 round(matched / total * 100, 1) if total else 0,
+            "unmatched_name_zip":  unmatched_name_zip,
+            "no_zip":              no_zip,
+            "has_mobile":          has_mobile,
+            "party":               party_data,
+            "sources":             source_data,
+            "last_sync":           last_sync.isoformat() if last_sync else None,
+        })
+    except Exception as exc:
+        conn.close()
+        from fastapi.responses import JSONResponse as _JSONResponse
+        return _JSONResponse({"error": str(exc)}, status_code=500)
+
+
+@router.get("/export-unmatched")
+def export_unmatched(current_user: User = Depends(require_user)):
+    """Download unmatched CRM contacts as a CSV file."""
+    import csv
+    import io
+    import pymysql
+    from datetime import date
+    env = _build_env()
+
+    def _generate():
+        try:
+            conn = pymysql.connect(
+                host=env.get("MYSQL_HOST", env.get("DB_HOST", "127.0.0.1")),
+                port=int(env.get("MYSQL_PORT", env.get("DB_PORT", "3306"))),
+                user=env.get("MYSQL_USER", env.get("DB_USER", "root")),
+                password=env.get("MYSQL_PASSWORD", env.get("DB_PASSWORD", "")),
+                database="crm_unified",
+                charset="utf8mb4",
+                autocommit=True,
+            )
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, email_1, first_name, last_name,
+                       mobile, phone_1, address, city, state, zip5,
+                       sources, clean_first, clean_last, created_at
+                FROM contacts
+                WHERE vf_state_voter_id IS NULL
+                ORDER BY last_name, first_name
+            """)
+            headers = [
+                "id", "email", "first_name", "last_name",
+                "mobile", "phone", "address", "city", "state", "zip5",
+                "sources", "clean_first", "clean_last", "created_at",
+            ]
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow(headers)
+            yield buf.getvalue()
+
+            for row in cur:
+                buf = io.StringIO()
+                csv.writer(buf).writerow(
+                    ["" if v is None else str(v) for v in row]
+                )
+                yield buf.getvalue()
+            conn.close()
+        except Exception as exc:
+            yield f"ERROR,{exc}\n"
+
+    from datetime import date
+    filename = f"unmatched_contacts_{date.today().isoformat()}.csv"
+    return StreamingResponse(
+        _generate(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
 @router.post("/run")
 async def voter_run_stream(
     cmd:      str = Form(...),

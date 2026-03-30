@@ -75,6 +75,14 @@ DEFAULTS = [
     # Voter Pipeline tokens are managed dynamically via the settings UI
     # (HUBSPOT_TOKEN_*, CM_API_KEY_*, MAILCHIMP_KEY_* rows are user-created)
 
+    # Facebook Custom Audience export (voter file → Meta)
+    ("FB_ACCESS_TOKEN",  "", "FB Token for Voter Audiences (ads_management scope)", "meta",  True),
+    ("FB_AD_ACCOUNT_ID", "", "FB Ad Account ID for Audiences (numeric, no act_ prefix)", "meta", False),
+
+    # Nightly CRM automation
+    ("VOTER_NIGHTLY_SYNC", "false", "Enable Nightly CRM Sync (true/false)", "voter", False),
+    ("VOTER_SYNC_HOUR",    "2",     "Nightly Sync Hour (0–23, server time)",  "voter", False),
+
 ]
 
 
@@ -98,7 +106,7 @@ def seed_defaults():
                         is_secret=is_secret,
                     ))
             # Remove stale settings — but preserve dynamically-managed voter tokens
-            DYNAMIC_PREFIXES = ("HUBSPOT_TOKEN_", "CM_API_KEY_", "MAILCHIMP_KEY_")
+            DYNAMIC_PREFIXES = ("HUBSPOT_TOKEN_", "CM_API_KEY_", "MAILCHIMP_KEY_", "FB_")
             valid_keys = {d[0] for d in DEFAULTS}
             stale = db.query(PortalSetting).filter(
                 PortalSetting.key.notin_(valid_keys)

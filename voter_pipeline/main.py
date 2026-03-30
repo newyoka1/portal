@@ -29,6 +29,11 @@ Usage:
     python main.py crm-enrich --full         # Re-enrich all contacts
     python main.py crm-enrich --stats        # Show enrichment stats only
     python main.py fb-audiences                              # Interactive donor/audience → Facebook export
+    python main.py crm-phone                 # Match unmatched CRM contacts to voter file by phone number
+    python main.py fb-push --list-audiences  # List voter file audience names available for FB push
+    python main.py fb-push --audience NYS_HARD_DEM          # Push a named voter audience to Facebook
+    python main.py fb-push --audience NYS_SWING --ld 63     # Push audience filtered to a district
+    python main.py fb-push --audience NYS_HARD_GOP --fb-audience-id 123 --replace  # Replace existing
     python main.py fb-audiences --list-audiences             # List available audiences
     python main.py fb-audiences --audience NYS_HARD_DEM      # Export audience to new FB Custom Audience
     python main.py fb-audiences --audience NYS_SWING --ld 63 # Filter to a single district
@@ -60,7 +65,9 @@ Commands:
     cm-sync         Sync Campaign Monitor subscribers to unified contacts
     crm-sync        Sync all CRM sources (HubSpot + Campaign Monitor)
     crm-enrich      Append voter file data to CRM contacts (party, districts, history, donors)
+    crm-phone       Second-pass: match unmatched CRM contacts to voter file using phone numbers
     fb-audiences    Interactive export of donor/segment audiences to Facebook Custom Audiences
+    fb-push         Non-interactive push of a named voter audience to Facebook Custom Audiences
     sync            Push final enriched tables to Aiven remote MySQL
 """
 
@@ -464,6 +471,38 @@ def main():
     p_crm_enrich.add_argument("--stats", action="store_true",
         help="Show enrichment match stats only")
 
+    # crm-phone
+    p_crm_phone = sub.add_parser("crm-phone",
+        help="Second-pass: match unmatched CRM contacts to voter file via phone number")
+    p_crm_phone.add_argument("--stats", action="store_true",
+        help="Show match stats only (no matching)")
+
+    # fb-push — non-interactive voter audience → Facebook Custom Audience
+    p_fbpush = sub.add_parser(
+        "fb-push",
+        help="Push a named voter audience to Facebook Custom Audiences",
+    )
+    fb_push_mode = p_fbpush.add_mutually_exclusive_group()
+    fb_push_mode.add_argument(
+        "--audience", metavar="NAME",
+        help="Audience name from voter_audience_bridge",
+    )
+    fb_push_mode.add_argument(
+        "--list-audiences", action="store_true",
+        help="List available audience names with voter counts",
+    )
+    fb_push_dist = p_fbpush.add_mutually_exclusive_group()
+    fb_push_dist.add_argument("--ld",     metavar="NUM")
+    fb_push_dist.add_argument("--sd",     metavar="NUM")
+    fb_push_dist.add_argument("--cd",     metavar="NUM")
+    fb_push_dist.add_argument("--county", metavar="NAME")
+    p_fbpush.add_argument("--fb-audience-id", metavar="ID",
+        help="Existing Facebook Custom Audience ID to update")
+    p_fbpush.add_argument("--replace", action="store_true",
+        help="Atomically replace audience (requires --fb-audience-id)")
+    p_fbpush.add_argument("--dry-run", action="store_true",
+        help="Hash and prepare records but do not upload to Facebook")
+
     # fb-audiences — interactive by default; optional CLI flags bypass the prompts
     p_fb = sub.add_parser(
         "fb-audiences",
@@ -713,6 +752,29 @@ def _dispatch(args, verbosity):
         if getattr(args, 'fb_audience_name', None): extra += ["--audience-name", args.fb_audience_name]
         if getattr(args, 'dry_run', False):       extra.append("--dry-run")
         run("export/facebook_donor_audience.py", extra, verbosity_level=verbosity)
+
+    # ── crm-phone ─────────────────────────────────────────────────────────────
+    elif args.command == "crm-phone":
+        extra = []
+        if args.stats: extra.append("--stats")
+        run("pipeline/phone_match_crm.py", extra, verbosity_level=verbosity)
+
+    # ── fb-push ───────────────────────────────────────────────────────────────
+    elif args.command == "fb-push":
+        extra = []
+        if getattr(args, "list_audiences", False):
+            extra.append("--list-audiences")
+        elif getattr(args, "audience", None):
+            extra += ["--audience", args.audience]
+        if getattr(args, "ld",     None): extra += ["--ld",     args.ld]
+        elif getattr(args, "sd",   None): extra += ["--sd",     args.sd]
+        elif getattr(args, "cd",   None): extra += ["--cd",     args.cd]
+        elif getattr(args, "county", None): extra += ["--county", args.county]
+        if getattr(args, "fb_audience_id", None):
+            extra += ["--fb-audience-id", args.fb_audience_id]
+        if getattr(args, "replace",  False): extra.append("--replace")
+        if getattr(args, "dry_run",  False): extra.append("--dry-run")
+        run("export/facebook_audience.py", extra, verbosity_level=verbosity)
 
     # ── reset ─────────────────────────────────────────────────────────────────
     elif args.command == "reset":
