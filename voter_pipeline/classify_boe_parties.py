@@ -200,143 +200,112 @@ def classify_by_keywords(conn):
 
 
 def classify_by_voter_registration(conn):
-    """Tier 2: For candidate committees, look up the candidate's voter registration party.
+    """Tier 2: Batch-classify filers by matching candidate names to voter_file.
 
-    COMMCAND has 'Authorized Single Candidate Committee' types where the committee
-    name often contains the candidate's name (e.g. 'Friends of Kathy Hochul').
-    We extract candidate names from the filer record and match against voter_file.
+    Uses a temp table + single JOIN instead of per-filer queries for performance.
+
+    1. CANDIDATE type filers: parse first/last from filer name
+    2. COMMITTEE type filers: extract candidate name via regex patterns
+       (e.g. 'Friends of Kathy Hochul' → first=KATHY, last=HOCHUL)
+    3. Batch-JOIN against voter_file to get dominant OfficialParty
     """
+    import re
     cur = conn.cursor()
 
-    # Get unclassified filers that have matching names in contributions
-    cur.execute("""
-        SELECT DISTINCT f.filer_id, f.name
-        FROM boe_filers f
-        JOIN contributions c ON TRIM(c.filer) = TRIM(f.name)
-        WHERE f.party IS NULL
-    """)
-    unclassified = cur.fetchall()
-    if not unclassified:
-        print("  Tier 2 (voter registration): 0 filers to check")
-        return 0
-
-    # Build a lookup: for each filer_id, find the dominant voter registration party
-    # of people who donated TO this filer.  If 70%+ of donors sharing a last name
-    # with the filer are one party, that's a strong signal.
-    #
-    # Actually, a simpler approach: look at the COMMCAND candidate name fields.
-    # COMMCAND cols: 0=id, 1=name, 2=type, ... 10=first, 11=middle, 12=last
-    # For CANDIDATE rows, cols 10-12 are the candidate's own name.
-    # For COMMITTEE rows, cols 10-12 are the treasurer, not the candidate.
-    #
-    # So for CANDIDATE type filers, we can directly look up their party in voter_file.
-
-    # Step 1: Match CANDIDATE type filers to voter_file
-    cur.execute("""
-        SELECT f.filer_id, f.name
-        FROM boe_filers f
-        WHERE f.party IS NULL AND f.type = 'CANDIDATE'
-    """)
-    candidates = cur.fetchall()
-
-    classified = 0
-    for fid, name in candidates:
-        # Parse candidate name from the filer name
-        # COMMCAND candidate names are in the 'name' field itself
-        # Try matching against voter_file by name
-        parts = name.strip().split()
-        if len(parts) < 2:
-            continue
-        # Use first and last name tokens
-        first = parts[0].upper()
-        last = parts[-1].upper()
-        # Skip very short names (initials)
-        if len(first) < 2 or len(last) < 2:
-            continue
-
-        cur.execute("""
-            SELECT OfficialParty, COUNT(*) as cnt
-            FROM nys_voter_tagging.voter_file
-            WHERE UPPER(FirstName) = %s AND UPPER(LastName) = %s
-            GROUP BY OfficialParty
-            ORDER BY cnt DESC
-            LIMIT 1
-        """, (first, last))
-        row = cur.fetchone()
-        if row and row[1] >= 1:
-            party = row[0]
-            if party == 'Republican':
-                cur.execute("UPDATE boe_filers SET party = 'R' WHERE filer_id = %s", (fid,))
-                classified += 1
-            elif party == 'Democrat':
-                cur.execute("UPDATE boe_filers SET party = 'D' WHERE filer_id = %s", (fid,))
-                classified += 1
-
-    conn.commit()
-    print(f"  Tier 2 (candidate voter reg): {classified:,} candidate filers classified")
-
-    # Step 2: For remaining COMMITTEE filers, extract candidate name from common patterns
-    # like "Friends of [Name]", "[Name] for [Office]", "Committee to Elect [Name]"
-    cur.execute("""
-        SELECT f.filer_id, f.name
-        FROM boe_filers f
-        JOIN contributions c ON TRIM(c.filer) = TRIM(f.name)
-        WHERE f.party IS NULL AND f.type = 'COMMITTEE'
-        GROUP BY f.filer_id, f.name
-    """)
-    committees = cur.fetchall()
-
-    import re
-    # Patterns that extract candidate names from committee names
+    # Regex patterns for extracting candidate names from committee names
     name_patterns = [
         re.compile(r'(?:friends of|friends for|people for|citizens for|committee to (?:re-?)?elect|vote for)\s+(.+?)(?:\s+(?:for|inc|pac|committee|cmte|\d{4}).*)?$', re.I),
         re.compile(r'^(.+?)\s+(?:for|4)\s+(?:ny|new york|governor|senate|congress|assembly|mayor|council|da|district attorney|comptroller|ag|attorney general|state senate|state assembly)\b', re.I),
         re.compile(r'^(.+?)\s+\d{4}\s*$', re.I),  # "Name 2024"
     ]
 
-    classified2 = 0
-    for fid, name in committees:
-        candidate_name = None
-        for pat in name_patterns:
-            m = pat.search(name)
-            if m:
-                candidate_name = m.group(1).strip()
-                break
-        if not candidate_name:
-            continue
+    FALSE_POSITIVES = frozenset(('FOR', 'THE', 'OF', 'AND', 'INC', 'PAC', 'NYC', 'NYS'))
 
-        parts = candidate_name.split()
+    def _extract_name(filer_name, filer_type):
+        """Extract (first, last) from a filer name. Returns None if unparseable."""
+        if filer_type == 'CANDIDATE':
+            parts = filer_name.strip().split()
+        else:
+            # COMMITTEE: try regex extraction
+            candidate_name = None
+            for pat in name_patterns:
+                m = pat.search(filer_name)
+                if m:
+                    candidate_name = m.group(1).strip()
+                    break
+            if not candidate_name:
+                return None
+            parts = candidate_name.split()
+
         if len(parts) < 2:
-            continue
+            return None
         first = parts[0].upper()
         last = parts[-1].upper()
         if len(first) < 2 or len(last) < 2:
-            continue
-        # Skip common false positives
-        if last in ('FOR', 'THE', 'OF', 'AND', 'INC', 'PAC', 'NYC', 'NYS'):
-            continue
+            return None
+        if last in FALSE_POSITIVES:
+            return None
+        return (first, last)
 
-        cur.execute("""
-            SELECT OfficialParty, COUNT(*) as cnt
+    # Collect all unclassified filers (both CANDIDATE and COMMITTEE types)
+    cur.execute("SELECT filer_id, name, type FROM boe_filers WHERE party IS NULL")
+    all_filers = cur.fetchall()
+
+    # Build temp table of (filer_id, first, last) for batch lookup
+    cur.execute("DROP TEMPORARY TABLE IF EXISTS _tmp_filer_names")
+    cur.execute("""
+        CREATE TEMPORARY TABLE _tmp_filer_names (
+            filer_id INT PRIMARY KEY,
+            first_name VARCHAR(100),
+            last_name VARCHAR(100),
+            INDEX idx_name (first_name, last_name)
+        )
+    """)
+
+    batch = []
+    for fid, name, ftype in all_filers:
+        parsed = _extract_name(name, ftype)
+        if parsed:
+            batch.append((fid, parsed[0], parsed[1]))
+
+    if not batch:
+        print("  Tier 2 (voter registration): 0 filers to check")
+        return 0
+
+    cur.executemany(
+        "INSERT INTO _tmp_filer_names (filer_id, first_name, last_name) VALUES (%s, %s, %s)",
+        batch
+    )
+    print(f"  Tier 2: {len(batch):,} filer names extracted, batch-matching to voter_file...")
+
+    # Single batch query: for each (first, last), find dominant party in voter_file
+    cur.execute("""
+        UPDATE boe_filers f
+        JOIN _tmp_filer_names t ON f.filer_id = t.filer_id
+        JOIN (
+            SELECT FirstName, LastName, OfficialParty,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY UPPER(FirstName), UPPER(LastName)
+                       ORDER BY COUNT(*) DESC
+                   ) AS rn
             FROM nys_voter_tagging.voter_file
-            WHERE UPPER(FirstName) = %s AND UPPER(LastName) = %s
-            GROUP BY OfficialParty
-            ORDER BY cnt DESC
-            LIMIT 1
-        """, (first, last))
-        row = cur.fetchone()
-        if row and row[1] >= 1:
-            party = row[0]
-            if party == 'Republican':
-                cur.execute("UPDATE boe_filers SET party = 'R' WHERE filer_id = %s", (fid,))
-                classified2 += 1
-            elif party == 'Democrat':
-                cur.execute("UPDATE boe_filers SET party = 'D' WHERE filer_id = %s", (fid,))
-                classified2 += 1
-
+            WHERE OfficialParty IN ('Democrat', 'Republican')
+            GROUP BY UPPER(FirstName), UPPER(LastName), OfficialParty
+        ) v ON t.first_name = UPPER(v.FirstName)
+           AND t.last_name  = UPPER(v.LastName)
+           AND v.rn = 1
+        SET f.party = CASE v.OfficialParty
+            WHEN 'Democrat' THEN 'D'
+            WHEN 'Republican' THEN 'R'
+        END
+        WHERE f.party IS NULL
+    """)
+    classified = cur.rowcount
     conn.commit()
-    print(f"  Tier 2 (committee name → voter reg): {classified2:,} committee filers classified")
-    return classified + classified2
+
+    cur.execute("DROP TEMPORARY TABLE IF EXISTS _tmp_filer_names")
+    print(f"  Tier 2 (voter registration): {classified:,} filers classified")
+    return classified
 
 
 def apply_to_contributions(conn):
