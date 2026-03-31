@@ -83,6 +83,25 @@ a:hover { color: var(--pk-red-dk); }
   box-shadow: 0 0 0 .2rem var(--pk-red-lt);
 }
 
+/* ── Cards & panels ─────────────────────────────────────────────────────── */
+.card.shadow-sm {
+  border: 1px solid #d0d4da;
+  box-shadow: 0 2px 6px rgba(0,0,0,.08) !important;
+}
+.card-header.bg-white {
+  background: #f6f7f9 !important;
+  border-bottom: 1px solid #d0d4da;
+}
+/* Step boxes inside donor cards */
+.card-body .border.rounded {
+  border-color: #c0c6cf !important;
+  background: #fafbfc;
+}
+.card-body .border.rounded:hover {
+  border-color: #a0a8b4 !important;
+  background: #f4f5f7;
+}
+
 /* ── Queue table ─────────────────────────────────────────────────────────── */
 .email-row { cursor: pointer; }
 .email-row:hover td { background: #fdf0f0; }
