@@ -991,6 +991,7 @@ async function runCrmStream(cmd, extra) {
       }
     }
     const taskId = d.task_id;
+    localStorage.setItem('vp_task', JSON.stringify({id: taskId, cmd, tab: 'crm'}));
     let offset = 0;
     const term = makeTermState();
     while (true) {
@@ -1008,6 +1009,7 @@ async function runCrmStream(cmd, extra) {
         if (!pd.running) {
           processLine(`[Exit code: ${pd.exit_code}]`);
           pre.textContent += `\n[Exit code: ${pd.exit_code}]\n`;
+          localStorage.removeItem('vp_task');
           break;
         }
       } catch (err) {
@@ -1017,6 +1019,8 @@ async function runCrmStream(cmd, extra) {
     }
   } catch (err) {
     pre.textContent += '\n[Error: ' + err.message + ']';
+  } finally {
+    localStorage.removeItem('vp_task');
   }
 }
 
@@ -1378,11 +1382,13 @@ async function runStream(cmd, extra, tab, triggerBtn) {
       }
       return;
     }
-    // Poll for output
+    // Save to localStorage so we can resume on page reload
+    localStorage.setItem('vp_task', JSON.stringify({id: d.task_id, cmd, tab}));
     await _pollTask(d.task_id, container, _updateDlBar);
   } catch (err) {
     container.textContent += '\n[Error: ' + err.message + ']';
   } finally {
+    localStorage.removeItem('vp_task');
     if (triggerBtn) {
       triggerBtn.disabled = false;
       triggerBtn.innerHTML = triggerBtn._origHtml;
@@ -1405,6 +1411,7 @@ async function _pollTask(taskId, container, dlBarCallback) {
       offset = d.offset;
       if (!d.running) {
         container.textContent += `\n[Exit code: ${d.exit_code}]\n`;
+        localStorage.removeItem('vp_task');
         break;
       }
     } catch (err) {
@@ -1413,6 +1420,29 @@ async function _pollTask(taskId, container, dlBarCallback) {
     await new Promise(r => setTimeout(r, 1500));
   }
 }
+
+// Auto-resume a running task on page load
+(function resumeTask() {
+  const saved = localStorage.getItem('vp_task');
+  if (!saved) return;
+  try {
+    const { id, cmd, tab } = JSON.parse(saved);
+    const container = document.getElementById('log-' + tab);
+    if (!container) { localStorage.removeItem('vp_task'); return; }
+    // Show the output panel
+    const wrap = document.getElementById('log-' + tab + '-wrap');
+    if (wrap) {
+      const labelEl = document.getElementById('log-' + tab + '-label');
+      if (labelEl) labelEl.innerHTML = `<i class="bi bi-terminal me-1"></i>${cmd}`;
+      wrap.classList.remove('d-none');
+    }
+    container.classList.remove('d-none');
+    container.textContent = `▶ Resuming: ${cmd}\n`;
+    _pollTask(id, container).then(() => {
+      localStorage.removeItem('vp_task');
+    });
+  } catch (e) { localStorage.removeItem('vp_task'); }
+})();
 
 /* ── Voter File: status ──────────────────────────────────────────────────── */
 async function loadVoterFileStatus() {
