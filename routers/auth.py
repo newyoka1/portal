@@ -38,7 +38,8 @@ def login(
         )
     token = create_session(user.id)
     response = RedirectResponse("/", status_code=302)
-    response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax")
+    response.set_cookie(SESSION_COOKIE, token, httponly=True, samesite="lax",
+                         secure=True, max_age=7 * 24 * 3600)
     return response
 
 
