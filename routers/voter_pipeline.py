@@ -371,8 +371,16 @@ def voter_file_status(current_user: User = Depends(require_user)):
 
 ALLOWED_CMDS = frozenset({
     "status", "pipeline", "export", "donors", "hubspot-sync", "cm-sync",
-    "crm-sync", "crm-enrich", "crm-phone", "ethnicity", "fb-audiences",
-    "fb-push", "reset", "sync",
+    "crm-sync", "crm-enrich", "crm-phone", "crm-extended-match",
+    "ethnicity", "enrich-derived", "district-scores", "party-snapshot",
+    "fb-audiences", "fb-push", "reset", "sync",
+    "voter-file-load", "voter-contact",
+    # BOE individual steps
+    "boe-download", "boe-load", "boe-enrich", "boe-enrich-only",
+    # National (FEC) individual steps
+    "fec-download", "fec-load", "fec-enrich", "national-enrich",
+    # CFB individual steps
+    "cfb-download", "cfb-load", "cfb-enrich",
 })
 
 
