@@ -208,11 +208,11 @@ def classify_by_voter_registration(conn):
     """
     cur = conn.cursor()
 
-    # Get unclassified filers that have filer_id in contributions
+    # Get unclassified filers that have matching names in contributions
     cur.execute("""
         SELECT DISTINCT f.filer_id, f.name
         FROM boe_filers f
-        JOIN contributions c ON c.filer_id = f.filer_id
+        JOIN contributions c ON TRIM(c.filer) = TRIM(f.name)
         WHERE f.party IS NULL
     """)
     unclassified = cur.fetchall()
@@ -280,7 +280,7 @@ def classify_by_voter_registration(conn):
     cur.execute("""
         SELECT f.filer_id, f.name
         FROM boe_filers f
-        JOIN contributions c ON c.filer_id = f.filer_id
+        JOIN contributions c ON TRIM(c.filer) = TRIM(f.name)
         WHERE f.party IS NULL AND f.type = 'COMMITTEE'
         GROUP BY f.filer_id, f.name
     """)
@@ -349,7 +349,7 @@ def apply_to_contributions(conn):
 
     cur.execute("""
         UPDATE contributions c
-        JOIN boe_filers f ON c.filer_id = f.filer_id
+        JOIN boe_filers f ON TRIM(c.filer) = TRIM(f.name)
         SET c.party = f.party
         WHERE c.party = 'U'
           AND f.party IS NOT NULL
@@ -509,13 +509,13 @@ def main():
 
     conn = get_conn('boe_donors')
 
-    # Check contributions table exists and has filer_id
+    # Check contributions table exists and has filer column
     cur = conn.cursor()
     try:
-        cur.execute("SELECT filer_id FROM contributions LIMIT 0")
+        cur.execute("SELECT filer FROM contributions LIMIT 0")
     except Exception:
-        print("\nERROR: contributions.filer_id not found.")
-        print("Re-run: python main.py boe-enrich  (will rebuild contributions with filer_id)")
+        print("\nERROR: contributions table not found or missing 'filer' column.")
+        print("Re-run: python main.py boe-enrich  (will rebuild contributions)")
         conn.close()
         sys.exit(1)
 

@@ -391,6 +391,7 @@ _drop_and_create(cur, "contributions", """CREATE TABLE contributions (
     party     CHAR(1),
     source    CHAR(2),
     INDEX idx_filer_id (filer_id),
+    INDEX idx_filer    (filer),
     INDEX idx_source   (source),
     INDEX idx_party    (party),
     INDEX idx_year     (year),
