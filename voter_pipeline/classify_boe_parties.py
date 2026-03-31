@@ -51,9 +51,9 @@ def _drop_and_create(cur, table_name, create_sql):
             raise
 
 # ---------------------------------------------------------------------------
-# COMMCAND.CSV path
+# COMMCAND.CSV path — extracted by download_boe.py alongside the other CSVs
 # ---------------------------------------------------------------------------
-COMMCAND_PATH = Path("data/boe_reports/commcand_extract/COMMCAND.CSV")
+COMMCAND_PATH = Path(__file__).parent / "data" / "boe_donors" / "extracted" / "COMMCAND.CSV"
 
 # ---------------------------------------------------------------------------
 # Keyword lists (modeled after step4_classify_parties.py FEC classifier)

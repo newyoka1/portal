@@ -34,12 +34,16 @@ BOE_DIR.mkdir(parents=True, exist_ok=True)
 EXTRACT_DIR.mkdir(parents=True, exist_ok=True)
 
 # Maps outer ZIP filename → (inner ZIP name, CSV name)
+# Disclosure reports use nested ZIPs: outer.zip → inner.zip → CSV
 UNPACK = {
     "ALL_REPORTS_StateCandidate.zip":  ("STATE_CANDIDATE.zip",  "STATE_CANDIDATE.csv"),
     "ALL_REPORTS_CountyCandidate.zip": ("COUNTY_CANDIDATE.zip", "COUNTY_CANDIDATE.csv"),
     "ALL_REPORTS_StateCommittee.zip":  ("STATE_COMMITTEE.zip",  "STATE_COMMITTEE.csv"),
     "ALL_REPORTS_CountyCommittee.zip": ("COUNTY_COMMITTEE.zip", "COUNTY_COMMITTEE.csv"),
 }
+
+# COMMCAND (Committee and Candidate listing) — flat ZIP, not nested
+COMMCAND_DIR = EXTRACT_DIR   # same dir as the other CSVs
 
 BASE_URL   = "https://publicreporting.elections.ny.gov"
 PAGE_URL   = f"{BASE_URL}/DownloadCampaignFinanceData/DownloadCampaignFinanceData"
@@ -263,6 +267,109 @@ def run(force: bool = False):
             if i < len(DOWNLOADS):
                 time.sleep(3)
             print()
+
+        # ── COMMCAND (Committee & Candidate filer listing) ─────────────
+        commcand_csv = COMMCAND_DIR / "COMMCAND.CSV"
+        commcand_md5 = COMMCAND_DIR / "COMMCAND.CSV.md5"
+        print(f"[COMMCAND] Committee & Candidate listing")
+
+        if commcand_csv.exists() and commcand_md5.exists() and not force:
+            print(f"  Already extracted: COMMCAND.CSV ({fmt_size(commcand_csv.stat().st_size)})")
+            print(f"  Use --force to re-download.")
+            results.append(("COMMCAND.zip", "UNCHANGED", fmt_size(commcand_csv.stat().st_size)))
+        else:
+            old_cc_hash = commcand_md5.read_text().strip() if commcand_md5.exists() else None
+            cc_ok = False
+            try:
+                # SetSessions with "Committee and Candidate Listing" date type
+                cc_status = page.evaluate(f"""
+                    async () => {{
+                        const r = await fetch("{SET_URL}", {{
+                            method: "POST",
+                            headers: {{
+                                "Content-Type": "application/json",
+                                "X-Requested-With": "XMLHttpRequest",
+                                "Accept": "application/json, text/javascript, */*; q=0.01"
+                            }},
+                            body: '{{"lstDateType":"Committee and Candidate Listing","lstUCYearDCF":"All","lstFilingDesc":"All"}}'
+                        }});
+                        return r.status;
+                    }}
+                """)
+                if cc_status != 200:
+                    print(f"  ERROR: SetSessions returned {cc_status}")
+                    results.append(("COMMCAND.zip", "FAILED", f"SetSessions {cc_status}"))
+                else:
+                    print(f"  Downloading...")
+                    t0 = time.time()
+                    with page.expect_download(timeout=120_000) as dl_info:
+                        page.evaluate(f"""
+                            (() => {{
+                                const f = document.createElement('form');
+                                f.method = 'GET';
+                                f.action = '{DL_URL}';
+                                document.body.appendChild(f);
+                                f.submit();
+                                document.body.removeChild(f);
+                            }})()
+                        """)
+                    download = dl_info.value
+                    tmp_cc = tmp_dir / "COMMCAND.zip"
+                    tmp_dir.mkdir(exist_ok=True)
+                    download.save_as(tmp_cc)
+
+                    if tmp_cc.exists() and tmp_cc.stat().st_size > 0:
+                        new_cc_hash = file_md5(tmp_cc)
+                        zip_size = tmp_cc.stat().st_size
+                        print(f"  Downloaded: {fmt_size(zip_size)}  in {time.time()-t0:.0f}s")
+
+                        if old_cc_hash and old_cc_hash == new_cc_hash and not force:
+                            print(f"  UNCHANGED - skipping extract")
+                            tmp_cc.unlink()
+                            results.append(("COMMCAND.zip", "UNCHANGED", fmt_size(commcand_csv.stat().st_size) if commcand_csv.exists() else ""))
+                        else:
+                            # COMMCAND is a flat ZIP (not nested) — extract directly
+                            with zipfile.ZipFile(tmp_cc) as zf:
+                                # Find the CSV inside (name may vary in case)
+                                csv_names = [n for n in zf.namelist() if n.upper().endswith('.CSV')]
+                                if csv_names:
+                                    src_name = csv_names[0]
+                                    with zf.open(src_name) as src, open(commcand_csv, "wb") as dst:
+                                        shutil.copyfileobj(src, dst)
+                                    commcand_md5.write_text(new_cc_hash)
+                                    tmp_cc.unlink()
+                                    sz = fmt_size(commcand_csv.stat().st_size)
+                                    print(f"  Extracted: COMMCAND.CSV ({sz})")
+                                    results.append(("COMMCAND.zip", "UPDATED" if old_cc_hash else "NEW", sz))
+                                    cc_ok = True
+                                else:
+                                    # Maybe it's a nested ZIP like the others
+                                    inner_names = [n for n in zf.namelist() if n.upper().endswith('.ZIP')]
+                                    if inner_names:
+                                        inner_bytes = io.BytesIO(zf.read(inner_names[0]))
+                                        with zipfile.ZipFile(inner_bytes) as inner:
+                                            csv_inner = [n for n in inner.namelist() if n.upper().endswith('.CSV')]
+                                            if csv_inner:
+                                                with inner.open(csv_inner[0]) as src, open(commcand_csv, "wb") as dst:
+                                                    shutil.copyfileobj(src, dst)
+                                                commcand_md5.write_text(new_cc_hash)
+                                                tmp_cc.unlink()
+                                                sz = fmt_size(commcand_csv.stat().st_size)
+                                                print(f"  Extracted (nested): COMMCAND.CSV ({sz})")
+                                                results.append(("COMMCAND.zip", "UPDATED" if old_cc_hash else "NEW", sz))
+                                                cc_ok = True
+                                    if not cc_ok:
+                                        print(f"  ERROR: no CSV found in ZIP (contents: {zf.namelist()})")
+                                        tmp_cc.unlink(missing_ok=True)
+                                        results.append(("COMMCAND.zip", "FAILED", "no CSV in ZIP"))
+                    else:
+                        print(f"  ERROR: downloaded file is empty")
+                        results.append(("COMMCAND.zip", "FAILED", "empty download"))
+            except Exception as e:
+                print(f"  ERROR: {e}")
+                results.append(("COMMCAND.zip", "FAILED", str(e)))
+
+        print()
 
         # Cleanup temp dir
         tmp_dir_path = BOE_DIR / "_tmp"
