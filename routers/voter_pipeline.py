@@ -275,7 +275,7 @@ def voter_data_status(current_user: User = Depends(require_user)):
             ]],
         },
         {
-            "label": "FEC Federal Contributions (extracted)",
+            "label": "National Donors — Federal Contributions (extracted)",
             "key":   "fec",
             "files": [_file_info(fec_dir / "extracted" / f"indiv{str(c)[-2:]}")
                       for c in fec_cycles],

@@ -41,12 +41,12 @@
         <span class="badge bg-success fs-6 px-2 py-1 flex-shrink-0">2</span>
         <div>
           <div class="fw-semibold">Donor Data <span class="text-muted fw-normal">— enriches voter_file rows with giving history</span></div>
-          <div class="text-muted small mb-1">BOE, FEC, and CFB are independent — run in any order. Each adds donation columns (<code>boe_total_amt</code>, <code>cfb_total_amt</code>, etc.) to voter_file that are then copied onto matched CRM contacts.</div>
+          <div class="text-muted small mb-1">BOE, National, and CFB are independent — run in any order. Each adds donation columns (<code>boe_total_amt</code>, <code>cfb_total_amt</code>, etc.) to voter_file that are then copied onto matched CRM contacts.</div>
           <div class="mb-1">
             <span class="badge bg-light text-dark border me-1">Donors → BOE: Download → Load &amp; Classify → Enrich VF</span>
           </div>
           <div class="mb-1">
-            <span class="badge bg-light text-dark border me-1">Donors → FEC: Download → Extract → Load &amp; Classify → Enrich VF</span>
+            <span class="badge bg-light text-dark border me-1">Donors → National: Download → Extract → Load &amp; Classify → Enrich VF</span>
           </div>
           <div>
             <span class="badge bg-light text-dark border me-1">Donors → CFB: Download → Load &amp; Classify → Enrich VF</span>
@@ -299,13 +299,13 @@
         <div class="row g-2 align-items-center">
           <div class="col-auto">
             <button class="btn btn-primary" onclick="vpRun('donors','--no-refresh',this)">
-              <i class="bi bi-currency-dollar me-1"></i>All Donors
+              <i class="bi bi-currency-dollar me-1"></i>Enrich All
             </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">BOE + FEC + CFB in sequence — skips downloads, uses existing files</div>
+            <div class="text-muted mt-1" style="font-size:.75rem">BOE + National + CFB in sequence — skips downloads, uses existing files</div>
           </div>
           <div class="col-auto">
             <button class="btn btn-outline-secondary" onclick="vpRun('donors','--refresh',this)">
-              <i class="bi bi-cloud-download me-1"></i>All Donors + Download
+              <i class="bi bi-cloud-download me-1"></i>Enrich All + Download
             </button>
             <div class="text-muted mt-1" style="font-size:.75rem">Re-downloads all source files first, then processes all three</div>
           </div>
@@ -371,10 +371,10 @@
       </div>
     </div>
 
-    <!-- FEC -->
+    <!-- National Donors -->
     <div class="card shadow-sm mb-3">
       <div class="card-header bg-white py-2">
-        <h6 class="fw-bold mb-0"><i class="bi bi-flag me-1"></i>FEC — Federal Campaign Finance</h6>
+        <h6 class="fw-bold mb-0"><i class="bi bi-flag me-1"></i>National Donors — Federal Campaign Finance</h6>
       </div>
       <div class="card-body">
         <p class="text-muted small mb-3">
@@ -387,9 +387,9 @@
           <div class="col-md-4">
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download &amp; Extract</div>
-              <div class="text-muted small mb-2">Downloads 6 cycles of FEC bulk ZIPs from <code>fec.gov</code>, extracts them immediately, then deletes the ZIPs. Hash-checked — skips unchanged cycles.</div>
+              <div class="text-muted small mb-2">Downloads 6 cycles of federal bulk ZIPs from <code>fec.gov</code>, extracts them immediately, then deletes the ZIPs. Hash-checked — skips unchanged cycles.</div>
               <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-download', '', this)">
-                <i class="bi bi-cloud-download me-1"></i>Download &amp; Extract FEC
+                <i class="bi bi-cloud-download me-1"></i>Download &amp; Extract
               </button>
             </div>
           </div>
@@ -397,9 +397,9 @@
           <div class="col-md-4">
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Load &amp; Classify</div>
-              <div class="text-muted small mb-2">Bulk-loads FEC <code>.txt</code> files into <code>National_Donors</code> DB via <code>LOAD DATA INFILE</code>, then classifies ~6K committees as D/R/Unknown.</div>
+              <div class="text-muted small mb-2">Bulk-loads federal <code>.txt</code> files into <code>National_Donors</code> DB via <code>LOAD DATA INFILE</code>, then classifies ~6K committees as D/R/Unknown.</div>
               <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-load', '', this)">
-                <i class="bi bi-database-up me-1"></i>Load &amp; Classify FEC
+                <i class="bi bi-database-up me-1"></i>Load &amp; Classify
               </button>
             </div>
           </div>
@@ -407,19 +407,19 @@
           <div class="col-md-4">
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Enrich Voter File</div>
-              <div class="text-muted small mb-2">Matches FEC contributions to voter_file by name+zip, writes national donation totals, D/R amounts, and <code>is_national_donor</code> flag.</div>
+              <div class="text-muted small mb-2">Matches national contributions to voter_file by name+zip, writes national donation totals, D/R amounts, and <code>is_national_donor</code> flag.</div>
               <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-enrich', '', this)">
-                <i class="bi bi-person-vcard me-1"></i>Enrich Voter File ← FEC
+                <i class="bi bi-person-vcard me-1"></i>Enrich Voter File ← National
               </button>
             </div>
           </div>
         </div>
         <div class="d-flex gap-2 align-items-center">
           <button class="btn btn-sm btn-outline-primary" onclick="vpRun('national-enrich', '--no-refresh', this)">
-            <i class="bi bi-arrow-repeat me-1"></i>All FEC (skip download)
+            <i class="bi bi-arrow-repeat me-1"></i>All National (skip download)
           </button>
           <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('national-enrich', '--refresh', this)">
-            <i class="bi bi-cloud-arrow-down me-1"></i>All FEC + Download
+            <i class="bi bi-cloud-arrow-down me-1"></i>All National + Download
           </button>
         </div>
       </div>
