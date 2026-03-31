@@ -283,16 +283,22 @@ def classify_by_voter_registration(conn):
         UPDATE boe_filers f
         JOIN _tmp_filer_names t ON f.filer_id = t.filer_id
         JOIN (
-            SELECT FirstName, LastName, OfficialParty,
+            SELECT first_u, last_u, OfficialParty,
                    ROW_NUMBER() OVER (
-                       PARTITION BY UPPER(FirstName), UPPER(LastName)
-                       ORDER BY COUNT(*) DESC
+                       PARTITION BY first_u, last_u
+                       ORDER BY cnt DESC
                    ) AS rn
-            FROM nys_voter_tagging.voter_file
-            WHERE OfficialParty IN ('Democrat', 'Republican')
-            GROUP BY UPPER(FirstName), UPPER(LastName), OfficialParty
-        ) v ON t.first_name = UPPER(v.FirstName)
-           AND t.last_name  = UPPER(v.LastName)
+            FROM (
+                SELECT UPPER(FirstName) AS first_u,
+                       UPPER(LastName) AS last_u,
+                       OfficialParty,
+                       COUNT(*) AS cnt
+                FROM nys_voter_tagging.voter_file
+                WHERE OfficialParty IN ('Democrat', 'Republican')
+                GROUP BY UPPER(FirstName), UPPER(LastName), OfficialParty
+            ) sub
+        ) v ON t.first_name = v.first_u
+           AND t.last_name  = v.last_u
            AND v.rn = 1
         SET f.party = CASE v.OfficialParty
             WHEN 'Democrat' THEN 'D'
