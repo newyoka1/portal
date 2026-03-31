@@ -291,7 +291,7 @@ def run(force: bool = False):
                                 "X-Requested-With": "XMLHttpRequest",
                                 "Accept": "application/json, text/javascript, */*; q=0.01"
                             }},
-                            body: '{{"lstDateType":"Committee and Candidate Listing","lstUCYearDCF":"All","lstFilingDesc":"All"}}'
+                            body: '{{"lstDateType":"Filer Data","lstUCYearDCF":"All","lstFilingDesc":"All"}}'
                         }});
                         return r.status;
                     }}
