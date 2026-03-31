@@ -213,48 +213,74 @@
             <span class="text-muted fw-normal">(deletes and reloads all records — use if data looks stale)</span>
           </label>
         </div>
-        <div class="row g-2 mb-1">
-          <div class="col-auto">
-            <button class="btn btn-primary" onclick="vpRunFull('crm-sync')">
-              <i class="bi bi-arrow-repeat me-1"></i>All CRM
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">HubSpot + Campaign Monitor + voter match in one go</div>
+
+        <!-- Run All -->
+        <div class="mb-3">
+          <button class="btn btn-primary" onclick="vpRunFull('crm-sync')">
+            <i class="bi bi-arrow-repeat me-1"></i>Sync All CRM
+          </button>
+          <span class="text-muted small ms-2">HubSpot + Campaign Monitor + voter match in one go</span>
+        </div>
+
+        <!-- Step grid -->
+        <div class="row g-2 mb-3">
+          <!-- Step 1: Pull Data -->
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100">
+              <div class="small fw-semibold mb-2"><span class="badge bg-secondary me-1">1</span>Pull Data</div>
+              <div class="d-flex gap-2 mb-2">
+                <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="vpRunFull('hubspot-sync')">
+                  <i class="bi bi-cloud-download me-1"></i>HubSpot
+                </button>
+                <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="vpRunFull('cm-sync')">
+                  <i class="bi bi-cloud-download me-1"></i>Campaign Monitor
+                </button>
+              </div>
+              <div class="text-muted small">Sync contacts &amp; deals from all connected CRM accounts</div>
+            </div>
           </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRunFull('hubspot-sync')">
-              <i class="bi bi-cloud-download me-1"></i>HubSpot
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Sync contacts &amp; deals from all HubSpot accounts</div>
+          <!-- Step 2: Match to Voter File -->
+          <div class="col-md-6">
+            <div class="border rounded p-3 h-100">
+              <div class="small fw-semibold mb-2"><span class="badge bg-secondary me-1">2</span>Match to Voter File</div>
+              <button class="btn btn-sm btn-outline-secondary w-100 mb-2" onclick="vpRunFull('crm-enrich')">
+                <i class="bi bi-person-check me-1"></i>Match to Voter File
+              </button>
+              <div class="text-muted small">Copies party, district, voting history &amp; demographics onto each contact</div>
+            </div>
           </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRunFull('cm-sync')">
-              <i class="bi bi-cloud-download me-1"></i>Campaign Monitor
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Sync subscribers from all Campaign Monitor accounts</div>
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRunFull('crm-enrich')">
-              <i class="bi bi-person-check me-1"></i>Match to Voter File
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Look up each contact in the voter file — copies party, district, voting history &amp; demographics onto the contact record</div>
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('crm-phone', '', this)">
-              <i class="bi bi-telephone-plus me-1"></i>Phone Match
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Second-pass: matches unmatched contacts to voter file using phone numbers — recovers an estimated 30–50K additional matches</div>
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary" onclick="vpRun('crm-extended-match', '', this)">
-              <i class="bi bi-person-plus me-1"></i>Extended Match
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Third-pass: 3 extra high-confidence strategies — hyphenated surnames, compound first names, inactive voter records</div>
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-sm btn-outline-info mt-1" onclick="vpRun('crm-extended-match', '--dry-run', this)">
-              <i class="bi bi-eye me-1"></i>Dry Run
-            </button>
-            <div class="text-muted mt-1" style="font-size:.75rem">Count potential extended matches without writing</div>
+        </div>
+
+        <!-- Advanced matching -->
+        <div class="card border-0 bg-light mb-1">
+          <div class="card-body py-2 px-3">
+            <div class="small fw-semibold mb-2"><i class="bi bi-sliders me-1"></i>Advanced Matching</div>
+            <div class="row g-2">
+              <div class="col-md-4">
+                <div class="border rounded p-2 bg-white h-100">
+                  <button class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="vpRun('crm-phone', '', this)">
+                    <i class="bi bi-telephone-plus me-1"></i>Phone Match
+                  </button>
+                  <div class="text-muted small">Second-pass via phone numbers (~30–50K extra matches)</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="border rounded p-2 bg-white h-100">
+                  <button class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="vpRun('crm-extended-match', '', this)">
+                    <i class="bi bi-person-plus me-1"></i>Extended Match
+                  </button>
+                  <div class="text-muted small">Third-pass: hyphenated surnames, compound names, inactive voters</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="border rounded p-2 bg-white h-100">
+                  <button class="btn btn-sm btn-outline-info w-100 mb-1" onclick="vpRun('crm-extended-match', '--dry-run', this)">
+                    <i class="bi bi-eye me-1"></i>Dry Run
+                  </button>
+                  <div class="text-muted small">Count potential extended matches without writing</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
