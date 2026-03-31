@@ -97,10 +97,11 @@ FEC_FILES = [
 ]
 
 BOE_FILES = [
-    os.path.join(BASE, "data", "boe_donors", "ALL_REPORTS_StateCandidate.zip"),
-    os.path.join(BASE, "data", "boe_donors", "ALL_REPORTS_CountyCandidate.zip"),
-    os.path.join(BASE, "data", "boe_donors", "ALL_REPORTS_StateCommittee.zip"),
-    os.path.join(BASE, "data", "boe_donors", "ALL_REPORTS_CountyCommittee.zip"),
+    os.path.join(BASE, "data", "boe_donors", "extracted", "STATE_CANDIDATE.csv"),
+    os.path.join(BASE, "data", "boe_donors", "extracted", "COUNTY_CANDIDATE.csv"),
+    os.path.join(BASE, "data", "boe_donors", "extracted", "STATE_COMMITTEE.csv"),
+    os.path.join(BASE, "data", "boe_donors", "extracted", "COUNTY_COMMITTEE.csv"),
+    os.path.join(BASE, "data", "boe_donors", "extracted", "COMMCAND.CSV"),
 ]
 
 CFB_FILES = [

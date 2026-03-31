@@ -271,6 +271,7 @@ def voter_data_status(current_user: User = Depends(require_user)):
                 "COUNTY_CANDIDATE.csv",
                 "STATE_COMMITTEE.csv",
                 "COUNTY_COMMITTEE.csv",
+                "COMMCAND.CSV",
             ]],
         },
         {
