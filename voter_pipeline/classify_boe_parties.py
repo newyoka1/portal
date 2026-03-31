@@ -20,10 +20,35 @@ import os, sys, csv, time
 from pathlib import Path
 from dotenv import load_dotenv
 
+import pymysql
 load_dotenv()
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from utils.db import get_conn
+
+
+def _column_exists(cur, database, table, column):
+    """Check if a column exists in the given table."""
+    cur.execute(
+        "SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS "
+        "WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s",
+        (database, table, column),
+    )
+    return cur.fetchone() is not None
+
+
+def _drop_and_create(cur, table_name, create_sql):
+    """DROP + CREATE with retry if InnoDB DDL purge lags behind."""
+    cur.execute(f"DROP TABLE IF EXISTS {table_name}")
+    try:
+        cur.execute(create_sql)
+    except pymysql.err.OperationalError as e:
+        if e.args[0] == 1050:
+            time.sleep(1)
+            cur.execute(f"DROP TABLE IF EXISTS {table_name}")
+            cur.execute(create_sql)
+        else:
+            raise
 
 # ---------------------------------------------------------------------------
 # COMMCAND.CSV path
@@ -97,14 +122,12 @@ def load_boe_filers(conn):
     Schema:
       filer_id INT PK, name VARCHAR, type ENUM(COMMITTEE,CANDIDATE),
       level VARCHAR, status VARCHAR, committee_type VARCHAR, office VARCHAR
-    """
-    if not COMMCAND_PATH.exists():
-        print(f"  WARNING: {COMMCAND_PATH} not found — skipping filer lookup")
-        return 0
 
+    Always creates the table (even when COMMCAND.CSV is missing) so
+    downstream classify steps find 0 rows instead of a missing table.
+    """
     cur = conn.cursor()
-    cur.execute("DROP TABLE IF EXISTS boe_filers")
-    cur.execute("""
+    _drop_and_create(cur, "boe_filers", """
         CREATE TABLE boe_filers (
             filer_id        INT PRIMARY KEY,
             name            VARCHAR(255),
@@ -120,6 +143,10 @@ def load_boe_filers(conn):
             INDEX idx_party (party)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
     """)
+
+    if not COMMCAND_PATH.exists():
+        print(f"  WARNING: {COMMCAND_PATH} not found — table created empty")
+        return 0
 
     rows = []
     with open(COMMCAND_PATH, "r", encoding="latin-1") as f:
@@ -374,20 +401,21 @@ def rebuild_donor_summary_parties(conn):
     exact = cur.rowcount
     print(f"    Exact: {exact:,}")
 
-    # Hyphenated fallback
-    for part_col in ["clean_last_h1", "clean_last_h2"]:
-        cur.execute(
-            "INSERT IGNORE INTO voter_contribs (StateVoterId, year, party, total, count)"
-            " SELECT v.StateVoterId, c.year, c.party, SUM(c.amount), COUNT(*)"
-            " FROM nys_voter_tagging.voter_file v"
-            " JOIN boe_donors.contributions c"
-            f"   ON v.{part_col}  = c.last"
-            "  AND v.clean_first = c.first"
-            "  AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5"
-            f" WHERE v.{part_col} IS NOT NULL"
-            "  AND c.zip5 != ''"
-            " GROUP BY v.StateVoterId, c.year, c.party"
-        )
+    # Hyphenated fallback (requires clean_last_h1/h2 from 'pipeline' command)
+    if _column_exists(cur, "nys_voter_tagging", "voter_file", "clean_last_h1"):
+        for part_col in ["clean_last_h1", "clean_last_h2"]:
+            cur.execute(
+                "INSERT IGNORE INTO voter_contribs (StateVoterId, year, party, total, count)"
+                " SELECT v.StateVoterId, c.year, c.party, SUM(c.amount), COUNT(*)"
+                " FROM nys_voter_tagging.voter_file v"
+                " JOIN boe_donors.contributions c"
+                f"   ON v.{part_col}  = c.last"
+                "  AND v.clean_first = c.first"
+                "  AND SUBSTRING(v.PrimaryZip, 1, 5) = c.zip5"
+                f" WHERE v.{part_col} IS NOT NULL"
+                "  AND c.zip5 != ''"
+                " GROUP BY v.StateVoterId, c.year, c.party"
+            )
 
     # Re-pivot boe_donor_summary
     print("  Re-pivoting boe_donor_summary...")
