@@ -139,6 +139,7 @@ def load_boe_filers(conn):
             district        VARCHAR(50),
             county          VARCHAR(100),
             party           CHAR(1) DEFAULT NULL,
+            INDEX idx_name  (name),
             INDEX idx_type  (type),
             INDEX idx_party (party)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
@@ -324,7 +325,7 @@ def apply_to_contributions(conn):
 
     cur.execute("""
         UPDATE contributions c
-        JOIN boe_filers f ON TRIM(c.filer) = TRIM(f.name)
+        JOIN boe_filers f ON c.filer = f.name
         SET c.party = f.party
         WHERE c.party = 'U'
           AND f.party IS NOT NULL
