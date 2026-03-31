@@ -1,9 +1,13 @@
 """Voter Pipeline — CRM sync, Aiven sync, export (cloud-safe ops only)."""
+import asyncio
 import csv
 import io
 import os
+import subprocess
 import sys
+import tempfile
 import time as _time
+import uuid
 from datetime import date, datetime
 from pathlib import Path
 
@@ -21,6 +25,13 @@ templates = Jinja2Templates(directory="templates")
 
 PORTAL_DIR  = Path(__file__).parent.parent
 VOTER_DIR   = PORTAL_DIR / "voter_pipeline"
+
+# ── Background task registry ────────────────────────────────────────────────
+# Tasks run as subprocesses with stdout → file. Survives nginx timeouts and
+# browser refreshes. Frontend polls /task/<id>/output for new content.
+_TASK_DIR = PORTAL_DIR / ".tasks"
+_TASK_DIR.mkdir(exist_ok=True)
+_tasks: dict[str, dict] = {}  # id → {proc, cmd, started, logfile}
 
 
 def _crm_connect(env: dict, **overrides) -> pymysql.Connection:
@@ -385,42 +396,73 @@ ALLOWED_CMDS = frozenset({
 
 
 @router.post("/run")
-async def voter_run_stream(
+async def voter_run_task(
     cmd:      str = Form(...),
     extra:    str = Form(""),
     current_user: User = Depends(require_user),
 ):
-    """Stream output for any voter-pipeline main.py subcommand."""
+    """Start a pipeline command as a background task. Returns task ID."""
     if cmd not in ALLOWED_CMDS:
         return JSONResponse({"error": f"invalid command: {cmd}"}, status_code=400)
-    args = [sys.executable, str(VOTER_DIR / "main.py"), cmd]
+
+    # Only one task at a time
+    for tid, t in list(_tasks.items()):
+        if t["proc"].poll() is None:
+            return JSONResponse({
+                "error": f"A task is already running: {t['cmd']}",
+                "task_id": tid,
+            }, status_code=409)
+
+    args = [sys.executable, "-u", str(VOTER_DIR / "main.py"), cmd]
     if extra:
-        args += extra.split()   # e.g. "--ld 63" or "--full"
+        args += extra.split()
 
-    return StreamingResponse(
-        _stream(args, str(VOTER_DIR), _build_env()),
-        media_type="text/plain",
+    task_id = uuid.uuid4().hex[:12]
+    logfile = _TASK_DIR / f"{task_id}.log"
+
+    fh = open(logfile, "w", buffering=1)
+    proc = subprocess.Popen(
+        args,
+        cwd=str(VOTER_DIR),
+        env=_build_env(),
+        stdout=fh,
+        stderr=subprocess.STDOUT,
     )
+    _tasks[task_id] = {
+        "proc": proc, "cmd": cmd, "extra": extra,
+        "started": _time.time(), "logfile": logfile, "fh": fh,
+    }
+
+    return JSONResponse({"task_id": task_id, "cmd": cmd})
 
 
-async def _stream(args: list[str], cwd: str, env: dict | None = None):
-    import asyncio
-    try:
-        proc = await asyncio.create_subprocess_exec(
-            *args,
-            cwd=cwd,
-            env=env,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.STDOUT,
-        )
-        # Read in chunks (not lines) so \r progress prints flush through nginx
-        # without waiting for a \n — avoids proxy_read_timeout on long syncs.
-        while True:
-            chunk = await proc.stdout.read(4096)
-            if not chunk:
-                break
-            yield chunk.decode("utf-8", errors="replace")
-        await proc.wait()
-        yield f"\n[Exit code: {proc.returncode}]\n"
-    except Exception as exc:
-        yield f"\n[Error starting process: {exc}]\n"
+@router.get("/task/{task_id}/output")
+async def task_output(
+    task_id: str,
+    offset:  int = 0,
+    current_user: User = Depends(require_user),
+):
+    """Poll for new output from a running task. Returns text from offset."""
+    task = _tasks.get(task_id)
+    if not task:
+        return JSONResponse({"error": "unknown task"}, status_code=404)
+
+    logfile = task["logfile"]
+    if not logfile.exists():
+        return JSONResponse({"text": "", "offset": 0, "running": True})
+
+    with open(logfile, "r", errors="replace") as f:
+        f.seek(offset)
+        text = f.read()
+        new_offset = f.tell()
+
+    proc = task["proc"]
+    rc = proc.poll()
+    running = rc is None
+
+    result = {"text": text, "offset": new_offset, "running": running}
+    if not running:
+        result["exit_code"] = rc
+        # Clean up file handle
+        task["fh"].close()
+    return JSONResponse(result)
