@@ -494,7 +494,10 @@ def print_stats(conn):
             COUNT(*) as total
         FROM boe_filers
     """)
-    cf, uf, tf = cur.fetchone()
+    row = cur.fetchone()
+    cf = int(row[0] or 0)
+    uf = int(row[1] or 0)
+    tf = int(row[2] or 0)
     print(f"\n  Filer lookup: {cf:,} classified / {uf:,} unknown / {tf:,} total")
 
 
