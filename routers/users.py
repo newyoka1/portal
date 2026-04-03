@@ -32,6 +32,7 @@ def create_user(
     email: str = Form(...),
     password: str = Form(...),
     is_admin: str = Form(default=""),
+    voter_role: str = Form(default=""),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -43,6 +44,7 @@ def create_user(
         email=email,
         password_hash=hash_password(password),
         is_admin=bool(is_admin),
+        voter_role=voter_role or None,
     ))
     db.commit()
     return RedirectResponse("/users", status_code=302)

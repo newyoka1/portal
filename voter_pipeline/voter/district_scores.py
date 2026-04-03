@@ -22,24 +22,15 @@ Called by: python main.py district-scores
 """
 
 import os, sys, time, argparse
-from dotenv import load_dotenv
 import pymysql
-
-load_dotenv()
-
-MYSQL_HOST     = os.getenv("MYSQL_HOST", "127.0.0.1")
-MYSQL_PORT     = int(os.getenv("MYSQL_PORT", "3306"))
-MYSQL_USER     = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.db import get_conn
 
 
 def connect():
-    return pymysql.connect(
-        host=MYSQL_HOST, port=MYSQL_PORT,
-        user=MYSQL_USER, password=MYSQL_PASSWORD,
-        database="nys_voter_tagging",
-        charset="utf8mb4", autocommit=True
-    )
+    conn = get_conn(database="nys_voter_tagging", autocommit=True)
+    conn.cursor().execute("SET SESSION innodb_lock_wait_timeout = 600")
+    return conn
 
 
 CREATE_TABLE = """
@@ -75,23 +66,23 @@ SELECT
     %s AS district_type,
     {col} AS district_name,
     COUNT(*) AS total_voters,
-    SUM(OfficialParty = 'DEM') AS dem_count,
-    SUM(OfficialParty = 'REP') AS rep_count,
-    SUM(OfficialParty NOT IN ('DEM', 'REP')) AS other_count,
-    ROUND((SUM(OfficialParty = 'REP') - SUM(OfficialParty = 'DEM'))
+    SUM(OfficialParty = 'Democrat') AS dem_count,
+    SUM(OfficialParty = 'Republican') AS rep_count,
+    SUM(OfficialParty NOT IN ('Democrat', 'Republican')) AS other_count,
+    ROUND((SUM(OfficialParty = 'Republican') - SUM(OfficialParty = 'Democrat'))
           / COUNT(*) * 100, 2) AS partisan_lean,
     CASE
-        WHEN ABS((SUM(OfficialParty = 'REP') - SUM(OfficialParty = 'DEM'))
+        WHEN ABS((SUM(OfficialParty = 'Republican') - SUM(OfficialParty = 'Democrat'))
                   / COUNT(*) * 100) < 5  THEN 'Tossup'
-        WHEN (SUM(OfficialParty = 'REP') - SUM(OfficialParty = 'DEM'))
+        WHEN (SUM(OfficialParty = 'Republican') - SUM(OfficialParty = 'Democrat'))
               / COUNT(*) * 100 < -15     THEN 'Safe D'
-        WHEN (SUM(OfficialParty = 'REP') - SUM(OfficialParty = 'DEM'))
+        WHEN (SUM(OfficialParty = 'Republican') - SUM(OfficialParty = 'Democrat'))
               / COUNT(*) * 100 < 0       THEN 'Lean D'
-        WHEN (SUM(OfficialParty = 'REP') - SUM(OfficialParty = 'DEM'))
+        WHEN (SUM(OfficialParty = 'Republican') - SUM(OfficialParty = 'Democrat'))
               / COUNT(*) * 100 > 15      THEN 'Safe R'
         ELSE 'Lean R'
     END AS competitiveness,
-    ROUND(AVG(turnout_score), 2) AS avg_turnout,
+    ROUND(AVG(GeneralRegularity) * 100, 2) AS avg_turnout,
     ROUND(SUM(CASE WHEN COALESCE(boe_total_amt, 0)
                        + COALESCE(national_total_amount, 0)
                        + COALESCE(cfb_total_amt, 0) > 0
@@ -126,6 +117,21 @@ def main():
     conn = connect()
     cur  = conn.cursor()
 
+    # Advisory lock: prevents concurrent runs (e.g. orphaned process after portal restart)
+    cur.execute("SELECT GET_LOCK('district_scores_run', 0)")
+    if cur.fetchone()[0] != 1:
+        print("[SKIP] Another district_scores process is already running. Exiting.")
+        conn.close()
+        sys.exit(0)
+
+    try:
+        _run(conn, cur)
+    finally:
+        cur.execute("SELECT RELEASE_LOCK('district_scores_run')")
+        conn.close()
+
+
+def _run(conn, cur):
     print("\n[1] Creating district_scores table...")
     cur.execute(CREATE_TABLE)
 
@@ -173,7 +179,6 @@ def main():
 
     print()
     cur.close()
-    conn.close()
     print("Done.")
 
 

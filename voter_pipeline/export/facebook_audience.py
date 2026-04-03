@@ -395,6 +395,10 @@ Examples:
         help='Override the name for the new Facebook Custom Audience',
     )
     p.add_argument(
+        '--fb-account', metavar='NAME', default='',
+        help='Named FB account suffix (reads FB_ACCESS_TOKEN_NAME / FB_AD_ACCOUNT_ID_NAME)',
+    )
+    p.add_argument(
         '--dry-run', action='store_true',
         help='Query and hash records but do not upload anything to Facebook',
     )
@@ -415,8 +419,9 @@ def get_district_filter(args) -> tuple | None:
 def main():
     args = parse_args()
 
-    token      = os.getenv('FB_ACCESS_TOKEN', '').strip()
-    account_id = os.getenv('FB_AD_ACCOUNT_ID', '').strip()
+    _sfx       = ('_' + args.fb_account.strip()) if getattr(args, 'fb_account', '').strip() else ''
+    token      = os.getenv(f'FB_ACCESS_TOKEN{_sfx}', os.getenv('FB_ACCESS_TOKEN', '')).strip()
+    account_id = os.getenv(f'FB_AD_ACCOUNT_ID{_sfx}', os.getenv('FB_AD_ACCOUNT_ID', '')).strip()
 
     if not args.list_audiences and not args.dry_run:
         if not token:

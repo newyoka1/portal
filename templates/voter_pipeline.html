@@ -119,182 +119,504 @@
   </div>
 </div>
 
-<!-- ── Pipeline Health Dashboard ─────────────────────────────────────────── -->
+<!-- ── CRM Health Dashboard ─────────────────────────────────────────── -->
 <div class="card shadow-sm mb-3" id="stats-card">
-  <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
-    <h6 class="fw-bold mb-0"><i class="bi bi-graph-up me-1"></i>Pipeline Health</h6>
-    <button class="btn btn-sm btn-outline-secondary" onclick="loadStats()" id="stats-refresh-btn">
-      <i class="bi bi-arrow-clockwise me-1"></i>Refresh
-    </button>
+  <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center"
+       style="cursor:pointer" onclick="toggleStatsCard()">
+    <h6 class="fw-bold mb-0"><i class="bi bi-graph-up me-1"></i>CRM Health
+      <span class="badge bg-light text-secondary fw-normal ms-2" id="stats-match-badge" style="font-size:.75rem"></span>
+    </h6>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation();loadStats()" id="stats-refresh-btn">
+        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+      </button>
+      <i class="bi bi-chevron-down" id="stats-chevron" style="transition:transform .2s"></i>
+    </div>
   </div>
-  <div class="card-body py-2" id="stats-body">
+  <div class="card-body py-2" id="stats-body" style="display:none">
     <div class="text-center text-muted py-2">
       <div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading stats…
     </div>
   </div>
 </div>
 
+<!-- ── Voter File Enrichment Dashboard ───────────────────────────────────── -->
+<div class="card shadow-sm mb-3" id="enrich-stats-card">
+  <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center"
+       style="cursor:pointer" onclick="toggleEnrichCard()">
+    <h6 class="fw-bold mb-0">
+      <i class="bi bi-database-fill-check me-1 text-success"></i>Voter File Enrichment
+      <span class="badge bg-light text-secondary fw-normal ms-2" id="enrich-total-badge" style="font-size:.75rem"></span>
+    </h6>
+    <div class="d-flex align-items-center gap-2">
+      <button class="btn btn-sm btn-outline-secondary" onclick="event.stopPropagation();loadEnrichStats()" id="enrich-refresh-btn">
+        <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+      </button>
+      <i class="bi bi-chevron-down" id="enrich-chevron" style="transition:transform .2s"></i>
+    </div>
+  </div>
+  <div id="enrich-stats-body" class="card-body py-2" style="display:none">
+    <div class="text-center text-muted py-2" id="enrich-loading">
+      <div class="spinner-border spinner-border-sm me-2" role="status"></div>Scanning 12M+ voter records… <span class="text-muted" style="font-size:.78rem">(~40s first load)</span>
+    </div>
+    <!-- Accordion sections injected by JS -->
+    <div id="enrich-accordion" class="accordion accordion-flush"></div>
+  </div>
+</div>
+
+
 <ul class="nav nav-tabs mb-3" id="voterTabs">
-  <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-export">Export</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-crm">CRM Sync</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-donors">Donors</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-enrich">Voter File Enrich</a></li>
-  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-voterfile">Voter File</a></li>
+  {% if not export_viewer_only %}
+  <li class="nav-item"><a class="nav-link {% if not export_viewer_only %}active{% endif %}" data-bs-toggle="tab" href="#tab-voterfile"><span class="badge bg-primary me-1">1</span>Voter File</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-donors"><span class="badge bg-success me-1">2</span>Donors</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-crm"><span class="badge bg-warning text-dark me-1">3&ndash;4</span>CRM Sync</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-enrich"><span class="badge bg-secondary me-1">5</span>Enrich</a></li>
+  {% endif %}
+  <li class="nav-item"><a class="nav-link {% if export_viewer_only %}active{% endif %}" data-bs-toggle="tab" href="#tab-export">Export</a></li>
+  <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-audiences">Issue Tagging</a></li>
   <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-status">Status</a></li>
 </ul>
 
 <div class="tab-content">
 
-  <!-- ── EXPORT ──────────────────────────────────────────────────────────── -->
-  <div class="tab-pane fade show active" id="tab-export">
-    <div class="card shadow-sm">
+
+
+  <!-- ── AUDIENCES ────────────────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="tab-audiences">
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+        <span class="fw-semibold"><i class="bi bi-collection me-1"></i>Issue Audiences</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadAudienceStatus()">
+          <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+        </button>
+      </div>
       <div class="card-body">
         <p class="text-muted small mb-3">
-          Generates an Excel file of all voter records in a given district, enriched with
-          donor history, CRM match status, party, ethnicity model, and voting frequency scores.
-          Run <strong>CRM Sync → Match to Voter File</strong> and <strong>Donors</strong> first for complete data.
+          Audience CSV files (one row per <code>StateVoterId</code>) placed in <code>data/</code> are
+          automatically matched against the voter file when <strong>Pipeline</strong> runs. Upload new
+          files here, then click <strong>Refresh Audiences</strong> to re-match without reloading the
+          full voter file.
         </p>
-        <div class="row g-3 mb-3">
-          <div class="col-md-4">
-            <label class="form-label fw-semibold">District type</label>
-            <select class="form-select" id="distType" onchange="updateDistInput()">
+
+        <!-- Bridge stats -->
+        <div id="aud-bridge-stats" class="mb-3 d-none">
+          <span class="badge bg-success me-1" id="aud-bridge-rows"></span>
+          <span class="badge bg-primary" id="aud-bridge-voters"></span>
+        </div>
+
+        <!-- File list -->
+        <div id="aud-file-list" class="mb-3">
+          <div class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Loading…</div>
+        </div>
+
+        <!-- Upload -->
+        <div class="mb-3">
+          <label class="form-label fw-semibold small">Upload audience CSV(s)</label>
+          <input class="form-control form-control-sm" type="file" id="audFileInput" accept=".csv,.zip" multiple>
+          <div id="aud-upload-status" class="mt-2"></div>
+        </div>
+
+        <!-- Actions -->
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-primary" onclick="uploadAudiences()">
+            <i class="bi bi-cloud-upload me-1"></i>Upload Selected
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" id="rebuildBridgeBtn" onclick="vpRun('pipeline', '', this)">
+            <i class="bi bi-database-gear me-1"></i>Rebuild Bridge
+          </button>
+          <span class="text-muted small align-self-center">Matches uploaded CSVs against voter file (skips voter reload if unchanged)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pipeline / bridge-rebuild log (shown when Rebuild Bridge runs) -->
+    <div id="log-pipeline-wrap" class="d-none mt-3">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
+          <span class="small" id="log-pipeline-label"><i class="bi bi-terminal me-1"></i>Rebuild Bridge</span>
+          <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-danger py-0 d-none" id="kill-pipeline-btn" onclick="killRunningTask()"><i class="bi bi-stop-circle me-1"></i>Kill</button>
+            <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-pipeline-wrap').classList.add('d-none')">&#215;</button>
+          </div>
+        </div>
+        <!-- bridge progress bar (injected by JS when [N/M] lines appear) -->
+        <div id="bridge-prog-wrap" class="d-none px-3 pt-2" style="background:#1a1d21">
+          <div class="d-flex justify-content-between align-items-center small mb-1">
+            <span id="bridge-prog-file" class="text-light font-monospace text-truncate" style="max-width:70%"></span>
+            <span id="bridge-prog-pct"  class="text-info font-monospace"></span>
+          </div>
+          <div class="progress mb-2" style="height:6px">
+            <div id="bridge-prog-bar" class="progress-bar progress-bar-striped progress-bar-animated bg-info"
+                 role="progressbar" style="width:0%"></div>
+          </div>
+        </div>
+        <div id="log-pipeline" class="bg-dark text-light p-3 rounded-bottom small"
+             style="max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── EXPORT ──────────────────────────────────────────────────────────── -->
+  <!-- ── EXPORT ──────────────────────────────────────────────────────────────────── -->
+  <!-- ── EXPORT -->
+  <div class="tab-pane fade{% if export_viewer_only %} show active{% endif %}" id="tab-export">
+
+    <!-- Target Selection -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white py-2">
+        <h6 class="fw-bold mb-0"><i class="bi bi-crosshair me-1 text-primary"></i>Select Target</h6>
+      </div>
+      <div class="card-body py-3">
+        <div class="row g-3 align-items-end">
+          <div class="col-sm-4 col-md-3">
+            <label class="form-label fw-semibold small mb-1">District Type</label>
+            <select class="form-select" id="distType" autocomplete="off" onchange="updateDistInput()">
+              <option value="">Choose one&hellip;</option>
               <option value="ld">Assembly (LD)</option>
               <option value="sd">Senate (SD)</option>
               <option value="cd">Congress (CD)</option>
               <option value="county">County</option>
+              <option value="statewide">&#127783; New York State (Statewide)</option>
             </select>
           </div>
-          <div class="col-md-4">
-            <label class="form-label fw-semibold" id="distLabel">District number</label>
-            <input type="number" class="form-control" id="distValue" value="63" min="1" max="200">
+          <div class="col-sm-4 col-md-3" id="distValueWrap"></div>
+          <div class="col-sm-4 col-md-6 d-flex align-items-end gap-2">
+            <button class="btn btn-outline-info btn-sm" onclick="loadExportPreview()">
+              <i class="bi bi-bar-chart me-1"></i>Preview Breakdown
+            </button>
+            <span class="text-muted small"><i class="bi bi-info-circle me-1"></i>Filter applies to both Export and Facebook push.</span>
           </div>
-          <div class="col-md-4 d-flex align-items-end">
-            <div class="form-check">
-              <input class="form-check-input" type="checkbox" id="vcFormat">
-              <label class="form-check-label" for="vcFormat">Voter-contact format</label>
-              <div class="text-muted" style="font-size:.75rem">Condensed layout optimised for phone/canvass lists</div>
+        </div>
+
+        <!-- Preview result panel -->
+        <div id="export-preview-wrap" class="d-none mt-3">
+          <div class="card border-info">
+            <div class="card-header d-flex justify-content-between align-items-center py-2" style="background:rgba(13,202,240,.08)">
+              <span class="fw-semibold text-info small"><i class="bi bi-bar-chart me-1"></i>Pre-Export Breakdown</span>
+              <button class="btn btn-sm btn-outline-secondary py-0" onclick="document.getElementById('export-preview-wrap').classList.add('d-none')">&#215;</button>
+            </div>
+            <div id="export-preview-body" class="card-body py-2">
+              <div class="text-center text-muted py-3">
+                <span class="spinner-border spinner-border-sm me-2"></span>Loading&hellip;
+              </div>
             </div>
           </div>
         </div>
-        <button class="btn btn-primary" onclick="runExport()">
-          <i class="bi bi-download me-1"></i>Run Export
-        </button>
-        <hr class="my-3">
-        <button class="btn btn-outline-secondary" onclick="window.location='/voter-pipeline/export-unmatched'">
-          <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export Unmatched Contacts
-        </button>
-        <div class="text-muted mt-1" style="font-size:.75rem">Downloads all CRM contacts not yet matched to the voter file as CSV — useful for manual lookup or sending to a data vendor</div>
-        <div id="log-export-wrap" class="d-none mt-3">
-          <div class="card shadow-sm border-0">
-            <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
-              <span class="small" id="log-export-label"><i class="bi bi-terminal me-1"></i>Output</span>
-              <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-export-wrap').classList.add('d-none')">×</button>
+
+      </div>
+    </div>
+
+    <!-- Export + Facebook grid -->
+    <div class="row g-3 mb-3">
+
+      <!-- Export Chairman Report -->
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-white py-2">
+            <span class="fw-semibold"><i class="bi bi-file-earmark-spreadsheet me-1 text-success"></i>Export Chairman Report</span>
+          </div>
+          <div class="card-body d-flex flex-column">
+
+            <label class="form-label fw-semibold small mb-2">Sheets to include</label>
+            <div class="row g-2 mb-3">
+              <div class="col-6">
+                <div class="form-check">
+                  <input class="form-check-input sheet-cb" type="checkbox" id="sheetDonors" value="donors" checked>
+                  <label class="form-check-label small" for="sheetDonors"><i class="bi bi-cash-coin me-1 text-success"></i>Donors</label>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="form-check">
+                  <input class="form-check-input sheet-cb" type="checkbox" id="sheetPhones" value="phones" checked>
+                  <label class="form-check-label small" for="sheetPhones"><i class="bi bi-telephone me-1 text-info"></i>Phones</label>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="form-check">
+                  <input class="form-check-input sheet-cb" type="checkbox" id="sheetEmails" value="emails" checked>
+                  <label class="form-check-label small" for="sheetEmails"><i class="bi bi-envelope me-1 text-primary"></i>Emails</label>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="form-check">
+                  <input class="form-check-input sheet-cb" type="checkbox" id="sheetParty" value="party" checked>
+                  <label class="form-check-label small" for="sheetParty"><i class="bi bi-people me-1 text-secondary"></i>Voter File (by party)</label>
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="form-check">
+                  <input class="form-check-input sheet-cb" type="checkbox" id="sheetAudiences" value="audiences" checked>
+                  <label class="form-check-label small" for="sheetAudiences"><i class="bi bi-tags me-1 text-warning"></i>Issue Audiences</label>
+                </div>
+              </div>
             </div>
-            <div id="log-export" class="bg-dark text-light p-3 rounded-bottom small"
-                 style="max-height:350px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
+
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <button class="btn btn-success btn-sm" onclick="runExport()">
+                <i class="bi bi-download me-1"></i>Generate Export
+              </button>
+            </div>
+
+            <div class="mt-auto pt-2" style="border-top:1px solid #eee">
+              <button class="btn btn-outline-secondary btn-sm" onclick="window.location='/voter-pipeline/export-unmatched'">
+                <i class="bi bi-file-earmark-spreadsheet me-1"></i>Export Unmatched Contacts
+              </button>
+              <div class="text-muted mt-1" style="font-size:.72rem">CRM contacts not yet matched to voter file</div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- Push to Facebook -->
+      <div class="col-md-6">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-white py-2">
+            <span class="fw-semibold"><i class="bi bi-meta me-1 text-primary"></i>Push to Facebook</span>
+          </div>
+          <div class="card-body d-flex flex-column">
+
+            <!-- Ad Account -->
+            <div class="row g-2 mb-3">
+              <div class="col-8">
+                <label class="form-label small fw-semibold mb-1"><i class="bi bi-person-badge me-1"></i>Ad Account</label>
+                <select class="form-select form-select-sm" id="fbDonorAccount">
+                  <option value="">&#8212; click Load &#8212;</option>
+                </select>
+              </div>
+              <div class="col-4 d-flex align-items-end">
+                <button class="btn btn-outline-secondary btn-sm w-100" onclick="loadFbAccounts()">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Load
+                </button>
+              </div>
+            </div>
+
+            <!-- What to push -->
+            <label class="form-label small fw-semibold mb-2">What to push
+              <span class="text-muted fw-normal">&#8212; check items &amp; set audience name</span>
+            </label>
+
+            <!-- Voter File by party -->
+            <div class="d-flex align-items-center mb-2" style="gap:.5rem">
+              <div class="form-check flex-shrink-0" style="min-width:18px">
+                <input class="form-check-input" type="checkbox" id="fbPushParty">
+              </div>
+              <label class="form-check-label small flex-shrink-0" for="fbPushParty" style="min-width:115px">
+                <i class="bi bi-people me-1 text-secondary"></i>Voter File by party
+              </label>
+              <input type="text" class="form-control form-control-sm" id="fbPartyPrefix"
+                     value="Politika" placeholder="Politika"
+                     title="Prefix — becomes {name}-Party-DEM, {name}-Party-REP, etc.">
+              <span class="text-muted flex-shrink-0" style="font-size:.7rem;white-space:nowrap">-Party-DEM&#x2026;</span>
+            </div>
+
+            <!-- Issue Audiences -->
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <span class="small fw-semibold"><i class="bi bi-tags me-1 text-warning"></i>Issue Audiences</span>
+              <button class="btn btn-outline-secondary btn-sm py-0 px-2" onclick="loadFbIssues()" style="font-size:.72rem">
+                <i class="bi bi-arrow-clockwise me-1"></i>Load
+              </button>
+            </div>
+            <div id="fb-issue-list" class="ps-1 mb-3 flex-grow-1">
+              <span class="text-muted small">Click Load to populate.</span>
+            </div>
+
+            <!-- Donor segments -->
+            <div class="d-flex align-items-center gap-2 mb-2">
+              <span class="small fw-semibold"><i class="bi bi-cash-coin me-1 text-success"></i>Donor Segments</span>
+            </div>
+            <div id="fb-donor-seg-list" class="ps-1 mb-3">
+              <div class="mb-1 d-flex align-items-center" style="gap:.5rem">
+                <input class="form-check-input fb-donor-seg-cb" type="checkbox" id="fbDonorSegRegRep" value="reg_rep" checked>
+                <label class="form-check-label small flex-grow-1" for="fbDonorSegRegRep">Registered Republican donors</label>
+                <input type="text" class="form-control form-control-sm fb-donor-seg-name" id="fbDonorSegRegRep_name" data-key="reg_rep" placeholder="Politika-Registered Republican donors" style="max-width:220px;font-size:.72rem">
+              </div>
+              <div class="mb-1 d-flex align-items-center" style="gap:.5rem">
+                <input class="form-check-input fb-donor-seg-cb" type="checkbox" id="fbDonorSegRegDem" value="reg_dem" checked>
+                <label class="form-check-label small flex-grow-1" for="fbDonorSegRegDem">Registered Democrat donors</label>
+                <input type="text" class="form-control form-control-sm fb-donor-seg-name" id="fbDonorSegRegDem_name" data-key="reg_dem" placeholder="Politika-Registered Democrat donors" style="max-width:220px;font-size:.72rem">
+              </div>
+              <div class="mb-1 d-flex align-items-center" style="gap:.5rem">
+                <input class="form-check-input fb-donor-seg-cb" type="checkbox" id="fbDonorSegGaveRep" value="gave_rep" checked>
+                <label class="form-check-label small flex-grow-1" for="fbDonorSegGaveRep">Donated to Republicans</label>
+                <input type="text" class="form-control form-control-sm fb-donor-seg-name" id="fbDonorSegGaveRep_name" data-key="gave_rep" placeholder="Politika-Donated to Republicans" style="max-width:220px;font-size:.72rem">
+              </div>
+              <div class="mb-1 d-flex align-items-center" style="gap:.5rem">
+                <input class="form-check-input fb-donor-seg-cb" type="checkbox" id="fbDonorSegGaveUnk" value="gave_unk" checked>
+                <label class="form-check-label small flex-grow-1" for="fbDonorSegGaveUnk">Donated to unknown/independent</label>
+                <input type="text" class="form-control form-control-sm fb-donor-seg-name" id="fbDonorSegGaveUnk_name" data-key="gave_unk" placeholder="Politika-Donated to unknown/independent" style="max-width:220px;font-size:.72rem">
+              </div>
+              <div class="mb-1 d-flex align-items-center" style="gap:.5rem">
+                <input class="form-check-input fb-donor-seg-cb" type="checkbox" id="fbDonorSegGaveDem" value="gave_dem" checked>
+                <label class="form-check-label small flex-grow-1" for="fbDonorSegGaveDem">Donated to Democrats</label>
+                <input type="text" class="form-control form-control-sm fb-donor-seg-name" id="fbDonorSegGaveDem_name" data-key="gave_dem" placeholder="Politika-Donated to Democrats" style="max-width:220px;font-size:.72rem">
+              </div>
+            </div>
+
+            <!-- Atomic replace -->
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="checkbox" id="fbDonorReplace">
+              <label class="form-check-label small" for="fbDonorReplace">
+                Atomic replace <span class="text-muted">(replaces instead of appending)</span>
+              </label>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2">
+              <button class="btn btn-primary btn-sm" onclick="pushDonorAudience(false, this)">
+                <i class="bi bi-cloud-upload me-1"></i>Push to Facebook
+              </button>
+              <button class="btn btn-outline-secondary btn-sm" onclick="pushDonorAudience(true, this)">
+                <i class="bi bi-bug me-1"></i>Dry Run
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /.row g-3 -->
+
+    <!-- Shared log output -->
+    <div id="log-export-wrap" class="d-none mb-3">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
+          <span class="small" id="log-export-label"><i class="bi bi-terminal me-1"></i>Output</span>
+          <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-danger py-0 d-none" id="kill-export-btn" onclick="killRunningTask()"><i class="bi bi-stop-circle me-1"></i>Kill</button>
+            <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-export-wrap').classList.add('d-none')">&#215;</button>
+          </div>
+        </div>
+        <div id="log-export" class="bg-dark text-light p-3 rounded-bottom small"
+             style="max-height:350px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
+      </div>
+    </div>
+
+    <!-- Past Reports -->
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold py-2">
+        <i class="bi bi-clock-history me-1"></i>Past Reports
+      </div>
+      <div id="export-reports-body" class="card-body py-2">
+        <div class="text-center text-muted py-2"><span class="spinner-border spinner-border-sm me-2"></span>Loading&hellip;</div>
+      </div>
+    </div>
+  </div><!-- /#tab-export -->
+
+  <!-- ── CRM SYNC ──────────────────────────────────────────────── -->
+  <div class="tab-pane fade" id="tab-crm">
+
+    <!-- Phase 3: CRM Sync -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <h6 class="fw-semibold mb-1"><span class="badge bg-warning text-dark me-1">Phase 3</span> CRM Sync — pull contacts from HubSpot &amp; Campaign Monitor</h6>
+        <p class="text-muted small mb-3">
+          Merges all contact sources into <code>crm_unified.contacts</code>. Must run before matching
+          so there are contacts to match against.
+        </p>
+        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+          <button class="btn btn-primary" onclick="vpRun('crm-sync', '', this)">
+            <i class="bi bi-arrow-repeat me-1"></i>Sync New
+          </button>
+          <button class="btn btn-outline-danger" onclick="vpRun('crm-sync', '--full', this)"
+              title="Truncates and reloads all CRM records">
+            <i class="bi bi-arrow-clockwise me-1"></i>Resync All
+          </button>
+          <span class="text-muted small">HubSpot + Campaign Monitor</span>
+        </div>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <div class="border rounded p-2 h-100">
+              <div class="d-flex gap-1 mb-1">
+                <button class="btn btn-sm btn-outline-primary flex-fill" onclick="vpRun('hubspot-sync', '', this)">
+                  <i class="bi bi-cloud-download me-1"></i>Sync New
+                </button>
+                <button class="btn btn-sm btn-outline-danger flex-fill" onclick="vpRun('hubspot-sync', '--full', this)"
+                    title="Truncate + reload all HubSpot contacts &amp; deals">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Resync
+                </button>
+              </div>
+              <div class="text-muted small">Sync contacts &amp; deals from all HubSpot accounts</div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="border rounded p-2 h-100">
+              <div class="d-flex gap-1 mb-1">
+                <button class="btn btn-sm btn-outline-primary flex-fill" onclick="vpRun('cm-sync', '', this)">
+                  <i class="bi bi-cloud-download me-1"></i>Sync New
+                </button>
+                <button class="btn btn-sm btn-outline-danger flex-fill" onclick="vpRun('cm-sync', '--full', this)"
+                    title="Truncate + reload all Campaign Monitor subscribers">
+                  <i class="bi bi-arrow-clockwise me-1"></i>Resync
+                </button>
+              </div>
+              <div class="text-muted small">Sync subscribers from all Campaign Monitor lists</div>
+            </div>
           </div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- ── CRM SYNC ──────────────────────────────────────────────────────── -->
-  <div class="tab-pane fade" id="tab-crm">
-    <div class="card shadow-sm">
+    <!-- Phase 4: CRM → Voter Matching -->
+    <div class="card shadow-sm mb-3">
       <div class="card-body">
+        <h6 class="fw-semibold mb-1"><span class="badge bg-danger me-1">Phase 4</span> CRM → Voter Matching — run in this exact order</h6>
         <p class="text-muted small mb-3">
-          Pulls contacts and deals from your CRM platforms into the local database, then
-          optionally links each contact to their NYS voter record.
-          <strong>Typical order:</strong> HubSpot → Campaign Monitor → Match to Voter File.
+          Each pass only processes contacts the previous pass missed. Running out of order
+          wastes time but causes no data errors.
         </p>
-        <div class="form-check mb-3">
-          <input class="form-check-input" type="checkbox" id="fullSync">
-          <label class="form-check-label" for="fullSync">Full re-sync
-            <span class="text-muted fw-normal">(deletes and reloads all records — use if data looks stale)</span>
-          </label>
-        </div>
-
-        <!-- Run All -->
-        <div class="mb-3">
-          <button class="btn btn-primary" onclick="vpRunFull('crm-sync')">
-            <i class="bi bi-arrow-repeat me-1"></i>Sync All CRM
-          </button>
-          <span class="text-muted small ms-2">HubSpot + Campaign Monitor + voter match in one go</span>
-        </div>
-
-        <!-- Step grid -->
-        <div class="row g-2 mb-3">
-          <!-- Step 1: Pull Data -->
-          <div class="col-md-6">
-            <div class="border rounded p-3 h-100">
-              <div class="small fw-semibold mb-2"><span class="badge bg-secondary me-1">1</span>Pull Data</div>
-              <div class="d-flex gap-2 mb-2">
-                <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="vpRunFull('hubspot-sync')">
-                  <i class="bi bi-cloud-download me-1"></i>HubSpot
-                </button>
-                <button class="btn btn-sm btn-outline-secondary flex-fill" onclick="vpRunFull('cm-sync')">
-                  <i class="bi bi-cloud-download me-1"></i>Campaign Monitor
-                </button>
-              </div>
-              <div class="text-muted small">Sync contacts &amp; deals from all connected CRM accounts</div>
-            </div>
-          </div>
-          <!-- Step 2: Match to Voter File -->
-          <div class="col-md-6">
-            <div class="border rounded p-3 h-100">
-              <div class="small fw-semibold mb-2"><span class="badge bg-secondary me-1">2</span>Match to Voter File</div>
-              <button class="btn btn-sm btn-outline-secondary w-100 mb-2" onclick="vpRunFull('crm-enrich')">
+        <div class="row g-2">
+          <div class="col-md-4">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">①</span> Match to Voter File</div>
+              <div class="text-muted small mb-2">Exact name + zip. Covers ~60–70% of contacts.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRunFull('crm-enrich')">
                 <i class="bi bi-person-check me-1"></i>Match to Voter File
               </button>
-              <div class="text-muted small">Copies party, district, voting history &amp; demographics onto each contact</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">②</span> Phone Match</div>
+              <div class="text-muted small mb-2">Phone number lookup against voter_file. Catches ~5–10% more.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('crm-phone', '', this)">
+                <i class="bi bi-telephone-plus me-1"></i>Phone Match
+              </button>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">③</span> Extended Match</div>
+              <div class="text-muted small mb-2">Hyphenated surnames, compound first names, inactive voters.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="vpRun('crm-extended-match', '', this)">
+                <i class="bi bi-person-plus me-1"></i>Extended Match
+              </button>
+              <button class="btn btn-sm btn-outline-info w-100" onclick="vpRun('crm-extended-match', '--dry-run', this)">
+                <i class="bi bi-eye me-1"></i>Dry Run
+              </button>
             </div>
           </div>
         </div>
+      </div>
+    </div>
 
-        <!-- Advanced matching -->
-        <div class="card border-0 bg-light mb-1">
-          <div class="card-body py-2 px-3">
-            <div class="small fw-semibold mb-2"><i class="bi bi-sliders me-1"></i>Advanced Matching</div>
-            <div class="row g-2">
-              <div class="col-md-4">
-                <div class="border rounded p-2 bg-white h-100">
-                  <button class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="vpRun('crm-phone', '', this)">
-                    <i class="bi bi-telephone-plus me-1"></i>Phone Match
-                  </button>
-                  <div class="text-muted small">Second-pass via phone numbers (~30–50K extra matches)</div>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <div class="border rounded p-2 bg-white h-100">
-                  <button class="btn btn-sm btn-outline-secondary w-100 mb-1" onclick="vpRun('crm-extended-match', '', this)">
-                    <i class="bi bi-person-plus me-1"></i>Extended Match
-                  </button>
-                  <div class="text-muted small">Third-pass: hyphenated surnames, compound names, inactive voters</div>
-                </div>
-              </div>
-              <div class="col-md-4">
-                <div class="border rounded p-2 bg-white h-100">
-                  <button class="btn btn-sm btn-outline-info w-100 mb-1" onclick="vpRun('crm-extended-match', '--dry-run', this)">
-                    <i class="bi bi-eye me-1"></i>Dry Run
-                  </button>
-                  <div class="text-muted small">Count potential extended matches without writing</div>
-                </div>
-              </div>
-            </div>
+    <!-- Per-account progress cards -->
+    <div id="crm-progress" class="d-none mb-3"></div>
+
+    <!-- Output panel (same style as donors) -->
+    <div id="log-crm-wrap" class="d-none mb-3">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
+          <span class="small" id="log-crm-label"><i class="bi bi-terminal me-1"></i>Output</span>
+          <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-danger py-0 d-none" id="kill-crm-btn" onclick="killRunningTask()">
+              <i class="bi bi-stop-circle me-1"></i>Kill
+            </button>
+            <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-crm-wrap').classList.add('d-none')">×</button>
           </div>
         </div>
-
-        <!-- Per-account progress cards -->
-        <div id="crm-progress" class="d-none mb-3"></div>
-
-        <!-- Raw log (collapsible) -->
-        <div id="log-crm-wrap" class="d-none">
-          <a class="text-muted small d-block mb-1" data-bs-toggle="collapse"
-             href="#log-crm" style="cursor:pointer">
-            <i class="bi bi-terminal me-1"></i>Raw log
-          </a>
-          <div class="collapse" id="log-crm"></div>
-        </div>
+        <div id="log-crm" class="bg-dark text-light p-3 rounded-bottom small"
+             style="max-height:350px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
       </div>
     </div>
   </div>
@@ -307,20 +629,26 @@
       <div class="card shadow-sm border-0">
         <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
           <span class="small" id="log-donors-label"><i class="bi bi-terminal me-1"></i>Output</span>
-          <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-donors-wrap').classList.add('d-none')">×</button>
+          <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-danger py-0 d-none" id="kill-task-btn" onclick="killRunningTask()">
+              <i class="bi bi-stop-circle me-1"></i>Kill
+            </button>
+            <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-donors-wrap').classList.add('d-none')">×</button>
+          </div>
         </div>
         <div id="log-donors" class="bg-dark text-light p-3 rounded-bottom small"
              style="max-height:350px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
       </div>
     </div>
 
-    <!-- Quick actions -->
+    <!-- Phase 2 intro + quick actions -->
     <div class="card shadow-sm mb-3">
       <div class="card-body">
+        <h6 class="fw-semibold mb-1"><span class="badge bg-success me-1">Phase 2</span> Donor Data — enriches voter_file rows with giving history</h6>
         <p class="text-muted small mb-3">
-          Downloads and processes campaign finance data from three sources. Each source has
-          individual step buttons so you can re-run just the part that failed or changed.
-          After running, each matched voter record gains donation totals, R/D splits, and last-gift details.
+          BOE, National, and CFB are independent — run in any order. Each adds donation columns
+          (<code>boe_total_amt</code>, <code>cfb_total_amt</code>, etc.) to voter_file that are then
+          copied onto matched CRM contacts.
         </p>
         <div class="row g-2 align-items-center">
           <div class="col-auto">
@@ -341,52 +669,9 @@
 
     <!-- BOE -->
     <div class="card shadow-sm mb-3">
-      <div class="card-header bg-white py-2">
+      <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
         <h6 class="fw-bold mb-0"><i class="bi bi-building me-1"></i>BOE — NY State Campaign Finance</h6>
-      </div>
-      <div class="card-body">
-        <p class="text-muted small mb-3">
-          NY Board of Elections bulk filings: state &amp; county candidate and committee contributions.
-          Uses a Playwright headless browser to bypass the BOE download portal.
-          <strong>Steps:</strong> Download ZIPs → Load into DB &amp; classify parties → Enrich voter file.
-        </p>
-        <div class="row g-2 mb-3">
-          <!-- Step 1 -->
-          <div class="col-md-4">
-            <div class="border rounded p-2 h-100">
-              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download</div>
-              <div class="text-muted small mb-2">Scrapes BOE site via Playwright and saves 4 bulk ZIP files (~200–400 MB each). Skips unchanged files unless forced.</div>
-              <div class="form-check form-check-sm mb-2">
-                <input class="form-check-input" type="checkbox" id="boeForce">
-                <label class="form-check-label small" for="boeForce">Force re-download</label>
-              </div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-download', document.getElementById('boeForce').checked ? '--force' : '', this)">
-                <i class="bi bi-cloud-download me-1"></i>Download BOE
-              </button>
-            </div>
-          </div>
-          <!-- Step 2 -->
-          <div class="col-md-4">
-            <div class="border rounded p-2 h-100">
-              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Load &amp; Classify</div>
-              <div class="text-muted small mb-2">Loads ZIP contents into <code>boe_donors</code> DB, then classifies each contribution as D/R/U using filer keywords and candidate cross-reference.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100 mt-auto" onclick="vpRun('boe-load', '', this)">
-                <i class="bi bi-database-up me-1"></i>Load &amp; Classify BOE
-              </button>
-            </div>
-          </div>
-          <!-- Step 3 -->
-          <div class="col-md-4">
-            <div class="border rounded p-2 h-100">
-              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Enrich Voter File</div>
-              <div class="text-muted small mb-2">Merges <code>boe_donor_summary</code> into <code>voter_file</code> — writes BOE total/D/R amounts, counts, last gift date and filer per voter.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-enrich-only', '', this)">
-                <i class="bi bi-person-vcard me-1"></i>Enrich Voter File ← BOE
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="d-flex gap-2 align-items-center">
+        <div class="d-flex gap-2">
           <button class="btn btn-sm btn-outline-primary" onclick="vpRun('boe-enrich', '--no-refresh', this)">
             <i class="bi bi-arrow-repeat me-1"></i>All BOE (skip download)
           </button>
@@ -395,52 +680,48 @@
           </button>
         </div>
       </div>
-    </div>
-
-    <!-- National Donors -->
-    <div class="card shadow-sm mb-3">
-      <div class="card-header bg-white py-2">
-        <h6 class="fw-bold mb-0"><i class="bi bi-flag me-1"></i>National Donors — Federal Campaign Finance</h6>
-      </div>
       <div class="card-body">
-        <p class="text-muted small mb-3">
-          Federal Election Commission individual contribution files — 6 election cycles (~10 years).
-          Each step is independent so you can resume from any point if a step fails.
-          <strong>Steps:</strong> Download &amp; Extract → Load &amp; Classify → Enrich voter file.
-        </p>
-        <div class="row g-2 mb-3">
-          <!-- Step 1 -->
+        <div class="row g-2">
           <div class="col-md-4">
             <div class="border rounded p-2 h-100">
-              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download &amp; Extract</div>
-              <div class="text-muted small mb-2">Downloads 6 cycles of federal bulk ZIPs from <code>fec.gov</code>, extracts them immediately, then deletes the ZIPs. Hash-checked — skips unchanged cycles.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-download', '', this)">
-                <i class="bi bi-cloud-download me-1"></i>Download &amp; Extract
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download</div>
+              <div class="text-muted small mb-2">Scrapes BOE site via Playwright — saves 4 bulk ZIP files + COMMCAND filer list (~200–400 MB each).</div>
+              <div class="form-check form-check-sm mb-2">
+                <input class="form-check-input" type="checkbox" id="boeForce">
+                <label class="form-check-label small" for="boeForce">Force re-download</label>
+              </div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-download', document.getElementById('boeForce').checked ? '--force' : '', this)">
+                <i class="bi bi-cloud-download me-1"></i>Download
               </button>
             </div>
           </div>
-          <!-- Step 2 -->
           <div class="col-md-4">
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Load &amp; Classify</div>
-              <div class="text-muted small mb-2">Bulk-loads federal <code>.txt</code> files into <code>National_Donors</code> DB via <code>LOAD DATA INFILE</code>, then classifies ~6K committees as D/R/Unknown.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-load', '', this)">
+              <div class="text-muted small mb-2">Loads into <code>boe_donors</code> DB, classifies each contribution as D/R/U using filer keywords and candidate cross-reference.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-load', '', this)">
                 <i class="bi bi-database-up me-1"></i>Load &amp; Classify
               </button>
             </div>
           </div>
-          <!-- Step 3 -->
           <div class="col-md-4">
             <div class="border rounded p-2 h-100">
-              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Enrich Voter File</div>
-              <div class="text-muted small mb-2">Matches national contributions to voter_file by name+zip, writes national donation totals, D/R amounts, and <code>is_national_donor</code> flag.</div>
-              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-enrich', '', this)">
-                <i class="bi bi-person-vcard me-1"></i>Enrich Voter File ← National
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Enrich VF</div>
+              <div class="text-muted small mb-2">Merges <code>boe_donor_summary</code> into <code>voter_file</code> — writes BOE total/D/R amounts, counts, last gift date per voter.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('boe-enrich-only', '', this)">
+                <i class="bi bi-person-vcard me-1"></i>Enrich ← BOE
               </button>
             </div>
           </div>
         </div>
-        <div class="d-flex gap-2 align-items-center">
+      </div>
+    </div>
+
+    <!-- National -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+        <h6 class="fw-bold mb-0"><i class="bi bi-flag me-1"></i>National Donors</h6>
+        <div class="d-flex gap-2">
           <button class="btn btn-sm btn-outline-primary" onclick="vpRun('national-enrich', '--no-refresh', this)">
             <i class="bi bi-arrow-repeat me-1"></i>All National (skip download)
           </button>
@@ -449,20 +730,54 @@
           </button>
         </div>
       </div>
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-md-4">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download &amp; Extract</div>
+              <div class="text-muted small mb-2">Downloads 6 cycles of federal bulk ZIPs from <code>fec.gov</code>, extracts immediately, deletes ZIPs. Hash-checked — skips unchanged.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-download', '', this)">
+                <i class="bi bi-cloud-download me-1"></i>Download &amp; Extract
+              </button>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Load &amp; Classify</div>
+              <div class="text-muted small mb-2">Bulk-loads federal <code>.txt</code> files into <code>National_Donors</code> via <code>LOAD DATA INFILE</code>, classifies ~6K committees as D/R/Unknown.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-load', '', this)">
+                <i class="bi bi-database-up me-1"></i>Load &amp; Classify
+              </button>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="border rounded p-2 h-100">
+              <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">3</span>Enrich VF</div>
+              <div class="text-muted small mb-2">Matches national contributions to voter_file by name+zip, writes donation totals, D/R amounts, and <code>is_national_donor</code> flag.</div>
+              <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('fec-enrich', '', this)">
+                <i class="bi bi-person-vcard me-1"></i>Enrich ← National
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- CFB -->
     <div class="card shadow-sm mb-3">
-      <div class="card-header bg-white py-2">
+      <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
         <h6 class="fw-bold mb-0"><i class="bi bi-buildings me-1"></i>CFB — NYC Campaign Finance</h6>
+        <div class="d-flex gap-2">
+          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('cfb-enrich', '--no-refresh', this)">
+            <i class="bi bi-arrow-repeat me-1"></i>All CFB (skip download)
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('cfb-enrich', '--refresh', this)">
+            <i class="bi bi-cloud-arrow-down me-1"></i>All CFB + Download
+          </button>
+        </div>
       </div>
       <div class="card-body">
-        <p class="text-muted small mb-3">
-          NYC Campaign Finance Board individual contributions across 4 election cycles (2017, 2021, 2023, 2025).
-          <strong>Steps:</strong> Download CSVs → Load &amp; Enrich voter file (CFB load also writes directly to voter_file).
-        </p>
-        <div class="row g-2 mb-3">
-          <!-- Step 1 -->
+        <div class="row g-2">
           <div class="col-md-6">
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">1</span>Download</div>
@@ -472,32 +787,23 @@
                 <label class="form-check-label small" for="cfbForce">Force re-download</label>
               </div>
               <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('cfb-download', document.getElementById('cfbForce').checked ? '--force' : '', this)">
-                <i class="bi bi-cloud-download me-1"></i>Download CFB
+                <i class="bi bi-cloud-download me-1"></i>Download
               </button>
             </div>
           </div>
-          <!-- Step 2 -->
           <div class="col-md-6">
             <div class="border rounded p-2 h-100">
               <div class="small fw-semibold mb-1"><span class="badge bg-secondary me-1">2</span>Load &amp; Enrich</div>
-              <div class="text-muted small mb-2">Loads CSVs into <code>cfb_donors</code> DB and matches contributions to voter_file by name+zip. Writes per-cycle amounts and totals. Force-reload re-processes even if file hash is unchanged.</div>
+              <div class="text-muted small mb-2">Loads CSVs into <code>cfb_donors</code> DB and matches to voter_file by name+zip. Writes per-cycle amounts and totals.</div>
               <div class="form-check form-check-sm mb-2">
                 <input class="form-check-input" type="checkbox" id="cfbLoadForce">
                 <label class="form-check-label small" for="cfbLoadForce">Force re-load (ignore hash)</label>
               </div>
               <button class="btn btn-sm btn-outline-secondary w-100" onclick="vpRun('cfb-load', document.getElementById('cfbLoadForce').checked ? '--force' : '', this)">
-                <i class="bi bi-database-up me-1"></i>Load &amp; Enrich CFB
+                <i class="bi bi-database-up me-1"></i>Load &amp; Enrich
               </button>
             </div>
           </div>
-        </div>
-        <div class="d-flex gap-2 align-items-center">
-          <button class="btn btn-sm btn-outline-primary" onclick="vpRun('cfb-enrich', '--no-refresh', this)">
-            <i class="bi bi-arrow-repeat me-1"></i>All CFB (skip download)
-          </button>
-          <button class="btn btn-sm btn-outline-secondary" onclick="vpRun('cfb-enrich', '--refresh', this)">
-            <i class="bi bi-cloud-arrow-down me-1"></i>All CFB + Download
-          </button>
         </div>
       </div>
     </div>
@@ -541,11 +847,10 @@
   <div class="tab-pane fade" id="tab-enrich">
     <div class="card shadow-sm">
       <div class="card-body">
+        <h6 class="fw-semibold mb-1"><span class="badge bg-secondary me-1">Phase 5</span> Derived Enrichment — computed fields on matched data</h6>
         <p class="text-muted small mb-3">
-          Adds computed and modelled columns <em>directly to the voter file</em> — these are derived from
-          data already in the database, not downloaded from external sources.
-          <span class="text-muted">Note: this is different from <strong>CRM Sync → Match to Voter File</strong>,
-          which enriches your <em>CRM contacts</em> with voter data.</span>
+          Runs last because it depends on voter match results and donor data both being present.
+          Adds computed and modelled columns <em>directly to the voter file</em>.
         </p>
         <div class="row g-3 mb-3">
           <!-- Ethnicity -->
@@ -601,81 +906,26 @@
             </div>
           </div>
         </div>
-        <!-- ── Facebook Audience Push ──────────────────────────────────────── -->
-        <hr class="my-3">
-        <div class="d-flex align-items-center mb-2 gap-2">
-          <h6 class="fw-semibold mb-0"><i class="bi bi-meta me-1"></i>Facebook Audience Push</h6>
-          <span class="badge bg-secondary" style="font-size:.7rem">Requires FB_ACCESS_TOKEN + FB_AD_ACCOUNT_ID in Settings</span>
-        </div>
-        <p class="text-muted small mb-2">
-          Push a named voter segment directly to a Meta Custom Audience.
-          Run <strong>Load Audiences</strong> first to populate the selector, then choose a segment and click <strong>Push to Facebook</strong>.
-        </p>
-        <div class="row g-2 mb-2 align-items-end">
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold mb-1">Audience</label>
-            <select class="form-select form-select-sm" id="fbAudience">
-              <option value="">— click Load Audiences first —</option>
-            </select>
-          </div>
-          <div class="col-md-2">
-            <label class="form-label small fw-semibold mb-1">District filter</label>
-            <select class="form-select form-select-sm" id="fbDistType" onchange="toggleFbDist()">
-              <option value="">None</option>
-              <option value="ld">Assembly LD</option>
-              <option value="sd">Senate SD</option>
-              <option value="cd">Congressional CD</option>
-              <option value="county">County</option>
-            </select>
-          </div>
-          <div class="col-md-2" id="fbDistValueWrap" style="display:none">
-            <label class="form-label small fw-semibold mb-1">Value</label>
-            <input type="text" class="form-control form-control-sm" id="fbDistValue" placeholder="63 or Nassau">
-          </div>
-          <div class="col-md-3">
-            <label class="form-label small fw-semibold mb-1">FB Audience ID <span class="text-muted fw-normal">(to update existing)</span></label>
-            <input type="text" class="form-control form-control-sm" id="fbAudienceId" placeholder="Leave blank to create new">
-          </div>
-          <div class="col-auto">
-            <div class="form-check mb-0">
-              <input class="form-check-input" type="checkbox" id="fbReplace">
-              <label class="form-check-label small" for="fbReplace">Atomic replace</label>
-            </div>
-          </div>
-        </div>
-        <div class="row g-2 mb-2">
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary btn-sm" onclick="loadFbAudiences()">
-              <i class="bi bi-list-ul me-1"></i>Load Audiences
-            </button>
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-primary btn-sm" onclick="pushFbAudience()">
-              <i class="bi bi-cloud-upload me-1"></i>Push to Facebook
-            </button>
-          </div>
-          <div class="col-auto">
-            <button class="btn btn-outline-secondary btn-sm" onclick="vpRun('fb-push','--dry-run --audience ' + (document.getElementById('fbAudience').value||'NONE'))">
-              <i class="bi bi-bug me-1"></i>Dry Run
-            </button>
-          </div>
-        </div>
-        <div id="log-enrich-wrap" class="d-none mt-3">
-          <div class="card shadow-sm border-0">
-            <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
-              <span class="small" id="log-enrich-label"><i class="bi bi-terminal me-1"></i>Output</span>
-              <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-enrich-wrap').classList.add('d-none')">×</button>
-            </div>
-            <div id="log-enrich" class="bg-dark text-light p-3 rounded-bottom small"
-                 style="max-height:350px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
-          </div>
-        </div>
       </div>
     </div>
   </div>
 
   <!-- ── VOTER FILE ───────────────────────────────────────────────────────── -->
-  <div class="tab-pane fade" id="tab-voterfile">
+  <div class="tab-pane fade{% if not export_viewer_only %} show active{% endif %}" id="tab-voterfile">
+
+    <!-- Phase 1 intro -->
+    <div class="card shadow-sm mb-3">
+      <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+        <h6 class="fw-semibold mb-0"><span class="badge bg-primary me-1">Phase 1</span> Voter File — the foundation everything joins to</h6>
+        <span id="vf-row-count" class="badge bg-secondary">loading…</span>
+      </div>
+      <div class="card-body py-2">
+        <p class="text-muted small mb-0">
+          Run once per NYS file release (~every few months). Loads 13 M voter records and computes
+          name-cleaning columns used by all matching passes.
+        </p>
+      </div>
+    </div>
 
     <!-- Status row -->
     <div class="card shadow-sm mb-3">
@@ -743,7 +993,10 @@
       <div class="card shadow-sm border-0">
         <div class="card-header bg-dark text-light py-2 d-flex justify-content-between align-items-center">
           <span class="small" id="log-voterfile-label"><i class="bi bi-terminal me-1"></i>Output</span>
-          <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-voterfile-wrap').classList.add('d-none')">×</button>
+          <div class="d-flex gap-1">
+            <button class="btn btn-sm btn-outline-danger py-0 d-none" id="kill-voterfile-btn" onclick="killRunningTask()"><i class="bi bi-stop-circle me-1"></i>Kill</button>
+            <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-voterfile-wrap').classList.add('d-none')">×</button>
+          </div>
         </div>
         <div id="log-voterfile" class="bg-dark text-light p-3 rounded-bottom small"
              style="max-height:400px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
@@ -786,43 +1039,281 @@ const CMD_TAB = {
   'reset':'donors',
   'ethnicity':'enrich', 'enrich-derived':'enrich',
   'district-scores':'enrich', 'party-snapshot':'enrich',
-  'fb-audiences':'enrich', 'fb-push':'enrich',
+  'fb-audiences':'export', 'fb-push':'export',
   'voter-file-load':'voterfile',
+  'pipeline':'pipeline',
 };
 
 const CRM_CMDS = new Set(['crm-sync','hubspot-sync','cm-sync','crm-enrich','crm-phone','crm-extended-match']);
 
 function vpRun(cmd, extra, btn) {
   const tab = CMD_TAB[cmd] || 'status';
-  if (CRM_CMDS.has(cmd)) runCrmStream(cmd, extra);
+  if (CRM_CMDS.has(cmd)) runCrmStream(cmd, extra, btn || null);
   else                    runStream(cmd, extra, tab, btn || null);
 }
 
 function vpRunFull(cmd) {
-  const extra = document.getElementById('fullSync')?.checked ? '--full' : '';
-  vpRun(cmd, extra);
+  vpRun(cmd, '');
 }
 
 function runExport() {
-  const type  = document.getElementById('distType').value;
-  const val   = document.getElementById('distValue')?.value || document.getElementById('distValueText')?.value || '';
-  const vc    = document.getElementById('vcFormat').checked;
-  const cmd   = vc ? 'voter-contact' : 'export';
-  const extra = '--' + type + ' ' + val;
-  vpRun(cmd, extra);
+  const type   = document.getElementById('distType').value;
+  const sheets = [...document.querySelectorAll('.sheet-cb:checked')].map(cb => cb.value).join(',') || 'donors';
+  let extra;
+  if (type === 'statewide') {
+    extra = '--statewide --sheets ' + sheets;
+  } else {
+    const valEl = document.getElementById('distValue') || document.getElementById('distValueText') || {value:''};
+    extra = '--' + type + ' ' + valEl.value + ' --sheets ' + sheets;
+  }
+  vpRun('export', extra);
 }
 
-function updateDistInput() {
-  const type  = document.getElementById('distType').value;
-  const wrap  = document.getElementById('distValue').parentElement;
-  if (type === 'county') {
-    wrap.innerHTML = '<label class="form-label fw-semibold" id="distLabel">County name</label>'
-      + '<input type="text" class="form-control" id="distValue" value="Nassau">';
-  } else {
-    wrap.innerHTML = '<label class="form-label fw-semibold" id="distLabel">District number</label>'
-      + '<input type="number" class="form-control" id="distValue" value="63" min="1" max="200">';
+const _distCache = {};
+function _onDistrictChange() {
+  // Reset issue audience list so stale district counts are never shown
+  const issueList = document.getElementById('fb-issue-list');
+  if (issueList) {
+    issueList.innerHTML = '<span class="text-muted small">District changed — click Load Issues to refresh.</span>';
+  }
+  // Reload past reports filtered to the new district
+  loadExportReports();
+}
+
+async function updateDistInput() {
+  const type = document.getElementById('distType').value;
+  const wrap = document.getElementById('distValueWrap');
+  if (!type || type === 'statewide') { wrap.innerHTML = ''; _onDistrictChange(); return; }
+  // Show loading state
+  wrap.innerHTML = '<label class="form-label fw-semibold small mb-1">Loading&hellip;</label>'
+    + '<select class="form-select" id="distValue" disabled><option>Loading&hellip;</option></select>';
+  if (_distCache[type]) { _renderDistSelect(type, _distCache[type]); return; }
+  try {
+    const resp = await fetch('/voter-pipeline/district-list?type=' + type);
+    const d = await resp.json();
+    _distCache[type] = d.values || [];
+    _renderDistSelect(type, _distCache[type]);
+  } catch(e) {
+    wrap.innerHTML = '<span class="text-danger small">Error loading districts</span>';
   }
 }
+function _renderDistSelect(type, values) {
+  const labels = {ld:'Assembly District (LD)',sd:'Senate District (SD)',cd:'Congressional District (CD)',county:'County'};
+  const label = labels[type] || 'District';
+  const wrap = document.getElementById('distValueWrap');
+  wrap.innerHTML = '<label class="form-label fw-semibold small mb-1" id="distLabel">' + label + '</label>'
+    + '<select class="form-select" id="distValue" onchange="_onDistrictChange()">'
+    + '<option value="">Choose one&hellip;</option>'
+    + values.map(v => '<option value="' + v + '">' + v + '</option>').join('')
+    + '</select>';
+}
+
+async function loadExportPreview() {
+  const type = document.getElementById('distType').value;
+  const wrap = document.getElementById('export-preview-wrap');
+  const body = document.getElementById('export-preview-body');
+  wrap.classList.remove('d-none');
+  body.innerHTML = '<div class="text-center text-muted py-3"><span class="spinner-border spinner-border-sm me-2"></span>Loading&hellip;</div>';
+  let url;
+  if (type === 'statewide') {
+    url = '/voter-pipeline/export-preview?type=statewide&value=ALL';
+  } else {
+    const valEl = document.getElementById('distValue') || document.getElementById('distValueText') || {value:''};
+    url = '/voter-pipeline/export-preview?type=' + type + '&value=' + encodeURIComponent(valEl.value);
+  }
+  try {
+    const resp = await fetch(url);
+    const d    = await resp.json();
+    if (d.error) { body.innerHTML = '<div class="text-danger small p-2">' + d.error + '</div>'; return; }
+    const fmt = n => (n || 0).toLocaleString();
+    const pct = (n, t) => t ? ' <span class="text-muted">(' + Math.round(100*(n||0)/t) + '%)</span>' : '';
+    const p  = d.parties || {};
+    const dn = d.donors  || {};
+    const safeCount = x => x ? fmt(x.count) : '<span class="text-muted">n/a</span>';
+    const safeAmt   = x => (x && x.total) ? ' <span class="text-muted">$' + fmt(Math.round(x.total)) + '</span>' : '';
+    const dot = (color) => '<span class="me-1" style="display:inline-block;width:10px;height:10px;background:' + color + ';border-radius:2px"></span>';
+    // ── Row 1: Party / Donors / Contact ─────────────────────────────
+    let html =
+      '<div class="row g-3 py-1 mb-2">'
+    + '<div class="col-md-4">'
+    +   '<div class="text-muted small text-uppercase fw-semibold mb-2">Party Breakdown</div>'
+    +   '<table class="table table-sm table-borderless mb-0" style="font-size:.85rem">'
+    +     '<tr><td class="py-1 fw-bold">Total voters</td><td class="text-end fw-bold">' + fmt(d.total) + '</td></tr>'
+    +     '<tr><td class="py-1">' + dot('#0d6efd') + 'Democrat</td><td class="text-end">' + fmt(p.Democrat) + pct(p.Democrat, d.total) + '</td></tr>'
+    +     '<tr><td class="py-1">' + dot('#dc3545') + 'Republican</td><td class="text-end">' + fmt(p.Republican) + pct(p.Republican, d.total) + '</td></tr>'
+    +     '<tr><td class="py-1">' + dot('#ffc107') + 'Conservative</td><td class="text-end">' + fmt(p.Conservative) + pct(p.Conservative, d.total) + '</td></tr>'
+    +     '<tr><td class="py-1">' + dot('#198754') + 'Working Families</td><td class="text-end">' + fmt(p['Working Families']) + pct(p['Working Families'], d.total) + '</td></tr>'
+    +     '<tr><td class="py-1 text-muted">Other / Blank</td><td class="text-end text-muted">' + fmt((p.Other||0)+(p['Blank/Unknown']||0)) + pct((p.Other||0)+(p['Blank/Unknown']||0), d.total) + '</td></tr>'
+    +   '</table>'
+    + '</div>'
+    + '<div class="col-md-4">'
+    +   '<div class="text-muted small text-uppercase fw-semibold mb-2">Donor Sources</div>'
+    +   '<table class="table table-sm table-borderless mb-0" style="font-size:.85rem">'
+    +     '<tr><td class="py-1">BOE donors</td><td class="text-end">' + safeCount(dn.boe) + safeAmt(dn.boe) + '</td></tr>'
+    +     '<tr><td class="py-1">National donors</td><td class="text-end">' + safeCount(dn.national) + safeAmt(dn.national) + '</td></tr>'
+    +     '<tr><td class="py-1">CFB donors</td><td class="text-end">' + safeCount(dn.cfb) + safeAmt(dn.cfb) + '</td></tr>'
+    +   '</table>'
+    + '</div>'
+    + '<div class="col-md-4">'
+    +   '<div class="text-muted small text-uppercase fw-semibold mb-2">Contact Info</div>'
+    +   '<table class="table table-sm table-borderless mb-0" style="font-size:.85rem">'
+    +     '<tr><td class="py-1"><i class="bi bi-phone text-success me-1"></i>Mobile</td><td class="text-end">' + fmt(d.mobile) + pct(d.mobile, d.total) + '</td></tr>'
+    +     '<tr><td class="py-1"><i class="bi bi-telephone text-info me-1"></i>Primary phone</td><td class="text-end">' + fmt(d.landline) + pct(d.landline, d.total) + '</td></tr>'
+    +     '<tr><td class="py-1"><i class="bi bi-envelope text-primary me-1"></i>CRM email</td><td class="text-end">' + fmt(d.emails) + pct(d.emails, d.total) + '</td></tr>'
+    +     '<tr><td class="py-1"><i class="bi bi-tags text-warning me-1"></i>In an audience</td><td class="text-end">' + fmt(d.audiences) + pct(d.audiences, d.total) + '</td></tr>'
+    +   '</table>'
+    + '</div>'
+    + '</div>';
+
+    // ── Row 2: Ethnicity — broad (census/modeled) + derived (surname) ─
+    if (d.ethnicity) {
+      const eb = d.ethnicity.broad   || {};
+      const ed = d.ethnicity.derived || {};
+      const bTotal = (eb.White||0)+(eb.Hispanic||0)+(eb.Black||0)+(eb.Asian||0)+(eb.Other||0);
+      const dTotal = (ed.Irish||0)+(ed.Jewish||0)+(ed.Italian||0)+(ed['South Asian']||0)+(ed['E. European']||0)+(ed['Middle Eastern']||0);
+      const bar = (n, total, color) => {
+        const w = total ? Math.round(100*n/total) : 0;
+        return '<div class="d-flex align-items-center gap-2">'
+          + '<div style="flex:1;background:#e9ecef;border-radius:3px;height:6px">'
+          + '<div style="width:' + w + '%;background:' + color + ';height:6px;border-radius:3px"></div></div>'
+          + '<span style="min-width:3rem;text-align:right;font-size:.8rem">' + fmt(n) + '</span>'
+          + '<span class="text-muted" style="min-width:2.5rem;font-size:.8rem">' + w + '%</span>'
+          + '</div>';
+      };
+      // Broad categories section
+      html += '<div class="border-top pt-2 mt-1">'
+        + '<div class="text-muted small text-uppercase fw-semibold mb-1">'
+        + '<i class="bi bi-people-fill me-1"></i>Ethnicity (Broad — census modeled)'
+        + '</div>'
+        + '<div class="row g-0">'
+        + '<div class="col-md-6">'
+        +   '<table class="table table-sm table-borderless mb-0" style="font-size:.82rem">'
+        +     '<tr><td class="py-1" style="width:48%">White / Caucasian</td><td>' + bar(eb.White,    bTotal, '#6c757d') + '</td></tr>'
+        +     '<tr><td class="py-1">Hispanic / Latino</td>   <td>' + bar(eb.Hispanic, bTotal, '#fd7e14') + '</td></tr>'
+        +     '<tr><td class="py-1">Black / African Amer.</td><td>' + bar(eb.Black,    bTotal, '#343a40') + '</td></tr>'
+        +   '</table>'
+        + '</div>'
+        + '<div class="col-md-6">'
+        +   '<table class="table table-sm table-borderless mb-0" style="font-size:.82rem">'
+        +     '<tr><td class="py-1" style="width:48%">Asian / Pac. Islander</td><td>' + bar(eb.Asian,  bTotal, '#0dcaf0') + '</td></tr>'
+        +     '<tr><td class="py-1">Other / Multi-Racial</td><td>'              + bar(eb.Other,  bTotal, '#adb5bd') + '</td></tr>'
+        +   '</table>'
+        + '</div>'
+        + '</div>';
+      // Derived sub-group section
+      html += '<div class="text-muted small text-uppercase fw-semibold mb-1 mt-2">'
+        + '<i class="bi bi-person-badge me-1"></i>Ethnicity (Derived — surname model)'
+        + '</div>'
+        + '<div class="row g-0">'
+        + '<div class="col-md-6">'
+        +   '<table class="table table-sm table-borderless mb-0" style="font-size:.82rem">'
+        +     '<tr><td class="py-1" style="width:48%">Irish</td>      <td>' + bar(ed.Irish,              dTotal, '#28a745') + '</td></tr>'
+        +     '<tr><td class="py-1">Jewish</td>                        <td>' + bar(ed.Jewish,             dTotal, '#6f42c1') + '</td></tr>'
+        +     '<tr><td class="py-1">Italian</td>                       <td>' + bar(ed.Italian,            dTotal, '#dc3545') + '</td></tr>'
+        +   '</table>'
+        + '</div>'
+        + '<div class="col-md-6">'
+        +   '<table class="table table-sm table-borderless mb-0" style="font-size:.82rem">'
+        +     '<tr><td class="py-1" style="width:48%">South Asian</td> <td>' + bar(ed['South Asian'],    dTotal, '#fd7e14') + '</td></tr>'
+        +     '<tr><td class="py-1">E. European</td>                    <td>' + bar(ed['E. European'],   dTotal, '#0d6efd') + '</td></tr>'
+        +     '<tr><td class="py-1">Middle Eastern</td>                 <td>' + bar(ed['Middle Eastern'],dTotal, '#20c997') + '</td></tr>'
+        +   '</table>'
+        + '</div>'
+        + '</div></div>';
+    }
+
+    // ── Row 3: Issue Audience tags ────────────────────────────────────
+    if (d.audience_detail && d.audience_detail.length) {
+      const tags = d.audience_detail.map(a =>
+        '<span class="badge bg-warning text-dark me-1 mb-1" style="font-size:.75rem;font-weight:normal">'
+        + a.name + ' <span class="fw-semibold">' + fmt(a.count) + '</span></span>'
+      ).join('');
+      html += '<div class="border-top pt-2 mt-1">'
+        + '<div class="text-muted small text-uppercase fw-semibold mb-2">'
+        + '<i class="bi bi-tags-fill me-1"></i>Issue Audiences</div>'
+        + '<div>' + tags + '</div></div>';
+    } else if (d.audiences === 0) {
+      html += '<div class="border-top pt-2 mt-1 text-muted small">'
+        + '<i class="bi bi-tags me-1"></i>Issue Audiences: <em>none tagged yet &mdash; run Issue Tagging Audiences first</em></div>';
+    }
+
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = '<div class="text-danger small p-2">Error: ' + e.message + '</div>';
+  }
+}
+
+async function loadExportReports() {
+  const body = document.getElementById('export-reports-body');
+  body.innerHTML = '<div class="text-center text-muted py-2"><span class="spinner-border spinner-border-sm me-2"></span>Loading&hellip;</div>';
+  try {
+    const resp  = await fetch('/voter-pipeline/export-reports');
+    const files = await resp.json();
+    // Determine expected folder name for the selected district
+    const _dt  = (document.getElementById('distType')?.value || '').trim();
+    const _dve = document.getElementById('distValue') || document.getElementById('distValueText');
+    const _dv  = (_dve?.value || '').trim();
+    let distFilter = null;
+    if (_dt === 'statewide') distFilter = 'statewide';
+    else if (_dt && _dv)    distFilter = _dt.toUpperCase() + '_' + _dv;
+    const visible = distFilter ? files.filter(f => (f.district || '').toUpperCase() === distFilter.toUpperCase()) : files;
+    if (!visible.length) {
+      body.innerHTML = '<div class="text-muted small text-center py-2">'
+        + (distFilter ? 'No reports for ' + distFilter + '.' : 'No reports found.')
+        + '</div>';
+      return;
+    }
+    // Keep only the most recent file per district (files already sorted newest-first)
+    const seen = new Set();
+    const deduped = visible.filter(f => {
+      const key = (f.district || f.name).toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const rows = deduped.map(f =>
+      '<tr>'
+      + '<td style="font-size:.85rem"><i class="bi bi-file-earmark-spreadsheet text-success me-1"></i>' + f.name + '</td>'
+      + '<td class="text-muted" style="font-size:.8rem">' + (f.district || '') + '</td>'
+      + '<td class="text-muted" style="font-size:.8rem">' + f.created + '</td>'
+      + '<td class="text-muted" style="font-size:.8rem">' + f.size_mb + ' MB</td>'
+      + '<td class="d-flex gap-1">'
+      + '<a href="/voter-pipeline/export-reports/download?path=' + encodeURIComponent(f.rel_path)
+      + '" class="btn btn-sm btn-outline-primary py-0" title="Download"><i class="bi bi-download"></i></a>'
+      + '<button class="btn btn-sm btn-outline-danger py-0" title="Delete"'
+      + ' onclick="deleteExportReport(' + JSON.stringify(f.rel_path) + ', this)">'
+      + '<i class="bi bi-trash"></i></button>'
+      + '</td>'
+      + '</tr>'
+    ).join('');
+    body.innerHTML =
+      '<div class="table-responsive"><table class="table table-sm table-hover mb-0">'
+      + '<thead class="table-light"><tr><th>File</th><th>District</th><th>Generated</th><th>Size</th><th></th></tr></thead>'
+      + '<tbody>' + rows + '</tbody>'
+      + '</table></div>';
+  } catch(e) {
+    body.innerHTML = '<div class="text-danger small p-2">Error: ' + e.message + '</div>';
+  }
+}
+
+async function deleteExportReport(relPath, btn) {
+  if (!confirm('Delete this report?')) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch('/voter-pipeline/export-reports?path=' + encodeURIComponent(relPath),
+      { method: 'DELETE' });
+    if (r.ok) {
+      loadExportReports();
+    } else {
+      btn.disabled = false;
+      alert('Delete failed.');
+    }
+  } catch(e) {
+    btn.disabled = false;
+    alert('Error: ' + e.message);
+  }
+}
+
 
 /* ── CRM stream with progress cards ─────────────────────────────────────── */
 
@@ -913,34 +1404,35 @@ function termAppend(state, container, chunk) {
   container.scrollTop   = container.scrollHeight;
 }
 
-async function runCrmStream(cmd, extra) {
+async function runCrmStream(cmd, extra, triggerBtn) {
   const progressEl = document.getElementById('crm-progress');
   const logWrap    = document.getElementById('log-crm-wrap');
   const logEl      = document.getElementById('log-crm');
+  const labelEl    = document.getElementById('log-crm-label');
+
+  // Reset UI
   progressEl.innerHTML = '';
   progressEl.classList.remove('d-none');
+  if (labelEl) labelEl.innerHTML = `<i class="bi bi-terminal me-1"></i>${cmd}`;
   logWrap.classList.remove('d-none');
-  logEl.innerHTML = '';
+  logEl.textContent = `\u25b6 Running: ${cmd}${extra ? ' ' + extra : ''}\n`;
+  logWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  const pre = document.createElement('pre');
-  pre.className = 'bg-dark text-light p-3 rounded small mt-1';
-  pre.style = 'max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;';
-  logEl.appendChild(pre);
+  // Spinner on trigger button (matches runStream behaviour)
+  if (triggerBtn) {
+    triggerBtn.disabled = true;
+    triggerBtn._origHtml = triggerBtn.innerHTML;
+    triggerBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Running\u2026';
+  }
 
-  const fd = new FormData();
-  fd.append('cmd', cmd);
-  fd.append('extra', extra || '');
-
-  let currentAcct = null;
-  let currentPhase = null; // 'contacts' | 'deals'
-  let lineBuffer = '';
+  // ── Line parser for per-account progress cards ──────────────────────────
+  let currentAcct  = null;
+  let currentPhase = null;
 
   function processLine(line) {
-    // Trim carriage returns / whitespace
     const l = line.replace(/\r/g,'').trim();
     if (!l) return;
 
-    // New account
     const acctMatch = l.match(/^---\s+Account:\s+(.+?)\s+---/);
     if (acctMatch) {
       currentAcct  = acctMatch[1];
@@ -950,45 +1442,34 @@ async function runCrmStream(cmd, extra) {
       return;
     }
     if (!currentAcct) return;
-
     const aid = _acctId(currentAcct);
 
-    // Phase start
     if (/Contacts:\s+(FULL|incremental)/i.test(l)) {
       currentPhase = 'contacts';
-      _setBar(aid + '-contacts', 'running', 'syncing…');
+      _setBar(aid + '-contacts', 'running', 'syncing\u2026');
       return;
     }
     if (/Deals:\s+(FULL|incremental)/i.test(l)) {
       currentPhase = 'deals';
-      _setBar(aid + '-deals', 'running', 'syncing…');
+      _setBar(aid + '-deals', 'running', 'syncing\u2026');
       return;
     }
 
-    // Contact progress / done
     const cProg = l.match(/^([\d,]+)\s+contacts?\s+\([\d.]+\/sec\)/);
     if (cProg) { _setBar(aid + '-contacts', 'running', cProg[1] + ' contacts'); return; }
-
     const cDone = l.match(/^([\d,]+)\s+contacts?\s+synced/);
     if (cDone) { _setBar(aid + '-contacts', 'done', cDone[1] + ' contacts'); return; }
+    const cMerge = l.match(/\u2713 Contacts:\s+([\d,]+)/);
+    if (cMerge) { _setBar(aid + '-contacts', 'done', cMerge[1] + ' contacts'); return; }
 
-    // Merged count (incremental short path)
-    const cMerge = l.match(/Merged\s+([\d,]+)\s+contacts?/);
-    if (cMerge && currentPhase === 'contacts') {
-      _setBar(aid + '-contacts', 'done', cMerge[1] + ' contacts'); return;
-    }
-
-    // Deal progress / done
     const dProg = l.match(/^([\d,]+)\s+deals?\s+\([\d.]+\/sec\)/);
     if (dProg) { _setBar(aid + '-deals', 'running', dProg[1] + ' deals'); return; }
-
     const dDone = l.match(/^([\d,]+)\s+deals?\s+synced/);
     if (dDone) { _setBar(aid + '-deals', 'done', dDone[1] + ' deals'); return; }
-
-    const dUpd = l.match(/Updated\s+([\d,]+)\s+deals?/);
+    const dUpd = l.match(/\u2713 Deals:\s+([\d,]+)/);
     if (dUpd) { _setBar(aid + '-deals', 'done', dUpd[1] + ' deals'); return; }
 
-    // Exit code → mark incomplete bars as done
+    // Exit code: finalize all still-animated bars and badges
     if (/^\[Exit code:\s*0\]/.test(l)) {
       document.querySelectorAll('#crm-progress .progress-bar-animated').forEach(b => {
         b.classList.remove('progress-bar-striped','progress-bar-animated');
@@ -999,308 +1480,44 @@ async function runCrmStream(cmd, extra) {
         b.textContent = 'Done'; b.className = 'badge bg-success';
       });
     } else if (/^\[Exit code:/.test(l)) {
-      _setBadge(currentAcct, 'error');
+      if (currentAcct) _setBadge(currentAcct, 'error');
     }
   }
+
+  function processChunk(chunk) {
+    chunk.split(/[\n\r]+/).forEach(processLine);
+  }
+
+  const fd = new FormData();
+  fd.append('cmd', cmd);
+  fd.append('extra', extra || '');
 
   try {
     const resp = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
     const d    = await resp.json().catch(() => ({}));
     if (!resp.ok) {
       if (resp.status === 409 && d.task_id) {
-        pre.textContent += `[Attaching to running task: ${d.error}]\n`;
-        // Fall through to poll below
+        logEl.textContent += `[Attaching to running task…]\n`;
+        localStorage.setItem('vp_task', JSON.stringify({id: d.task_id, cmd, tab: 'crm'}));
+        await _pollTask(d.task_id, logEl, processChunk, cmd, 'kill-crm-btn');
       } else if (resp.status === 400) {
-        pre.textContent += '\n[Error: ' + (d.error || 'Bad request') + ']\n'; return;
+        logEl.textContent += '\n[Error: ' + (d.error || 'Bad request') + ']\n';
       } else {
-        pre.textContent += '\n[Session expired — please refresh the page to log in again]\n'; return;
+        logEl.textContent += '\n[Session expired — please refresh the page to log in again]\n';
       }
-    }
-    const taskId = d.task_id;
-    localStorage.setItem('vp_task', JSON.stringify({id: taskId, cmd, tab: 'crm'}));
-    let offset = 0;
-    const term = makeTermState();
-    while (true) {
-      try {
-        const pr = await fetch(`/voter-pipeline/task/${taskId}/output?offset=${offset}`);
-        if (!pr.ok) { pre.textContent += '\n[Lost connection to task]\n'; break; }
-        const pd = await pr.json();
-        if (pd.text) {
-          termAppend(term, pre, pd.text);
-          // Parse lines for CRM progress
-          const parts = pd.text.split(/[\n\r]+/);
-          parts.forEach(processLine);
-        }
-        offset = pd.offset;
-        if (!pd.running) {
-          processLine(`[Exit code: ${pd.exit_code}]`);
-          pre.textContent += `\n[Exit code: ${pd.exit_code}]\n`;
-          localStorage.removeItem('vp_task');
-          break;
-        }
-      } catch (err) {
-        pre.textContent += '\n[Poll error — retrying…]\n';
-      }
-      await new Promise(r => setTimeout(r, 1500));
-    }
-  } catch (err) {
-    pre.textContent += '\n[Error: ' + err.message + ']';
-  } finally {
-    localStorage.removeItem('vp_task');
-  }
-}
-
-/* ── Ethnicity helper (assembles --rebuild and --batch-size flags) ───────── */
-function runEthnicity() {
-  const rebuild = document.getElementById('ethRebuild').checked;
-  const batch   = document.getElementById('ethBatch').value || '50000';
-  let extra = '--batch-size ' + batch;
-  if (rebuild) extra += ' --rebuild';
-  vpRun('ethnicity', extra);
-}
-
-/* ── Reset confirmation ──────────────────────────────────────────────────── */
-function confirmReset(fullRebuild) {
-  const action = fullRebuild
-    ? 'DROP all donor databases AND clear voter_file enrichment columns, then RE-RUN the full donor pipeline'
-    : 'DROP all donor databases AND clear voter_file enrichment columns (no re-run)';
-  const msg = `⚠ DESTRUCTIVE OPERATION ⚠\n\nThis will ${action}.\n\nThis cannot be undone. Type "YES" to confirm.`;
-  const ans = prompt(msg);
-  if (ans !== 'YES') { alert('Reset cancelled.'); return; }
-  const extra = fullRebuild ? '--yes' : '--yes --db-only';
-  vpRun('reset', extra);
-}
-
-/* ── Data file status dashboard ─────────────────────────────────────────── */
-async function loadDataStatus() {
-  const body = document.getElementById('data-status-body');
-  const btn  = document.getElementById('data-status-refresh');
-  body.innerHTML = '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm me-2"></div>Loading…</div>';
-  if (btn) btn.disabled = true;
-
-  try {
-    const resp = await fetch('/voter-pipeline/data-status');
-    const d    = await resp.json();
-
-    if (d.error) { body.innerHTML = `<div class="alert alert-danger">${d.error}</div>`; return; }
-
-    const groupColors = { boe: 'primary', fec: 'success', cfb: 'warning' };
-
-    const cards = (d.groups || []).map(g => {
-      const present = g.files.filter(f => f.exists).length;
-      const total   = g.files.length;
-      const allOk   = present === total;
-      const color   = groupColors[g.key] || 'secondary';
-
-      const rows = g.files.map(f => {
-        let badge, ageCls;
-        if (!f.exists) {
-          badge  = '<span class="badge bg-danger">missing</span>';
-          ageCls = 'text-danger';
-        } else if (f.age_seconds < 86400 * 7) {
-          badge  = '<span class="badge bg-success">fresh</span>';
-          ageCls = 'text-success';
-        } else if (f.age_seconds < 86400 * 60) {
-          badge  = '<span class="badge bg-warning text-dark">aging</span>';
-          ageCls = 'text-warning';
-        } else {
-          badge  = '<span class="badge bg-danger">stale</span>';
-          ageCls = 'text-danger';
-        }
-        const size = f.size_mb != null ? `${f.size_mb} MB` : '—';
-        return `<tr>
-          <td class="small">${f.name}</td>
-          <td class="small text-end text-muted">${size}</td>
-          <td class="small text-end ${ageCls}">${f.age_str}</td>
-          <td class="text-end">${badge}</td>
-        </tr>`;
-      }).join('');
-
-      const headerBadge = allOk
-        ? `<span class="badge bg-success ms-2">${present}/${total}</span>`
-        : `<span class="badge bg-danger ms-2">${present}/${total}</span>`;
-
-      return `<div class="card shadow-sm mb-3">
-        <div class="card-header py-2 bg-white d-flex justify-content-between align-items-center">
-          <span class="fw-semibold"><i class="bi bi-file-earmark-zip me-1 text-${color}"></i>${g.label}${headerBadge}</span>
-        </div>
-        <div class="card-body p-0">
-          <table class="table table-sm table-hover mb-0">
-            <thead class="table-light"><tr>
-              <th class="small fw-semibold">File</th>
-              <th class="small fw-semibold text-end">Size</th>
-              <th class="small fw-semibold text-end">Last Download</th>
-              <th class="small fw-semibold text-end">Status</th>
-            </tr></thead>
-            <tbody>${rows}</tbody>
-          </table>
-        </div>
-      </div>`;
-    }).join('');
-
-    body.innerHTML = cards || '<div class="text-muted small">No file groups found.</div>';
-  } catch (err) {
-    body.innerHTML = `<div class="alert alert-danger small">Failed to load: ${err.message}</div>`;
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
-/* ── Pipeline Health stats ───────────────────────────────────────────────── */
-async function loadStats() {
-  const body = document.getElementById('stats-body');
-  const btn  = document.getElementById('stats-refresh-btn');
-  body.innerHTML = '<div class="text-center text-muted py-2"><div class="spinner-border spinner-border-sm me-2" role="status"></div>Loading…</div>';
-  if (btn) btn.disabled = true;
-
-  try {
-    const resp = await fetch('/voter-pipeline/stats');
-    const d    = await resp.json();
-
-    if (d.error) {
-      body.innerHTML = `<div class="text-danger small p-2"><i class="bi bi-exclamation-triangle me-1"></i>${d.error}</div>`;
       return;
     }
-
-    const pct      = d.pct;
-    const pctColor = pct >= 40 ? '#198754' : pct >= 20 ? '#d97706' : 'var(--pk-red)';
-
-    const partyHtml = (d.party || []).slice(0, 5)
-      .map(p => `<div class="small">${p.party}: <strong>${p.count.toLocaleString()}</strong></div>`)
-      .join('');
-
-    const srcHtml = (d.sources || []).slice(0, 6)
-      .map(s => {
-        const pctBadge = `<span class="badge bg-secondary ms-1" style="font-size:.65rem">${s.pct}%</span>`;
-        return `<div class="small">${s.source}: <strong>${s.total.toLocaleString()}</strong>${pctBadge}</div>`;
-      }).join('');
-
-    const methodColors = {
-      'name_zip': 'success', 'phone': 'primary', 'hyph_zip': 'info',
-      'first_word_zip': 'warning', 'inactive_name_zip': 'secondary', 'unlabelled': 'light'
-    };
-    const methodHtml = (d.match_methods || []).length
-      ? (d.match_methods || []).map(m => {
-          const pct2 = d.matched ? (m.count / d.matched * 100).toFixed(1) : 0;
-          const color = methodColors[m.method] || 'secondary';
-          return `<div class="small"><span class="badge bg-${color} me-1" style="font-size:.6rem">${m.method}</span><strong>${m.count.toLocaleString()}</strong> <span class="text-muted">(${pct2}%)</span></div>`;
-        }).join('')
-      : '<div class="text-muted small">Run Extended Match to see breakdown</div>';
-
-    const lastSync = d.last_sync
-      ? `<div class="text-muted small mt-2"><i class="bi bi-clock me-1"></i>Last contact update: ${new Date(d.last_sync).toLocaleString()}</div>`
-      : '';
-
-    body.innerHTML = `
-      <div class="row g-2">
-        <div class="col-md-2 text-center border-end">
-          <div style="font-size:2rem;font-weight:700;color:${pctColor}">${pct}%</div>
-          <div class="text-muted small">Match Rate</div>
-          <div class="small text-muted">${d.matched.toLocaleString()} / ${d.total.toLocaleString()}</div>
-        </div>
-        <div class="col-md-2 border-end px-3">
-          <div class="text-muted small fw-semibold mb-1">Unmatched</div>
-          <div class="small"><i class="bi bi-search me-1 text-muted"></i>Name+Zip: <strong>${(d.unmatched_name_zip||0).toLocaleString()}</strong></div>
-          <div class="small"><i class="bi bi-telephone me-1 text-muted"></i>Has mobile: <strong>${(d.has_mobile||0).toLocaleString()}</strong></div>
-          <div class="small"><i class="bi bi-question-circle me-1 text-muted"></i>No zip: <strong>${(d.no_zip||0).toLocaleString()}</strong></div>
-        </div>
-        <div class="col-md-3 border-end px-3">
-          <div class="text-muted small fw-semibold mb-1">Party (Matched)</div>
-          ${partyHtml || '<div class="text-muted small">—</div>'}
-        </div>
-        <div class="col-md-2 border-end px-3">
-          <div class="text-muted small fw-semibold mb-1">By Match Method</div>
-          ${methodHtml}
-        </div>
-        <div class="col-md-3 px-3">
-          <div class="text-muted small fw-semibold mb-1">Top Sources <span class="fw-normal">(match %)</span></div>
-          ${srcHtml || '<div class="text-muted small">—</div>'}
-        </div>
-      </div>
-      ${lastSync}`;
-  } catch (err) {
-    body.innerHTML = `<div class="text-danger small p-2">Failed to load stats: ${err.message}</div>`;
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
-/* ── Facebook Audience Push ──────────────────────────────────────────────── */
-function toggleFbDist() {
-  const type = document.getElementById('fbDistType').value;
-  const wrap = document.getElementById('fbDistValueWrap');
-  wrap.style.display = type ? '' : 'none';
-}
-
-async function loadFbAudiences() {
-  const select  = document.getElementById('fbAudience');
-  select.innerHTML = '<option value="">Loading…</option>';
-  select.disabled  = true;
-
-  const wrap    = document.getElementById('log-enrich-wrap');
-  const labelEl = document.getElementById('log-enrich-label');
-  const logEl   = document.getElementById('log-enrich');
-  if (wrap)    { wrap.classList.remove('d-none'); wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-  if (labelEl) labelEl.innerHTML = '<i class="bi bi-terminal me-1"></i>fb-push --list-audiences';
-  logEl.textContent = '▶ Loading audiences…\n';
-
-  const fd = new FormData();
-  fd.append('cmd',   'fb-push');
-  fd.append('extra', '--list-audiences');
-
-  const term = makeTermState(logEl.textContent);
-  let fullText = '';
-  try {
-    const resp   = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
-    const reader = resp.body.getReader();
-    const dec    = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = dec.decode(value);
-      fullText += chunk;
-      termAppend(term, logEl, chunk);
-    }
+    localStorage.setItem('vp_task', JSON.stringify({id: d.task_id, cmd, tab: 'crm'}));
+    await _pollTask(d.task_id, logEl, processChunk, cmd, 'kill-crm-btn');
   } catch (err) {
     logEl.textContent += '\n[Error: ' + err.message + ']';
-  }
-
-  // Parse output lines like:  "  NYS_HARD_DEM                               57,123"
-  select.innerHTML = '<option value="">— select audience —</option>';
-  fullText.split('\n').forEach(line => {
-    const m = line.match(/^\s{2}([A-Z0-9_]{3,})\s+([\d,]+)/);
-    if (m) {
-      const opt = document.createElement('option');
-      opt.value       = m[1];
-      opt.textContent = `${m[1]}  (${m[2]} voters)`;
-      select.appendChild(opt);
+  } finally {
+    localStorage.removeItem('vp_task');
+    if (triggerBtn) {
+      triggerBtn.disabled = false;
+      triggerBtn.innerHTML = triggerBtn._origHtml;
     }
-  });
-  select.disabled = false;
-}
-
-function pushFbAudience() {
-  const audience = document.getElementById('fbAudience').value;
-  if (!audience) {
-    alert('Please click "Load Audiences" and select an audience first.');
-    return;
   }
-
-  let extra = '--audience ' + audience;
-
-  const distType  = document.getElementById('fbDistType').value;
-  const distValue = document.getElementById('fbDistValue')?.value.trim();
-  if (distType && distValue) extra += ' --' + distType + ' ' + distValue;
-
-  const fbId = document.getElementById('fbAudienceId').value.trim();
-  if (fbId) extra += ' --fb-audience-id ' + fbId;
-
-  if (document.getElementById('fbReplace').checked) {
-    if (!fbId) { alert('Atomic replace requires a FB Audience ID.'); return; }
-    extra += ' --replace';
-  }
-
-  vpRun('fb-push', extra);
 }
 
 /* ── Generic stream (non-CRM tabs) ──────────────────────────────────────── */
@@ -1308,7 +1525,6 @@ async function runStream(cmd, extra, tab, triggerBtn) {
   const container = document.getElementById('log-' + tab);
   if (!container) return;
 
-  // For the donors tab: show the panel and scroll to it immediately
   const wrap = document.getElementById('log-' + tab + '-wrap');
   if (wrap) {
     const labelEl = document.getElementById('log-' + tab + '-label');
@@ -1317,12 +1533,11 @@ async function runStream(cmd, extra, tab, triggerBtn) {
     wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
-  // Show immediate feedback in container (unhide if it starts hidden)
   container.classList.remove('d-none');
-  container.textContent = `▶ Running: ${cmd}${extra ? ' ' + extra : ''}\n`;
+  container.textContent = `▶ Running: ${cmd}${extra ? ' ' + extra : ''}
+`;
   if (!wrap) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-  // Spinner on the triggering button
   if (triggerBtn) {
     triggerBtn.disabled = true;
     triggerBtn._origHtml = triggerBtn.innerHTML;
@@ -1333,9 +1548,9 @@ async function runStream(cmd, extra, tab, triggerBtn) {
   fd.append('cmd', cmd);
   fd.append('extra', extra || '');
 
-  // ── Download progress bar state ────────────────────────────────────────────
-  let dlBar   = null;   // injected <div> element
-  let dlTotal = 0;      // expected MB (from "(N MB expected)" line)
+  // ── Download progress bar ──────────────────────────────────────────────────
+  let dlBar   = null;
+  let dlTotal = 0;
 
   function _ensureDlBar() {
     if (dlBar) return dlBar;
@@ -1355,7 +1570,6 @@ async function runStream(cmd, extra, tab, triggerBtn) {
   }
 
   function _updateDlBar(chunk) {
-    // New file: "-> filename.csv  (87 MB expected)"
     const newDl = chunk.match(/-> ([\w._-]+)\s+\((\d+)\s+MB expected\)/);
     if (newDl) {
       dlTotal = parseFloat(newDl[2]);
@@ -1368,39 +1582,69 @@ async function runStream(cmd, extra, tab, triggerBtn) {
       return;
     }
     if (!dlBar || dlTotal <= 0) return;
-
-    // Final line: "\r  77.6 MB in 9s  (8.1 MB/s)"
     const done = chunk.match(/\r\s*([\d.]+)\s+MB in (\d+)s\s+\(([\d.]+)\s+MB\/s\)/);
     if (done) {
       const mb = parseFloat(done[1]), s = parseInt(done[2]), spd = parseFloat(done[3]);
-      dlBar.querySelector('.dl-stats').textContent =
-        mb.toFixed(1) + ' MB in ' + s + 's · ' + spd.toFixed(1) + ' MB/s';
+      dlBar.querySelector('.dl-stats').textContent = mb.toFixed(1) + ' MB in ' + s + 's · ' + spd.toFixed(1) + ' MB/s';
       const fill = dlBar.querySelector('.dl-fill');
       fill.style.width = '100%';
       fill.className = 'progress-bar bg-success dl-fill';
       dlTotal = 0;
       return;
     }
-
-    // Progress: "\r  77.6 MB  (8.1 MB/s)"
     const prog = chunk.match(/\r\s*([\d.]+)\s+MB\s+\(([\d.]+)\s+MB\/s\)/);
     if (prog) {
       const cur = parseFloat(prog[1]), spd = parseFloat(prog[2]);
       const pct = Math.min(100, (cur / dlTotal) * 100).toFixed(1);
-      dlBar.querySelector('.dl-stats').textContent =
-        cur.toFixed(1) + ' / ' + dlTotal + ' MB · ' + spd.toFixed(1) + ' MB/s';
+      dlBar.querySelector('.dl-stats').textContent = cur.toFixed(1) + ' / ' + dlTotal + ' MB · ' + spd.toFixed(1) + ' MB/s';
       dlBar.querySelector('.dl-fill').style.width = pct + '%';
     }
   }
+
+  // ── Bridge / pipeline progress bar ──────────────────────────────────────
+  function _updateBridgeBar(chunk) {
+    var m = chunk.match(/\[(\d+)\/(\d+)\]\s+(\S+)/);
+    if (m) {
+      var n = parseInt(m[1]), total = parseInt(m[2]), fname = m[3];
+      var pct = Math.round(n / total * 100);
+      var bwrap = document.getElementById('bridge-prog-wrap');
+      var bar  = document.getElementById('bridge-prog-bar');
+      var lbl  = document.getElementById('bridge-prog-file');
+      var pctEl = document.getElementById('bridge-prog-pct');
+      if (bwrap) bwrap.classList.remove('d-none');
+      if (lbl)  lbl.textContent  = fname;
+      if (pctEl) pctEl.textContent = n + ' / ' + total;
+      if (bar) {
+        bar.style.width = pct + '%';
+        bar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-info';
+      }
+      return;
+    }
+    var mm = chunk.match(/Matched ([\d,]+) voters/);
+    if (mm) {
+      var lbl2 = document.getElementById('bridge-prog-file');
+      if (lbl2 && lbl2.textContent)
+        lbl2.textContent = lbl2.textContent.replace(/ ✓.*$/, '') + ' ✓ ' + mm[1] + ' matched';
+      return;
+    }
+    if (chunk.includes('Bridge table rows')) {
+      var bar2 = document.getElementById('bridge-prog-bar');
+      if (bar2) { bar2.style.width = '100%'; bar2.className = 'progress-bar bg-success'; }
+      var pctEl2 = document.getElementById('bridge-prog-pct');
+      if (pctEl2) pctEl2.textContent = 'done';
+    }
+  }
+
+  function _updateBars(chunk) { _updateDlBar(chunk); _updateBridgeBar(chunk); }
 
   try {
     const resp = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
     const d    = await resp.json().catch(() => ({}));
     if (!resp.ok) {
       if (resp.status === 409 && d.task_id) {
-        container.textContent += `\n[A task is already running: ${d.error}]\n`;
-        container.textContent += `[Attaching to existing task…]\n`;
-        await _pollTask(d.task_id, container, _updateDlBar);
+        container.textContent += '\n[A task is already running: ' + d.error + ']\n';
+        container.textContent += '[Attaching to existing task…]\n';
+        await _pollTask(d.task_id, container, _updateBars, cmd, KILL_BTN_MAP[tab] || 'kill-task-btn');
       } else if (resp.status === 400) {
         container.textContent += '\n[Error: ' + (d.error || 'Bad request') + ']\n';
       } else {
@@ -1408,9 +1652,8 @@ async function runStream(cmd, extra, tab, triggerBtn) {
       }
       return;
     }
-    // Save to localStorage so we can resume on page reload
     localStorage.setItem('vp_task', JSON.stringify({id: d.task_id, cmd, tab}));
-    await _pollTask(d.task_id, container, _updateDlBar);
+    await _pollTask(d.task_id, container, _updateBars, cmd, KILL_BTN_MAP[tab] || 'kill-task-btn');
   } catch (err) {
     container.textContent += '\n[Error: ' + err.message + ']';
   } finally {
@@ -1422,7 +1665,338 @@ async function runStream(cmd, extra, tab, triggerBtn) {
   }
 }
 
-async function _pollTask(taskId, container, dlBarCallback) {
+
+
+// ── Last-run timestamp helpers ────────────────────────────────────────────
+function _recordLastRun(cmd) {
+  localStorage.setItem('vp_lastrun_' + cmd, new Date().toISOString());
+  _refreshRunBadge(cmd);
+}
+
+function _fmtRunTime(iso) {
+  const d = new Date(iso);
+  return '✓ ' + d.toLocaleDateString('en-US', {month:'short', day:'numeric'}) + ' · ' + d.toLocaleTimeString('en-US', {hour:'2-digit', minute:'2-digit'});
+}
+
+function _refreshRunBadge(cmd) {
+  const ts = localStorage.getItem('vp_lastrun_' + cmd);
+  document.querySelectorAll('button[onclick]').forEach(btn => {
+    const oc = btn.getAttribute('onclick') || '';
+    const m = oc.match(/vpRun\(['"]([^'"]+)['"]/);
+    if (!m || m[1] !== cmd) return;
+    let badge = btn.parentElement.querySelector('.lastrun-badge[data-cmd="' + cmd + '"]');
+    if (!badge) {
+      badge = document.createElement('small');
+      badge.className = 'lastrun-badge text-success d-block mt-1';
+      badge.style.cssText = 'font-size:0.7rem;line-height:1.2';
+      badge.dataset.cmd = cmd;
+      btn.insertAdjacentElement('afterend', badge);
+    }
+    if (ts) { badge.textContent = _fmtRunTime(ts); badge.style.display = ''; }
+    else     { badge.style.display = 'none'; }
+  });
+}
+
+function _initAllRunBadges() {
+  const seen = new Set();
+  document.querySelectorAll('button[onclick]').forEach(btn => {
+    const m = (btn.getAttribute('onclick') || '').match(/vpRun\(['"]([^'"]+)['"]/);
+    if (m && !seen.has(m[1])) { seen.add(m[1]); _refreshRunBadge(m[1]); }
+  });
+}
+
+let _activeTaskId    = null;
+let _activeContainer = null;
+let _activeKillBtnId = 'kill-task-btn';
+
+const KILL_BTN_MAP = {
+  'pipeline':  'kill-pipeline-btn',
+  'export':    'kill-export-btn',
+  'voterfile': 'kill-voterfile-btn',
+  'crm':       'kill-crm-btn',
+  'donors':    'kill-task-btn',
+};
+
+async function killRunningTask() {
+  if (!_activeTaskId) return;
+  const btn = document.getElementById(_activeKillBtnId);
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class=\"spinner-border spinner-border-sm me-1\"></span>Killing…';
+  }
+  try {
+    const r = await fetch(`/voter-pipeline/task/${_activeTaskId}/kill`, { method: 'POST' });
+    const d = await r.json();
+    if (_activeContainer) _activeContainer.textContent += `\n[${d.msg || 'Killed'}]\n`;
+  } catch (e) {
+  /* poll loop will detect the process died and clean up */
+  }
+}
+
+
+
+/* ── Toggle helpers for collapsible health cards ───────────────────────── */
+function toggleStatsCard() {
+  const body    = document.getElementById('stats-body');
+  const chevron = document.getElementById('stats-chevron');
+  const open    = body.style.display === 'none';
+  body.style.display     = open ? '' : 'none';
+  chevron.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
+  if (open && body.querySelector('.spinner-border')) loadStats();
+}
+
+function toggleEnrichCard() {
+  const body    = document.getElementById('enrich-stats-body');
+  const chevron = document.getElementById('enrich-chevron');
+  const open    = body.style.display === 'none';
+  body.style.display     = open ? '' : 'none';
+  chevron.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
+  if (open && body.querySelector('.spinner-border')) loadEnrichStats();
+}
+
+/* ── CRM Health loader ─────────────────────────────────────────────────── */
+async function loadStats(silent) {
+  const body  = document.getElementById('stats-body');
+  const btn   = document.getElementById('stats-refresh-btn');
+  const badge = document.getElementById('stats-match-badge');
+  if (!silent) body.innerHTML = '<div class="text-center text-muted py-2"><div class="spinner-border spinner-border-sm me-2"></div>Loading…</div>';
+  if (btn) btn.disabled = true;
+
+  try {
+    const resp = await fetch('/voter-pipeline/stats');
+    const d    = await resp.json();
+
+    if (d.error) {
+      body.innerHTML = '<div class="text-danger small p-2"><i class="bi bi-exclamation-triangle me-1"></i>' + d.error + '</div>';
+      if (badge) badge.textContent = '';
+      return;
+    }
+
+    const pct      = d.pct;
+    const pctColor = pct >= 40 ? '#198754' : pct >= 20 ? '#d97706' : 'var(--pk-red)';
+
+    // Header badge
+    if (badge) badge.textContent = (d.matched||0).toLocaleString() + ' / ' + (d.total||0).toLocaleString() + ' matched (' + pct + '%)';
+
+    // NY / Non-NY / Unknown breakdown
+    const ny    = d.ny || {};
+    const nonNy = d.non_ny || {};
+    const unk   = d.unknown_state || {};
+
+    const regionHtml =
+      '<div class="small"><span class="badge bg-success me-1">NY</span>' +
+        '<strong>' + (ny.matched||0).toLocaleString() + '</strong> / ' + (ny.total||0).toLocaleString() +
+        ' <span class="text-muted">(' + (ny.pct||0) + '%)</span></div>' +
+      '<div class="small"><span class="badge bg-secondary me-1">Non-NY</span>' +
+        '<strong>' + (nonNy.matched||0).toLocaleString() + '</strong> / ' + (nonNy.total||0).toLocaleString() + '</div>' +
+      '<div class="small"><span class="badge bg-warning text-dark me-1">Unknown</span>' +
+        '<strong>' + (unk.matched||0).toLocaleString() + '</strong> / ' + (unk.total||0).toLocaleString() +
+        ' <span class="text-muted">(zip: ' + (unk.has_zip||0).toLocaleString() + ', none: ' + (unk.no_zip||0).toLocaleString() + ')</span></div>';
+
+    const partyHtml = (d.party || []).slice(0, 5)
+      .map(function(p) { return '<div class="small">' + p.party + ': <strong>' + p.count.toLocaleString() + '</strong></div>'; })
+      .join('');
+
+    const srcHtml = (d.sources || []).slice(0, 6)
+      .map(function(s) {
+        return '<div class="small">' + s.source + ': <strong>' + s.total.toLocaleString() + '</strong>' +
+               '<span class="badge bg-secondary ms-1" style="font-size:.65rem">' + s.pct + '%</span></div>';
+      }).join('');
+
+    const methodColors = {
+      'name_zip':'success','phone':'primary','hyph_zip':'info',
+      'first_word_zip':'warning','inactive_name_zip':'secondary','unlabelled':'light'
+    };
+    var methodHtml;
+    if ((d.match_methods || []).length) {
+      methodHtml = (d.match_methods || []).map(function(m) {
+        var pct2 = d.matched ? (m.count / d.matched * 100).toFixed(1) : 0;
+        var color = methodColors[m.method] || 'secondary';
+        return '<div class="small"><span class="badge bg-' + color + ' me-1" style="font-size:.6rem">' + m.method + '</span>' +
+               '<strong>' + m.count.toLocaleString() + '</strong> <span class="text-muted">(' + pct2 + '%)</span></div>';
+      }).join('');
+    } else {
+      methodHtml = '<div class="text-muted small">Run a match to see breakdown</div>';
+    }
+
+    var lastSync = d.last_sync
+      ? '<div class="text-muted small mt-2"><i class="bi bi-clock me-1"></i>Last contact update: ' + new Date(d.last_sync).toLocaleString() + '</div>'
+      : '';
+
+    body.innerHTML =
+      '<div class="row g-2">' +
+        '<div class="col-md-2 text-center border-end">' +
+          '<div style="font-size:2rem;font-weight:700;color:' + pctColor + '">' + (ny.pct||0) + '%</div>' +
+          '<div class="text-muted small">NY Match Rate</div>' +
+          '<div class="small text-muted">' + (ny.matched||0).toLocaleString() + ' / ' + (ny.total||0).toLocaleString() + '</div>' +
+        '</div>' +
+        '<div class="col-md-2 border-end px-3">' +
+          '<div class="text-muted small fw-semibold mb-1">By Region</div>' + regionHtml +
+        '</div>' +
+        '<div class="col-md-3 border-end px-3">' +
+          '<div class="text-muted small fw-semibold mb-1">Party (Matched)</div>' + (partyHtml || '<div class="text-muted small">—</div>') +
+        '</div>' +
+        '<div class="col-md-2 border-end px-3">' +
+          '<div class="text-muted small fw-semibold mb-1">Match Method</div>' + methodHtml +
+        '</div>' +
+        '<div class="col-md-3 px-3">' +
+          '<div class="text-muted small fw-semibold mb-1">Top Sources <span class="fw-normal">(match %)</span></div>' + (srcHtml || '<div class="text-muted small">—</div>') +
+        '</div>' +
+      '</div>' + lastSync;
+
+  } catch (err) {
+    body.innerHTML = '<div class="text-danger small p-2">Failed to load stats: ' + err.message + '</div>';
+    if (badge) badge.textContent = '';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+/* ── Voter File Enrichment loader ──────────────────────────────────────── */
+async function loadEnrichStats(silent) {
+  const body      = document.getElementById('enrich-stats-body');
+  const btn       = document.getElementById('enrich-refresh-btn');
+  const badge     = document.getElementById('enrich-total-badge');
+  const loading   = document.getElementById('enrich-loading');
+  const accordion = document.getElementById('enrich-accordion');
+
+  if (!silent && loading) loading.classList.remove('d-none');
+  if (btn) btn.disabled = true;
+  if (accordion) accordion.innerHTML = '';
+
+  try {
+    const resp = await fetch('/voter-pipeline/enrichment-stats');
+    const d    = await resp.json();
+    if (loading) loading.classList.add('d-none');
+
+    if (d.error) {
+      if (accordion) accordion.innerHTML = '<div class="text-danger small p-2"><i class="bi bi-exclamation-triangle me-1"></i>' + d.error + '</div>';
+      if (badge) badge.textContent = '';
+      return;
+    }
+
+    var total = d.total || 1;
+    function fmt(n) { return (n||0).toLocaleString(); }
+    function money(n) { return '$' + (n||0).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:0}); }
+
+    if (badge) badge.textContent = fmt(total) + ' voters';
+
+    function section(id, icon, title, summary, content) {
+      return '<div class="accordion-item">' +
+        '<h2 class="accordion-header">' +
+          '<button class="accordion-button collapsed py-2 px-3" type="button" data-bs-toggle="collapse" data-bs-target="#enrich-' + id + '">' +
+            '<i class="bi ' + icon + ' me-2"></i><span class="fw-semibold small">' + title + '</span>' +
+            '<span class="badge bg-light text-secondary ms-2" style="font-size:.7rem">' + summary + '</span>' +
+          '</button>' +
+        '</h2>' +
+        '<div id="enrich-' + id + '" class="accordion-collapse collapse">' +
+          '<div class="accordion-body py-2 px-3">' + content + '</div>' +
+        '</div>' +
+      '</div>';
+    }
+
+    // Demographics
+    var g = d.gender || {};
+    var p = d.party || {};
+    var demoContent =
+      '<div class="row g-2">' +
+        '<div class="col-md-4"><div class="small text-muted mb-1">Gender</div>' +
+          '<div class="small">Male: <strong>' + fmt(g.male) + '</strong> · Female: <strong>' + fmt(g.female) + '</strong> · Other: <strong>' + fmt(g.unknown) + '</strong></div></div>' +
+        '<div class="col-md-4"><div class="small text-muted mb-1">Party</div>' +
+          '<div class="small">DEM: <strong>' + fmt(p.dem) + '</strong> (' + (p.dem_pct||0) + '%) · REP: <strong>' + fmt(p.rep) + '</strong> (' + (p.rep_pct||0) + '%)</div>' +
+          '<div class="small">CON: <strong>' + fmt(p.conservative) + '</strong> · Other: <strong>' + fmt(p.other) + '</strong> · None: <strong>' + fmt(p.none) + '</strong></div></div>' +
+        '<div class="col-md-4"><div class="small text-muted mb-1">Age Ranges</div>' +
+          (d.age_ranges||[]).map(function(a) { return '<div class="small">' + a.range + ': <strong>' + fmt(a.count) + '</strong></div>'; }).join('') +
+        '</div>' +
+      '</div>';
+
+    // Contact Info
+    var c = d.contact || {};
+    var contactContent =
+      '<div class="small">Phone: <strong>' + fmt(c.phone) + '</strong> (' + (c.phone_pct||0) + '%)' +
+      ' · Mobile: <strong>' + fmt(c.mobile) + '</strong> (' + (c.mobile_pct||0) + '%)' +
+      ' · Landline: <strong>' + fmt(c.landline) + '</strong> (' + (c.landline_pct||0) + '%)' +
+      ' · Email: <strong>' + fmt(c.email) + '</strong> (' + (c.email_pct||0) + '%)</div>';
+
+    // Donors
+    var don = d.donors || {};
+    var boe = don.boe || {}; var nat = don.national || {}; var cfb = don.cfb || {};
+    var donorContent =
+      '<div class="row g-2">' +
+        '<div class="col-md-4"><div class="small text-muted mb-1">BOE (State)</div>' +
+          '<div class="small"><strong>' + fmt(boe.count) + '</strong> donors (' + (boe.pct||0) + '%) · ' + money(boe.total_amt) + '</div></div>' +
+        '<div class="col-md-4"><div class="small text-muted mb-1">National (FEC)</div>' +
+          '<div class="small"><strong>' + fmt(nat.count) + '</strong> donors (' + (nat.pct||0) + '%) · ' + money(nat.total_amt) + '</div>' +
+          '<div class="small">DEM: ' + money(nat.dem_amt) + ' · REP: ' + money(nat.rep_amt) + '</div></div>' +
+        '<div class="col-md-4"><div class="small text-muted mb-1">CFB (NYC)</div>' +
+          (cfb.available ? '<div class="small"><strong>' + fmt(cfb.count) + '</strong> donors (' + (cfb.pct||0) + '%) · ' + money(cfb.total_amt) + '</div>' : '<div class="text-muted small">Not loaded</div>') +
+        '</div>' +
+      '</div>';
+
+    // Ethnicity
+    var eth = d.ethnicity || {};
+    var broad = eth.broad || {};
+    var ethContent;
+    if (eth.modeled) {
+      ethContent = '<div class="small mb-1"><strong>' + fmt(eth.modeled) + '</strong> modeled (' + (eth.modeled_pct||0) + '%)</div>' +
+        '<div class="row g-1">' + Object.entries(broad).map(function(entry) {
+          return '<div class="col-auto"><span class="badge bg-light text-dark border">' + entry[0] + ': ' + fmt(entry[1]) + '</span></div>';
+        }).join('') + '</div>';
+    } else {
+      ethContent = '<div class="text-muted small">Run Build Ethnicity first</div>';
+    }
+
+    // Activity & Turnout
+    var act = d.activity || {};
+    var actContent =
+      '<div class="small">' +
+        'Avg turnout: <strong>' + (act.avg_turnout != null ? act.avg_turnout + '%' : '—') + '</strong>' +
+        ' · High (≥60%): <strong>' + fmt(act.high_turnout) + '</strong>' +
+        ' · Low (≤25%): <strong>' + fmt(act.low_turnout) + '</strong><br>' +
+        'New registrants: <strong>' + fmt(act.new_registrants) + '</strong> (' + (act.new_reg_pct||0) + '%)' +
+        ' · Party switchers: <strong>' + fmt(act.party_switchers) + '</strong> (' + (act.switcher_pct||0) + '%)' +
+        ' · Avg registration: <strong>' + (act.avg_reg_years != null ? act.avg_reg_years + ' yr' : '—') + '</strong>' +
+      '</div>';
+
+    // Geography
+    var geo = d.geography || {};
+    var aud = d.audiences || {};
+    var geoContent =
+      '<div class="small">' +
+        (geo.county_count||0) + ' counties · ' + (geo.ld_count||0) + ' assembly · ' + (geo.sd_count||0) + ' senate · ' + (geo.cd_count||0) + ' congressional<br>' +
+        'Geocoded: <strong>' + fmt(geo.geocoded) + '</strong> (' + (geo.geocoded_pct||0) + '%)' +
+        (aud.tags ? ' · Issue tags: <strong>' + aud.tags + '</strong> audiences, <strong>' + fmt(aud.tagged_voters) + '</strong> voters (' + (aud.tagged_pct||0) + '%)' : '') +
+      '</div>';
+
+    var donorTotal = (boe.count||0) + (nat.count||0) + (cfb.count||0);
+    if (accordion) accordion.innerHTML =
+      section('demo',     'bi-people',           'Demographics',      fmt(p.dem) + ' DEM · ' + fmt(p.rep) + ' REP', demoContent) +
+      section('contact',  'bi-telephone',        'Contact Info',      (c.phone_pct||0) + '% phone · ' + (c.email_pct||0) + '% email', contactContent) +
+      section('donors',   'bi-currency-dollar',  'Donor History',     fmt(donorTotal) + ' total donors', donorContent) +
+      section('ethnicity','bi-globe',            'Ethnicity',          (eth.modeled_pct||0) + '% modeled', ethContent) +
+      section('activity', 'bi-graph-up-arrow',   'Turnout & Activity', act.avg_turnout != null ? act.avg_turnout + '% avg' : '—', actContent) +
+      section('geo',      'bi-geo-alt',          'Geography',          (geo.county_count||0) + ' counties', geoContent);
+
+  } catch (err) {
+    if (loading) loading.classList.add('d-none');
+    if (accordion) accordion.innerHTML = '<div class="text-danger small p-2">Failed: ' + err.message + '</div>';
+    if (badge) badge.textContent = '';
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+const _ENRICH_REFRESH_CMDS = new Set([
+  'pipeline','boe-enrich','national-enrich','cfb-enrich',
+  'enrich-derived','ethnicity','district-scores','party-snapshot','reset',
+]);
+async function _pollTask(taskId, container, dlBarCallback, cmd, killBtnId) {
+  killBtnId = killBtnId || 'kill-task-btn';
+  _activeTaskId    = taskId;
+  _activeContainer = container;
+  _activeKillBtnId = killBtnId;
+  const killBtn = document.getElementById(killBtnId);
+  if (killBtn) { killBtn.classList.remove('d-none'); killBtn.disabled = false; killBtn.innerHTML = '<i class="bi bi-stop-circle me-1"></i>Kill'; }
+
   let offset = 0;
   const term = makeTermState(container.textContent);
   while (true) {
@@ -1437,6 +2011,12 @@ async function _pollTask(taskId, container, dlBarCallback) {
       offset = d.offset;
       if (!d.running) {
         container.textContent += `\n[Exit code: ${d.exit_code}]\n`;
+        if (dlBarCallback) dlBarCallback(`[Exit code: ${d.exit_code}]`);
+        if (d.exit_code === 0 && cmd) {
+          _recordLastRun(cmd);
+          if (_ENRICH_REFRESH_CMDS.has(cmd)) setTimeout(() => loadEnrichStats(true), 1500);
+          if (cmd === 'pipeline') setTimeout(() => loadAudienceStatus(), 2500);
+        }
         localStorage.removeItem('vp_task');
         break;
       }
@@ -1445,6 +2025,10 @@ async function _pollTask(taskId, container, dlBarCallback) {
     }
     await new Promise(r => setTimeout(r, 1500));
   }
+
+  _activeTaskId = null;
+  _activeContainer = null;
+  if (killBtn) killBtn.classList.add('d-none');
 }
 
 // Auto-resume a running task on page load
@@ -1464,7 +2048,8 @@ async function _pollTask(taskId, container, dlBarCallback) {
     }
     container.classList.remove('d-none');
     container.textContent = `▶ Resuming: ${cmd}\n`;
-    _pollTask(id, container).then(() => {
+    const killBtnId = KILL_BTN_MAP[tab] || 'kill-task-btn';
+    _pollTask(id, container, null, cmd, killBtnId).then(() => {
       localStorage.removeItem('vp_task');
     });
   } catch (e) { localStorage.removeItem('vp_task'); }
@@ -1485,6 +2070,13 @@ async function loadVoterFileStatus() {
       : `<span class="badge bg-secondary">Not loaded</span>`;
     html += `<div class="col-auto"><div class="small text-muted mb-1">voter_file (MySQL)</div>${rowBadge}</div>`;
 
+    // Also update the top-of-tab count badge
+    const topBadge = document.getElementById('vf-row-count');
+    if (topBadge) {
+      topBadge.className = d.row_count != null ? 'badge bg-success' : 'badge bg-secondary';
+      topBadge.textContent = d.row_count != null ? `${Number(d.row_count).toLocaleString()} rows` : 'Not loaded';
+    }
+
     // ZIP files
     if (d.files && d.files.length) {
       html += '<div class="col-12"><div class="small text-muted mb-1">data/zipped/</div><ul class="list-unstyled mb-0">';
@@ -1502,6 +2094,287 @@ async function loadVoterFileStatus() {
     body.innerHTML = html;
   } catch(e) {
     body.innerHTML = `<div class="text-danger small">Error: ${e.message}</div>`;
+  }
+}
+
+/* ── Audience files ──────────────────────────────────────────────────────── */
+// ── Facebook Push ─────────────────────────────────────────────────────────
+
+async function loadFbAccounts() {
+  const sel = document.getElementById('fbDonorAccount');
+  const btn = document.querySelector('[onclick="loadFbAccounts()"]');
+  sel.innerHTML = '<option value="">Loading…</option>';
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Loading…'; }
+  try {
+    const r = await fetch('/voter-pipeline/fb-meta-accounts');
+    const d = await r.json();
+    if (d.error && (!d.accounts || !d.accounts.length)) {
+      sel.innerHTML = '<option value="">Error: ' + d.error + '</option>';
+      return;
+    }
+    if (!d.accounts || !d.accounts.length) {
+      sel.innerHTML = '<option value="">No ad accounts found</option>';
+      return;
+    }
+    sel.innerHTML = d.accounts.map(a =>
+      `<option value="${a.id}">${a.label}</option>`
+    ).join('');
+  } catch(e) {
+    sel.innerHTML = '<option value="">Error: ' + e.message + '</option>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-arrow-clockwise me-1"></i>Load'; }
+  }
+}
+
+async function loadFbIssues() {
+  const list = document.getElementById('fb-issue-list');
+  list.innerHTML = '<span class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Loading…</span>';
+  // Read district filter from the same selectors used by the rest of the page
+  const distType = (document.getElementById('distType')?.value || '').trim();
+  const distValEl = document.getElementById('distValue') || document.getElementById('distValueText');
+  const distVal  = (distValEl?.value || '').trim();
+  const params = new URLSearchParams();
+  if (distType && distVal) { params.set('dist_type', distType); params.set('dist_val', distVal); }
+  const qs = params.toString();
+  try {
+    const r = await fetch('/voter-pipeline/fb-donor-audiences' + (qs ? '?' + qs : ''));
+    const d = await r.json();
+    if (d.error) { list.innerHTML = `<span class="text-danger small">${d.error}</span>`; return; }
+    if (!d.audiences || !d.audiences.length) {
+      list.innerHTML = '<span class="text-muted small">No audiences found — run pipeline first.</span>';
+      return;
+    }
+    // Show geo label so user knows which district the counts reflect
+    const geoNote = d.geo_label && d.geo_label !== 'Statewide'
+      ? `<div class="text-muted mb-1" style="font-size:.7rem">⌖ Counts for ${d.geo_label}</div>`
+      : '';
+    list.innerHTML = geoNote + d.audiences.map(a => {
+      const safe = a.name.replace(/"/g, '&quot;');
+      const clean = a.name.replace(/\.csv$/i, '');
+      const id = 'fbIss_' + a.name.replace(/[^a-zA-Z0-9]/g, '_');
+      return `<div class="mb-1 d-flex align-items-center" style="gap:.4rem">
+        <input class="form-check-input fb-issue-cb flex-shrink-0" type="checkbox"
+               id="${id}" value="${safe}" checked>
+        <label class="form-check-label small flex-grow-1 text-truncate" for="${id}"
+               title="${safe}">${clean}</label>
+        <span class="text-muted flex-shrink-0" style="font-size:.7rem">${Number(a.count).toLocaleString()}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    list.innerHTML = `<span class="text-danger small">Error: ${e.message}</span>`;
+  }
+}
+
+async function pushDonorAudience(dryRun, btn) {
+  const acct     = document.getElementById('fbDonorAccount').value;
+  const doParty  = document.getElementById('fbPushParty').checked;
+  const partyPfx = (document.getElementById('fbPartyPrefix').value || 'Politika').trim();
+  const doReplace = document.getElementById('fbDonorReplace').checked;
+
+  // Collect checked issue audiences
+  const issueChecks = [...document.querySelectorAll('.fb-issue-cb:checked')];
+
+  // Collect checked donor segments
+  const donorChecks = [...document.querySelectorAll('.fb-donor-seg-cb:checked')];
+
+  // Build sheets list
+  const sheets = [];
+  if (issueChecks.length) sheets.push('audiences');
+  if (doParty)            sheets.push('party');
+  if (donorChecks.length) sheets.push('donors');
+
+  if (!sheets.length) {
+    alert('Select at least one item to push (Issue Audiences, Voter File by party, or Donor Segments).');
+    return;
+  }
+
+  // Build extra args
+  let extra = `--sheets ${sheets.join(',')} --yes`;
+
+  if (acct) extra += ` --fb-ad-account-id ${acct}`;
+  if (dryRun) extra += ' --dry-run';
+  if (doReplace) extra += ' --replace';
+  if (partyPfx && doParty) extra += ` --party-prefix ${JSON.stringify(partyPfx)}`;
+
+  // Issue audience filter (only when a subset is checked)
+  const allIssues = [...document.querySelectorAll('.fb-issue-cb')];
+  if (issueChecks.length && issueChecks.length < allIssues.length) {
+    const names = issueChecks.map(cb => cb.value).join(',');
+    extra += ` --audience-filter ${JSON.stringify(names)}`;
+  }
+
+  // Donor segment filter
+  const allDonorCbs = [...document.querySelectorAll('.fb-donor-seg-cb')];
+  if (donorChecks.length && donorChecks.length < allDonorCbs.length) {
+    const keys = donorChecks.map(cb => cb.value).join(',');
+    extra += ` --donor-segments ${keys}`;
+  }
+
+  // Custom donor names
+  const donorNames = {};
+  document.querySelectorAll('.fb-donor-seg-name').forEach(inp => {
+    if (inp.value.trim()) donorNames[inp.dataset.key] = inp.value.trim();
+  });
+  if (Object.keys(donorNames).length) {
+    extra += ' --donor-names-b64 ' + btoa(JSON.stringify(donorNames));
+  }
+
+  // District geo filter — must match what the user has selected
+  const _fbDt  = (document.getElementById('distType')?.value || '').trim();
+  const _fbDve = document.getElementById('distValue') || document.getElementById('distValueText');
+  const _fbDv  = (_fbDve?.value || '').trim();
+  if (_fbDt === 'statewide') {
+    extra += ' --statewide';
+  } else if (_fbDt && _fbDv) {
+    extra += ` --${_fbDt} ${_fbDv}`;
+  }
+
+  // Switch to Export tab so the log panel is visible
+  const _exportTabLink = document.querySelector('a[href="#tab-export"]');
+  if (_exportTabLink) {
+    const _tab = bootstrap.Tab.getOrCreateInstance(_exportTabLink);
+    _tab.show();
+  }
+  vpRun('fb-audiences', extra, btn || null);
+}
+
+async function loadAudienceStatus() {
+  const list   = document.getElementById('aud-file-list');
+  const stats  = document.getElementById('aud-bridge-stats');
+  list.innerHTML = '<div class="text-muted small"><span class="spinner-border spinner-border-sm me-1"></span>Loading…</div>';
+  try {
+    const d = await (await fetch('/voter-pipeline/audience-status')).json();
+
+    // Bridge stats
+    if (d.bridge_rows != null) {
+      document.getElementById('aud-bridge-rows').textContent   = `${Number(d.bridge_rows).toLocaleString()} audience rows`;
+      document.getElementById('aud-bridge-voters').textContent = `${Number(d.bridge_voters).toLocaleString()} matched voters`;
+      stats.classList.remove('d-none');
+    } else {
+      stats.classList.add('d-none');
+    }
+
+    // File list
+    if (d.files && d.files.length) {
+      let html = '<table class="table table-sm table-hover mb-0" style="font-size:.82rem"><tbody>';
+      d.files.forEach(f => {
+        html += `<tr>
+          <td><i class="bi bi-file-earmark-spreadsheet me-1 text-success"></i>${f.name}</td>
+          <td class="text-muted">${f.size_mb} MB</td>
+          <td class="text-muted">${f.age_str}</td>
+          <td class="text-end">
+            <button class="btn btn-sm btn-outline-danger py-0 px-1"
+                    onclick="deleteAudience('${f.name.replace(/'/g,"\\'")}', this)"
+                    title="Delete">
+              <i class="bi bi-trash"></i>
+            </button>
+          </td>
+        </tr>`;
+      });
+      html += '</tbody></table>';
+      list.innerHTML = html;
+    } else {
+      list.innerHTML = '<div class="text-muted small">No audience CSV files found in <code>data/</code>.</div>';
+    }
+  } catch(e) {
+    list.innerHTML = `<div class="text-danger small">Error: ${e.message}</div>`;
+  }
+}
+
+async function uploadAudiences() {
+  const input  = document.getElementById('audFileInput');
+  const status = document.getElementById('aud-upload-status');
+  const files  = Array.from(input.files);
+  if (!files.length) { status.innerHTML = '<span class="text-warning small">No files selected.</span>'; return; }
+
+  // Build one progress-bar row per file up front
+  const rowIds = files.map((f, i) => 'aud-prog-' + i);
+  status.innerHTML = files.map((f, i) => `
+    <div class="small mb-1" id="${rowIds[i]}">
+      <div class="d-flex justify-content-between mb-1">
+        <span class="text-muted text-truncate" style="max-width:70%">${f.name}</span>
+        <span class="text-muted" id="${rowIds[i]}-pct">0%</span>
+      </div>
+      <div class="progress" style="height:6px">
+        <div class="progress-bar progress-bar-striped progress-bar-animated"
+             id="${rowIds[i]}-bar" role="progressbar" style="width:0%"></div>
+      </div>
+    </div>`).join('');
+
+  // Upload each file with XHR so we get upload progress events
+  function xhrUpload(f, rowId) {
+    return new Promise(resolve => {
+      const fd = new FormData();
+      fd.append('file', f);
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', e => {
+        if (!e.lengthComputable) return;
+        const pct = Math.round(e.loaded / e.total * 100);
+        const bar = document.getElementById(rowId + '-bar');
+        const lbl = document.getElementById(rowId + '-pct');
+        if (bar) bar.style.width = pct + '%';
+        if (lbl) lbl.textContent = pct + '%';
+      });
+
+      xhr.addEventListener('load', () => {
+        let d;
+        try { d = JSON.parse(xhr.responseText); } catch(_) {
+          d = { ok: false, error: 'HTTP ' + xhr.status + ' — ' + xhr.responseText.slice(0, 200) };
+        }
+        resolve({ f, rowId, d });
+      });
+
+      xhr.addEventListener('error', () => resolve({ f, rowId, d: { ok: false, error: 'Network error' } }));
+      xhr.open('POST', '/voter-pipeline/audience-upload');
+      xhr.send(fd);
+    });
+  }
+
+  // Run uploads sequentially so progress bars are readable one at a time
+  for (let i = 0; i < files.length; i++) {
+    const { f, rowId, d } = await xhrUpload(files[i], rowIds[i]);
+    const row = document.getElementById(rowId);
+    if (!row) continue;
+
+    if (d.ok && d.zip) {
+      const lines = d.files.map(cf =>
+        `<div class="ms-2 text-success"><i class="bi bi-check-circle me-1"></i>${cf.name} (${cf.size_mb} MB)</div>`
+      ).join('');
+      row.innerHTML = `<div class="text-success"><i class="bi bi-file-zip me-1"></i><strong>${f.name}</strong> &rarr; ${d.total_files} CSV(s) extracted (${d.total_mb} MB total)</div>${lines}`;
+    } else if (d.ok) {
+      row.innerHTML = `<span class="text-success"><i class="bi bi-check-circle me-1"></i>${f.name} (${d.size_mb} MB)</span>`;
+    } else {
+      row.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1"></i>${f.name}: ${d.error}</span>`;
+    }
+  }
+
+  // If any file succeeded, show a rebuild-bridge prompt
+  const anyOk = [...document.querySelectorAll('#aud-upload-status [class*="text-success"]')].length > 0;
+  if (anyOk) {
+    const prompt = document.createElement('div');
+    prompt.className = 'mt-2 pt-2 border-top';
+    prompt.innerHTML = '<span class="text-muted small me-2">Files uploaded — bridge still reflects old data until rebuilt.</span>'
+      + '<button class="btn btn-sm btn-warning" onclick="document.getElementById(\'rebuildBridgeBtn\').click(); this.closest(\'div\').remove()">' 
+      + '<i class="bi bi-database-gear me-1"></i>Rebuild Bridge Now</button>';
+    document.getElementById('aud-upload-status').appendChild(prompt);
+  }
+  input.value = '';
+  loadAudienceStatus();
+}
+
+async function deleteAudience(name, btn) {
+  if (!confirm(`Delete "${name}"?`)) return;
+  btn.disabled = true;
+  try {
+    const r = await fetch(`/voter-pipeline/audience/${encodeURIComponent(name)}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (d.ok) loadAudienceStatus();
+    else alert(`Error: ${d.error}`);
+  } catch(e) {
+    alert(`Error: ${e.message}`);
+  } finally {
+    btn.disabled = false;
   }
 }
 
@@ -1576,7 +2449,13 @@ async function uploadVoterFile() {
 
 // Auto-load stats when the page is ready
 document.addEventListener('DOMContentLoaded', () => {
-  loadStats();
+  // Force district type back to "Choose one" — ignore browser form memory
+  const _dt = document.getElementById('distType');
+  if (_dt) { _dt.value = ''; }
+  document.getElementById('distValueWrap').innerHTML = '';
+  loadStats(true);
+  _initAllRunBadges();
+  setTimeout(() => loadEnrichStats(true), 2000);
 
   // Auto-load data status when the Status tab is first clicked
   let dataStatusLoaded = false;
@@ -1584,8 +2463,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!dataStatusLoaded) { dataStatusLoaded = true; loadDataStatus(); }
   });
 
-  // Auto-load voter file status when that tab is first clicked
-  let vfStatusLoaded = false;
+  // Auto-load voter file status — immediately (it's the default tab) and on subsequent visits
+  let vfStatusLoaded = true;
+  loadVoterFileStatus();
+
+  let audStatusLoaded = false;
+  document.querySelector('a[href="#tab-audiences"]')?.addEventListener('shown.bs.tab', () => {
+    if (!audStatusLoaded) { audStatusLoaded = true; loadAudienceStatus(); }
+  });
+
+  // Auto-load past reports whenever Export tab is shown
+  document.querySelector('a[href="#tab-export"]')?.addEventListener('shown.bs.tab', () => {
+    loadExportReports();
+  });
+  // Also load immediately in case Export is the active tab on page load
+  if (document.querySelector('#tab-export.active, #tab-export.show')) loadExportReports();
   document.querySelector('a[href="#tab-voterfile"]')?.addEventListener('shown.bs.tab', () => {
     if (!vfStatusLoaded) { vfStatusLoaded = true; loadVoterFileStatus(); }
   });

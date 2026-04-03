@@ -115,9 +115,9 @@ def enrich_registration(conn, cur, refresh):
 
     run_batched(conn, cur, "Registration months + new-registrant flag",
         f"""UPDATE {VOTER_TABLE}
-            SET registration_months = TIMESTAMPDIFF(MONTH, RegDate, CURDATE()),
-                is_new_registrant   = IF(TIMESTAMPDIFF(MONTH, RegDate, CURDATE()) <= 24, 1, 0)
-            WHERE RegDate IS NOT NULL
+            SET registration_months = TIMESTAMPDIFF(MONTH, RegistrationDate, CURDATE()),
+                is_new_registrant   = IF(TIMESTAMPDIFF(MONTH, RegistrationDate, CURDATE()) <= 24, 1, 0)
+            WHERE RegistrationDate IS NOT NULL
               AND registration_months IS NULL""")
 
 
@@ -276,7 +276,7 @@ def print_summary(cur):
     """)
     total, new_reg, avg_months = cur.fetchone()
     print(f"\n  Registration Recency:")
-    print(f"    Voters with RegDate:   {int(total or 0):>12,}")
+    print(f"    Voters with RegistrationDate:   {int(total or 0):>12,}")
     print(f"    New registrants (24m): {int(new_reg or 0):>12,}")
     print(f"    Avg months registered: {float(avg_months or 0):>12.1f}")
 

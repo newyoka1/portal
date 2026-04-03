@@ -99,7 +99,90 @@
     </h6>
   </div>
   <div class="card-body">
+    {% if cat_key == 'meta' %}
+    <div class="alert alert-info d-flex align-items-start gap-2 mb-3 py-2" style="font-size:.85rem">
+      <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+      <div>
+        <strong>How to obtain Meta / Facebook credentials</strong>
+        <ol class="mb-0 ps-3 mt-1">
+          <li><strong>System User Token</strong> &mdash; Go to
+            <a href="https://business.facebook.com/settings/system-users" target="_blank">
+              Meta Business Manager &rarr; Settings &rarr; Users &rarr; System Users</a>.
+            Create or select a System User, click <em>Generate New Token</em>, choose your app,
+            and enable <code>ads_management</code> + <code>ads_read</code> permissions.
+            System User tokens <strong>do not expire</strong>.</li>
+          <li class="mt-1"><strong>Ad Account ID</strong> &mdash; Open
+            <a href="https://adsmanager.facebook.com" target="_blank">Ads Manager</a>.
+            The URL contains <code>act_XXXXXXXXXX</code> &mdash; copy <strong>only the digits</strong>
+            (no <code>act_</code> prefix).</li>
+          <li class="mt-1"><strong>Business ID</strong> &mdash; In
+            <a href="https://business.facebook.com/settings/info" target="_blank">
+              Business Manager &rarr; Settings &rarr; Business Info</a>,
+            copy the <em>Business ID</em> field.</li>
+          <li class="mt-1"><strong>App ID / App Secret</strong> &mdash; From your Meta Developer app at
+            <a href="https://developers.facebook.com/apps" target="_blank">developers.facebook.com/apps</a>
+            &rarr; App Dashboard &rarr; Settings &rarr; Basic.</li>
+        </ol>
+      </div>
+    </div>
+    {% endif %}
+
+    {# ── Named FB Ad Accounts (FB_ACCESS_TOKEN_<n> + FB_AD_ACCOUNT_ID_<n>) ── #}
+    {% if cat_key == 'meta' %}
+    <div class="mb-3">
+      <div class="d-flex justify-content-between align-items-center mb-2">
+        <span class="fw-semibold text-secondary small text-uppercase" style="letter-spacing:.05em">
+          <i class="bi bi-person-badge me-1"></i>Named Ad Accounts
+        </span>
+        <button class="btn btn-outline-secondary btn-sm" onclick="addFbAccountRow()">
+          <i class="bi bi-plus-lg me-1"></i>Add Account
+        </button>
+      </div>
+      <div id="fb_account_rows">
+        {% for s in settings %}
+        {% if s.key.startswith('FB_ACCESS_TOKEN_') %}
+        {% set suffix = s.key[16:] %}
+        {% set aid_key = 'FB_AD_ACCOUNT_ID_' + suffix %}
+        {% set aid_s = settings | selectattr('key','equalto', aid_key) | first | default(none) %}
+        <div class="fb-account-row border rounded p-2 mb-2">
+          <div class="d-flex justify-content-between align-items-center mb-1">
+            <strong class="small">{{ suffix }}</strong>
+            <button class="btn btn-outline-danger btn-sm py-0"
+                    onclick="deleteFbAccount('{{ suffix }}', this)">
+              <i class="bi bi-trash"></i>
+            </button>
+          </div>
+          <div class="row g-2">
+            <div class="col-md-8">
+              <div class="text-muted mb-1" style="font-size:.68rem">FB_ACCESS_TOKEN_{{ suffix }}</div>
+              <div class="input-group input-group-sm">
+                <input type="password" class="form-control font-monospace"
+                       data-key="FB_ACCESS_TOKEN_{{ suffix }}" value="{{ s.value or '' }}"
+                       placeholder="Paste token…">
+                <button class="btn btn-outline-secondary" type="button" onclick="toggleSecret(this)">
+                  <i class="bi bi-eye"></i>
+                </button>
+              </div>
+            </div>
+            <div class="col-md-4">
+              <div class="text-muted mb-1" style="font-size:.68rem">FB_AD_ACCOUNT_ID_{{ suffix }}</div>
+              <input type="text" class="form-control form-control-sm font-monospace"
+                     data-key="{{ aid_key }}"
+                     value="{{ aid_s.value if aid_s else '' }}"
+                     placeholder="1234567890">
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+      <div class="form-text">Named accounts appear in the <strong>Ad Account</strong> dropdown on the Export tab. Fill in both fields, then click <strong>Save All</strong>.</div>
+    </div>
+    <hr class="my-3">
+    {% endif %}
+
     {% for s in settings %}
+    {% if not (cat_key == 'meta' and (s.key.startswith('FB_ACCESS_TOKEN_') or s.key.startswith('FB_AD_ACCOUNT_ID_'))) %}
     <div class="row mb-3 align-items-center">
       <div class="col-md-4">
         <label class="form-label fw-semibold mb-0" for="setting_{{ s.key }}">{{ s.label or s.key }}</label>
@@ -126,8 +209,25 @@
         <input type="text" class="form-control" id="setting_{{ s.key }}"
                data-key="{{ s.key }}" value="{{ s.value or '' }}">
         {% endif %}
+        {% if cat_key == 'meta' %}
+          {% if s.key in ['META_ACCESS_TOKEN', 'FB_ACCESS_TOKEN'] %}
+          <div class="form-text">System User token with <code>ads_management</code> + <code>ads_read</code> scope.
+            Generate in <a href="https://business.facebook.com/settings/system-users" target="_blank">Business Manager &rarr; System Users</a>.</div>
+          {% elif s.key == 'FB_AD_ACCOUNT_ID' %}
+          <div class="form-text">Numeric ID only &mdash; no <code>act_</code> prefix.
+            Find in <a href="https://adsmanager.facebook.com" target="_blank">Ads Manager</a> URL: <code>act_<strong>1234567890</strong></code>.</div>
+          {% elif s.key == 'META_BUSINESS_IDS' %}
+          <div class="form-text">Comma-separated Business IDs. Found at
+            <a href="https://business.facebook.com/settings/info" target="_blank">Business Manager &rarr; Settings &rarr; Business Info &rarr; Business ID</a>.</div>
+          {% elif s.key in ['FB_APP_ID', 'FB_APP_SECRET'] %}
+          <div class="form-text">From your app at
+            <a href="https://developers.facebook.com/apps" target="_blank">developers.facebook.com/apps</a>
+            &rarr; App Dashboard &rarr; Settings &rarr; Basic.</div>
+          {% endif %}
+        {% endif %}
       </div>
     </div>
+    {% endif %}
     {% endfor %}
   </div>
 </div>
@@ -202,6 +302,57 @@ async function deleteToken(key, btn) {
   } else {
     alert('Delete failed: ' + (result.error || 'unknown'));
   }
+}
+
+function addFbAccountRow() {
+  const container = document.getElementById('fb_account_rows');
+  if (!container) return;
+  const name = prompt('Account name (letters, numbers, underscores — e.g. Campaign2025):');
+  if (!name || !name.trim()) return;
+  const suffix = name.trim().replace(/[^a-zA-Z0-9_]/g, '_');
+  if (document.querySelector(`[data-key="FB_ACCESS_TOKEN_${suffix}"]`)) {
+    alert(`Account "${suffix}" already exists.`); return;
+  }
+  const div = document.createElement('div');
+  div.className = 'fb-account-row border rounded p-2 mb-2';
+  div.innerHTML = `
+    <div class="d-flex justify-content-between align-items-center mb-1">
+      <strong class="small">${suffix}</strong>
+      <button class="btn btn-outline-danger btn-sm py-0" onclick="deleteFbAccount('${suffix}', this)">
+        <i class="bi bi-trash"></i>
+      </button>
+    </div>
+    <div class="row g-2">
+      <div class="col-md-8">
+        <div class="text-muted mb-1" style="font-size:.68rem">FB_ACCESS_TOKEN_${suffix}</div>
+        <div class="input-group input-group-sm">
+          <input type="password" class="form-control font-monospace"
+                 data-key="FB_ACCESS_TOKEN_${suffix}" placeholder="Paste token…">
+          <button class="btn btn-outline-secondary" type="button" onclick="toggleSecret(this)">
+            <i class="bi bi-eye"></i>
+          </button>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="text-muted mb-1" style="font-size:.68rem">FB_AD_ACCOUNT_ID_${suffix}</div>
+        <input type="text" class="form-control form-control-sm font-monospace"
+               data-key="FB_AD_ACCOUNT_ID_${suffix}" placeholder="1234567890">
+      </div>
+    </div>`;
+  container.appendChild(div);
+  div.querySelector('input').focus();
+}
+
+async function deleteFbAccount(suffix, btn) {
+  if (!confirm(`Remove FB account "${suffix}" and its credentials?`)) return;
+  const row = btn.closest('.fb-account-row');
+  const inputs = row.querySelectorAll('[data-key]');
+  for (const inp of inputs) {
+    if (inp.value) {
+      await fetch(`/settings/${encodeURIComponent(inp.dataset.key)}`, { method: 'DELETE' });
+    }
+  }
+  row.remove();
 }
 
 async function saveAllSettings() {

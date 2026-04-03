@@ -176,7 +176,13 @@ class MetaClient:
         for attempt in range(1, MAX_RETRIES + 1):
             try:
                 r = self._session.post(f'{META_BASE}/{path}', json=payload, timeout=120)
-                r.raise_for_status()
+                if not r.ok:
+                    try:
+                        err = r.json().get('error', {})
+                        msg = err.get('error_user_msg') or err.get('message') or r.text[:300]
+                    except Exception:
+                        msg = r.text[:300]
+                    raise RuntimeError(f"Meta API {r.status_code}: {msg}")
                 data = r.json()
                 if 'error' in data:
                     raise RuntimeError(f"Meta API error: {data['error'].get('message', data['error'])}")
@@ -202,6 +208,14 @@ class MetaClient:
                     pass
         return list(accounts.values())
 
+    def get_my_adaccounts(self) -> list[dict]:
+        """Return ad accounts accessible to this token via /me/adaccounts."""
+        try:
+            return self._get_paginated('me/adaccounts',
+                                       {'fields': 'id,name,account_id,currency'})
+        except Exception:
+            return []
+
     def get_all_custom_audiences(self, account_id: str) -> dict[str, str]:
         """Return {audience_name: audience_id} for every Custom Audience in this ad account."""
         rows = self._get_paginated(
@@ -225,12 +239,11 @@ class MetaClient:
 
     def replace_users_batch(self, audience_id: str, rows: list,
                             session_id: int, batch_seq: int,
-                            total_rows: int, is_last: bool) -> dict:
+                            total_rows: int) -> dict:
         return self._post(f'{audience_id}/usersreplace', {
             'session': {
                 'session_id': session_id,
                 'batch_seq': batch_seq,
-                'last_batch_in_session': is_last,
                 'estimated_num_total': total_rows,
             },
             'payload': {'schema': SCHEMA, 'data': rows},
@@ -245,12 +258,36 @@ SELECT_COLS = """
     vf.PrimaryCity, vf.DOB, vf.Gender
 """
 
+# Voter-table-only columns: no CRM email, use PrimaryPhone (BOE registration
+# phone — 100% coverage) instead of Landline (phone-append, ~74% coverage).
+SELECT_COLS_VOTER = """
+    vf.StateVoterId, NULL AS crm_email, vf.Mobile, vf.PrimaryPhone AS Landline,
+    vf.FirstName, vf.LastName, vf.PrimaryZip, vf.PrimaryState,
+    vf.PrimaryCity, vf.DOB, vf.Gender
+"""
+
 def _geo_clause(geo: tuple | None) -> tuple[str, list]:
     """Return (WHERE fragment, params) for the geographic filter, or ('1=1', [])."""
     if not geo:
         return '1=1', []
     col, val = geo
     return f'vf.`{col}` = %s', [val]
+
+
+def _dist_prefix(geo: tuple | None) -> str:
+    """Return short district label for use at the start of FB audience names.
+
+    Examples: ('SDName', '23') -> 'SD 23'
+              ('LDName', '63') -> 'LD 63'
+              ('CDName', '1')  -> 'CD 1'
+              ('CountyName', 'Queens') -> 'Queens'
+              None             -> ''
+    """
+    if not geo:
+        return ''
+    col, val = geo
+    short = {'SDName': 'SD', 'LDName': 'LD', 'CDName': 'CD'}.get(col)
+    return f'{short} {val}' if short else str(val)
 
 
 def build_donor_sql(sources: list[str], geo: tuple | None,
@@ -519,7 +556,7 @@ def upload(meta: MetaClient, account_id: str, audience_id: str | None,
         session_id = random.randint(10**9, 10**18)
         batch_seq  = 0
 
-        # Collect all batches (needed to mark last batch)
+        # Collect all batches for progress display
         print('  Hashing records...')
         batches, buf = [], []
         for row in stream_sql(sql, params, conn):
@@ -532,11 +569,10 @@ def upload(meta: MetaClient, account_id: str, audience_id: str | None,
         print(f'  Replacing audience {audience_id} '
               f'({len(batches)} batch(es), {total:,} rows)...')
         for i, batch in enumerate(batches, 1):
-            is_last = (i == len(batches))
             result  = meta.replace_users_batch(
                 audience_id, batch,      # type: ignore[arg-type]
                 session_id=session_id, batch_seq=i,
-                total_rows=total, is_last=is_last,
+                total_rows=total,
             )
             print(f'    Batch {i}/{len(batches)}: {len(batch):,} sent  '
                   f'({result.get("num_received","?")} received)')
@@ -617,12 +653,19 @@ def _upload_all_audiences(meta: MetaClient, account_id: str, account_name: str,
         """)
         all_audiences = cur.fetchall()
 
+    # Apply audience filter if provided
+    _filter = getattr(cli, 'audience_filter', None)
+    if _filter:
+        _allowed = {n.strip() for n in _filter.split(',') if n.strip()}
+        all_audiences = [(n, c) for n, c in all_audiences if n in _allowed]
+
     if not all_audiences:
         conn.close()
         print('\n  No audiences found in voter_audience_bridge. Run pipeline first.')
         return
 
     geo_label = f'{geo[0]} = {geo[1]}' if geo else 'Statewide'
+    prefix_label = getattr(cli, 'audience_prefix', 'Politika') or 'Politika'
 
     _divider('BULK AUDIENCE UPLOAD')
     print(f'  Will create {len(all_audiences)} separate Facebook Custom Audiences:')
@@ -633,7 +676,8 @@ def _upload_all_audiences(meta: MetaClient, account_id: str, account_name: str,
     # For geo-filtered, show "?" — we'll count per-audience during the loop.
     for aud_name, cnt in all_audiences:
         cnt_label = f'{cnt:>10,} voters' if not geo else f'{"(counting...)":>10}'
-        print(f'    Politika-{aud_name:<42}  {cnt_label}')
+        _disp = aud_name.removesuffix('.csv').removesuffix('.CSV')
+        print(f'    {prefix_label}-{_disp:<42}  {cnt_label}')
     print()
 
     if cli.dry_run:
@@ -641,14 +685,15 @@ def _upload_all_audiences(meta: MetaClient, account_id: str, account_name: str,
         conn.close()
         return
 
-    try:
-        ans = input('  Create / update all audiences? [y/N]: ').strip().lower()
-    except (EOFError, KeyboardInterrupt):
-        ans = 'n'
-    if ans not in ('y', 'yes'):
-        print('\n  Upload cancelled.')
-        conn.close()
-        return
+    if not getattr(cli, 'yes', False):
+        try:
+            ans = input('  Create / update all audiences? [y/N]: ').strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            ans = 'n'
+        if ans not in ('y', 'yes'):
+            print('\n  Upload cancelled.')
+            conn.close()
+            return
 
     # ── Fetch existing audiences once (one API call for the whole account) ────
     print('\n  Checking for existing audiences in this ad account...')
@@ -661,7 +706,20 @@ def _upload_all_audiences(meta: MetaClient, account_id: str, account_name: str,
     skipped  : list[str] = []
 
     for aud_name, bridge_cnt in all_audiences:
-        fb_name = f'Politika-{aud_name}'
+        prefix  = getattr(cli, 'audience_prefix', 'Politika') or 'Politika'
+        # Per-audience custom names override prefix-based default
+        _names_b64 = getattr(cli, 'audience_names_b64', None)
+        if _names_b64:
+            import base64 as _b64, json as _json
+            try:
+                _names_map = _json.loads(_b64.b64decode(_names_b64).decode())
+            except Exception:
+                _names_map = {}
+        else:
+            _names_map = {}
+        _clean_name = aud_name.removesuffix('.csv').removesuffix('.CSV')
+        _dp = _dist_prefix(geo)
+        fb_name = _names_map.get(aud_name) or _names_map.get(_clean_name) or (f'{_dp}-{prefix}-{_clean_name}' if _dp else f'{prefix}-{_clean_name}')
         sql, params = build_audience_sql(aud_name, geo)
 
         print(f'\n{"─"*62}')
@@ -725,6 +783,333 @@ def _upload_all_audiences(meta: MetaClient, account_id: str, account_name: str,
     print()
 
 
+# ── Party-based upload ───────────────────────────────────────────────────────
+
+# Parties with fewer than this many voters are merged into a single "Other" audience.
+PARTY_MIN_COUNT = 1_000
+
+
+def _upload_by_party(meta: 'MetaClient', account_id: str, account_name: str,
+                     geo: tuple | None, cli) -> None:
+    """
+    For each OfficialParty value in voter_file, create/replace a Facebook
+    Custom Audience named "Politika-Party-{party}".
+    Parties below PARTY_MIN_COUNT voters are merged into a single Party-Other audience.
+    Geographic filter (if any) is applied to every party.
+    """
+    conn = get_conn('nys_voter_tagging', autocommit=True)
+    geo_clause, geo_params = _geo_clause(geo)
+    geo_label = f'{geo[0]}={geo[1]}' if geo else 'Statewide'
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f'SELECT OfficialParty, COUNT(*) AS cnt '
+            f'FROM nys_voter_tagging.voter_file vf '
+            f'WHERE ({geo_clause}) AND OfficialParty IS NOT NULL AND OfficialParty != "" '
+            f'GROUP BY OfficialParty ORDER BY cnt DESC',
+            geo_params,
+        )
+        all_parties = [(r[0], int(r[1])) for r in cur.fetchall()]
+
+    # Split: parties >= PARTY_MIN_COUNT get their own audience; smaller ones merge into Other
+    main_parties  = [(p, c) for p, c in all_parties if c >= PARTY_MIN_COUNT]
+    minor_parties = [(p, c) for p, c in all_parties if c <  PARTY_MIN_COUNT]
+    other_count   = sum(c for _, c in minor_parties)
+
+    _pfx_base = getattr(cli, 'party_prefix', None) or getattr(cli, 'audience_prefix', 'Politika') or 'Politika'
+    _dp_disp  = _dist_prefix(geo)
+    pfx_disp  = f'{_dp_disp}-{_pfx_base}' if _dp_disp else _pfx_base
+
+    n_audiences = len(main_parties) + (1 if minor_parties else 0)
+    print(f'\n\n{"\u2550"*62}')
+    print(f'  PUSH BY PARTY  \u2014  {n_audiences} audiences  ({geo_label})')
+    print(f'  Account: {account_name}  (act_{account_id})')
+    print(f'{"\u2550"*62}')
+    for party, cnt in main_parties:
+        print(f'  {pfx_disp}-Party-{party:<26}  {cnt:>10,} voters')
+    if minor_parties:
+        print(f'  {pfx_disp}-Party-Other{"":22}  {other_count:>10,} voters')
+        for p, c in minor_parties:
+            print(f'      \u2514 {p:<30}  {c:>10,}')
+    print()
+
+    if cli.dry_run:
+        print('  DRY RUN \u2014 no data will be sent to Facebook.\n')
+        conn.close()
+        return
+
+    existing = meta.get_all_custom_audiences(account_id)
+    t_total  = time.time()
+
+    # ── Main parties — one audience each ─────────────────────────────────────
+    for party, cnt in main_parties:
+        prefix  = getattr(cli, 'party_prefix', None) or getattr(cli, 'audience_prefix', 'Politika') or 'Politika'
+        _dp = _dist_prefix(geo)
+        fb_name = f'{_dp}-{prefix}-Party-{party}' if _dp else f'{prefix}-Party-{party}'
+        sql = (
+            f'SELECT {SELECT_COLS_VOTER} '
+            f'FROM nys_voter_tagging.voter_file vf '
+            f'WHERE vf.OfficialParty = %s AND ({geo_clause})'
+        )
+        params = [party] + geo_params
+        description = (
+            f'NYS Voter Pipeline | Party: {party} | {geo_label} | '
+            f'{cnt:,} records | {datetime.now():%Y-%m-%d}'
+        )
+        existing_id = existing.get(fb_name)
+        mode        = 'replace' if existing_id else 'new'
+
+        print(f'\n{"\u2500"*62}')
+        print(f'  {fb_name}  ({cnt:,} voters) \u2014 {"replacing" if existing_id else "creating new"}')
+        print(f'{"\u2500"*62}')
+        if cnt == 0:
+            print('  No voters \u2014 skipping.')
+            continue
+
+        final_id = upload(
+            meta, account_id,
+            audience_id=existing_id, fb_name=fb_name, mode=mode,
+            description=description, sql=sql, params=params, conn=conn,
+        )
+        print(f'  Audience ID: {final_id}')
+
+    # ── Minor parties — merged into one "Other" audience ─────────────────────
+    if minor_parties and other_count > 0:
+        prefix  = getattr(cli, 'party_prefix', None) or getattr(cli, 'audience_prefix', 'Politika') or 'Politika'
+        _dp = _dist_prefix(geo)
+        fb_name = f'{_dp}-{prefix}-Party-Other' if _dp else f'{prefix}-Party-Other'
+        minor_names  = [p for p, _ in minor_parties]
+        placeholders = ', '.join(['%s'] * len(minor_names))
+        sql = (
+            f'SELECT {SELECT_COLS_VOTER} '
+            f'FROM nys_voter_tagging.voter_file vf '
+            f'WHERE vf.OfficialParty IN ({placeholders}) AND ({geo_clause})'
+        )
+        params = minor_names + geo_params
+        party_list  = ', '.join(minor_names)
+        description = (
+            f'NYS Voter Pipeline | Party: Other ({party_list}) | {geo_label} | '
+            f'{other_count:,} records | {datetime.now():%Y-%m-%d}'
+        )
+        existing_id = existing.get(fb_name)
+        mode        = 'replace' if existing_id else 'new'
+
+        print(f'\n{"\u2500"*62}')
+        print(f'  {fb_name}  ({other_count:,} voters \u2014 {len(minor_parties)} minor parties merged)')
+        print(f'{"\u2500"*62}')
+
+        final_id = upload(
+            meta, account_id,
+            audience_id=existing_id, fb_name=fb_name, mode=mode,
+            description=description, sql=sql, params=params, conn=conn,
+        )
+        print(f'  Audience ID: {final_id}')
+
+    conn.close()
+    elapsed = time.time() - t_total
+    print(f'\n  Party push complete  ({elapsed:.0f}s total).\n')
+
+
+# ── Donor segment definitions ────────────────────────────────────────────────
+
+DONOR_SEGMENTS = [
+    {
+        'key':   'reg_rep',
+        'label': 'Registered Republican donors',
+        'where': (
+            "vf.OfficialParty = 'Republican' "
+            "AND (COALESCE(vf.boe_total_amt,0) + COALESCE(vf.national_total_amount,0)"
+            " + COALESCE(vf.cfb_total_amt,0)) > 0"
+        ),
+    },
+    {
+        'key':   'reg_dem',
+        'label': 'Registered Democrat donors',
+        'where': (
+            "vf.OfficialParty = 'Democrat' "
+            "AND (COALESCE(vf.boe_total_amt,0) + COALESCE(vf.national_total_amount,0)"
+            " + COALESCE(vf.cfb_total_amt,0)) > 0"
+        ),
+    },
+    {
+        'key':   'gave_rep',
+        'label': 'Donated to Republicans',
+        'where': (
+            "COALESCE(vf.boe_total_R_amt,0) > 0 "
+            "OR COALESCE(vf.national_republican_amount,0) > 0"
+        ),
+    },
+    {
+        'key':   'gave_unk',
+        'label': 'Donated to unknown/independent',
+        'where': (
+            "COALESCE(vf.boe_total_U_amt,0) > 0 "
+            "OR COALESCE(vf.national_unknown_amount,0) > 0 "
+            "OR COALESCE(vf.national_independent_amount,0) > 0"
+        ),
+    },
+    {
+        'key':   'gave_dem',
+        'label': 'Donated to Democrats',
+        'where': (
+            "COALESCE(vf.boe_total_D_amt,0) > 0 "
+            "OR COALESCE(vf.national_democratic_amount,0) > 0"
+        ),
+    },
+]
+
+
+def _upload_donor_segments(meta, account_id, account_name, geo, cli):
+    """
+    Create/replace a Facebook Custom Audience for each donor segment.
+
+    Segment keys (pass via --donor-segments key1,key2 or omit for all 5):
+      reg_rep  — Registered Republican + any donation total > 0
+      reg_dem  — Registered Democrat   + any donation total > 0
+      gave_rep — Donated to Republican candidates (BOE R or FEC R)
+      gave_unk — Donated to unknown/independent candidates
+      gave_dem — Donated to Democrat candidates (BOE D or FEC D)
+
+    Custom audience names via --donor-names-b64 (base64 JSON {key: fb_name}).
+    """
+    _seg_filter = getattr(cli, 'donor_segments', None)
+    if _seg_filter:
+        _allowed = {k.strip() for k in _seg_filter.split(',') if k.strip()}
+        segments = [s for s in DONOR_SEGMENTS if s['key'] in _allowed]
+    else:
+        segments = list(DONOR_SEGMENTS)
+
+    if not segments:
+        print('  No donor segments to push.')
+        return
+
+    _names_b64 = getattr(cli, 'donor_names_b64', None)
+    if _names_b64:
+        import base64 as _b64, json as _json
+        try:
+            _names_map = _json.loads(_b64.b64decode(_names_b64).decode())
+        except Exception:
+            _names_map = {}
+    else:
+        _names_map = {}
+
+    prefix     = getattr(cli, 'audience_prefix', 'Politika') or 'Politika'
+    geo_clause, geo_params = _geo_clause(geo)
+    geo_label  = f'{geo[0]}={geo[1]}' if geo else 'Statewide'
+
+    print(f'\n\n{"=" * 62}')
+    print(f'  PUSH DONOR SEGMENTS  --  {len(segments)} segment(s)  ({geo_label})')
+    print(f'  Account: {account_name}  (act_{account_id})')
+    print(f'{"=" * 62}')
+
+    conn = get_conn('nys_voter_tagging', autocommit=True)
+
+    # Pre-count every segment (one query each)
+    counts = {}
+    for seg in segments:
+        _dp = _dist_prefix(geo)
+        fb_name = _names_map.get(seg['key']) or (f'{_dp}-{prefix}-{seg["label"]}' if _dp else f'{prefix}-{seg["label"]}')
+        sql_cnt = (
+            f'SELECT COUNT(*) FROM nys_voter_tagging.voter_file vf '
+            f'WHERE ({seg["where"]}) AND ({geo_clause})'
+        )
+        with conn.cursor() as cur:
+            cur.execute(sql_cnt, geo_params)
+            counts[seg['key']] = cur.fetchone()[0]
+        print(f'  {fb_name:<48}  {counts[seg["key"]]:>10,} voters')
+    print()
+
+    if cli.dry_run:
+        print('  DRY RUN -- no data will be sent to Facebook.\n')
+        conn.close()
+        return
+
+    if not getattr(cli, 'yes', False):
+        try:
+            ans = input('  Create / update all donor segment audiences? [y/N]: ').strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            ans = 'n'
+        if ans not in ('y', 'yes'):
+            print('\n  Upload cancelled.')
+            conn.close()
+            return
+
+    print('\n  Checking for existing audiences in this ad account...')
+    existing = meta.get_all_custom_audiences(account_id)
+    print(f'  Found {len(existing):,} existing Custom Audience(s) in account.\n')
+
+    t_total = time.time()
+    created = []
+    skipped = []
+
+    for seg in segments:
+        _dp = _dist_prefix(geo)
+        fb_name = _names_map.get(seg['key']) or (f'{_dp}-{prefix}-{seg["label"]}' if _dp else f'{prefix}-{seg["label"]}')
+        count   = counts[seg['key']]
+
+        print(f'\n{"-" * 62}')
+        print(f'  {fb_name}')
+        print(f'{"-" * 62}')
+
+        if count == 0:
+            print('  No voters found -- skipping.')
+            skipped.append(fb_name)
+            continue
+
+        sql    = (
+            f'SELECT {SELECT_COLS_VOTER} FROM nys_voter_tagging.voter_file vf '
+            f'WHERE ({seg["where"]}) AND ({geo_clause})'
+        )
+        params = list(geo_params)
+
+        description = (
+            f'NYS Voter Pipeline | {seg["label"]} | {geo_label} | '
+            f'{count:,} records | {datetime.now():%Y-%m-%d}'
+        )
+
+        existing_id = existing.get(fb_name)
+        if existing_id:
+            print(f'  {count:,} voters -- replacing existing (ID: {existing_id})...')
+            action = 'replaced'
+            final_id = upload(
+                meta, account_id,
+                audience_id=existing_id,
+                fb_name=fb_name,
+                mode='replace',
+                description=description,
+                sql=sql, params=params, conn=conn,
+            )
+        else:
+            print(f'  {count:,} voters -- creating new...')
+            action = 'created'
+            final_id = upload(
+                meta, account_id,
+                audience_id=None,
+                fb_name=fb_name,
+                mode='new',
+                description=description,
+                sql=sql, params=params, conn=conn,
+            )
+        created.append((fb_name, final_id, count, action))
+
+    conn.close()
+
+    elapsed = time.time() - t_total
+    print()
+    print('=' * 62)
+    print(f'  Donor segment push complete  ({elapsed:.0f}s total)')
+    print(f'  Created/updated: {len(created)}   Skipped: {len(skipped)}')
+    print()
+    for fb_name, aud_id, cnt, action in created:
+        print(f'  [{action:<8}]  {fb_name:<48}  {cnt:>8,}  ID: {aud_id}')
+    if skipped:
+        print()
+        for s in skipped:
+            print(f'  [skipped -- no voters]  {s}')
+    print('=' * 62)
+    print()
+
+
 # ── Argument parsing (optional — all flags have interactive fallbacks) ────────
 
 def _parse_args():
@@ -732,14 +1117,43 @@ def _parse_args():
     p = argparse.ArgumentParser(add_help=False)
     p.add_argument('--audience',        metavar='NAME', default=None)
     p.add_argument('--list-audiences',  action='store_true')
-    p.add_argument('--ld',     metavar='NUM',  default=None)
-    p.add_argument('--sd',     metavar='NUM',  default=None)
-    p.add_argument('--cd',     metavar='NUM',  default=None)
-    p.add_argument('--county', metavar='NAME', default=None)
+    p.add_argument('--ld',        metavar='NUM',  default=None)
+    p.add_argument('--sd',        metavar='NUM',  default=None)
+    p.add_argument('--cd',        metavar='NUM',  default=None)
+    p.add_argument('--county',    metavar='NAME', default=None)
+    p.add_argument('--statewide', action='store_true', default=False,
+                   help='No geographic filter (all of NY State)')
     p.add_argument('--fb-audience-id',  metavar='ID',   default=None, dest='fb_audience_id')
     p.add_argument('--replace',         action='store_true')
     p.add_argument('--audience-name',   metavar='NAME', default=None, dest='fb_audience_name')
     p.add_argument('--dry-run',         action='store_true', dest='dry_run')
+    p.add_argument('--fb-account',      metavar='NAME',      default='', dest='fb_account',
+                   help='Named FB account suffix (FB_ACCESS_TOKEN_NAME / FB_AD_ACCOUNT_ID_NAME)')
+    p.add_argument('--fb-ad-account-id', metavar='ID', default=None, dest='fb_ad_account_id',
+                   help='Ad Account ID to use directly (bypasses env var / business-ID lookup)')
+    p.add_argument('--sheets', metavar='SHEETS', default=None,
+                   help='Comma-separated push targets: audiences,party (mirrors export sheet types)')
+    p.add_argument('--yes', action='store_true',
+                   help='Skip interactive confirmations (for portal automation)')
+    p.add_argument('--audience-prefix', metavar='PREFIX', default='Politika',
+                   dest='audience_prefix',
+                   help='Prefix for FB audience names, e.g. "LD63" → "LD63-HardDems"')
+    p.add_argument('--audience-filter', metavar='NAMES', default=None,
+                   dest='audience_filter',
+                   help='Comma-separated audience names to include (no .csv); all if omitted')
+    p.add_argument('--audience-names-b64', metavar='B64', default=None,
+                   dest='audience_names_b64',
+                   help='Base64-encoded JSON mapping {audience_key: fb_audience_name}')
+    p.add_argument('--party-prefix', metavar='PREFIX', default=None,
+                   dest='party_prefix',
+                   help='Prefix for party audiences, e.g. "LD63" -> "LD63-Party-DEM"')
+    p.add_argument('--donor-segments', metavar='KEYS', default=None,
+                   dest='donor_segments',
+                   help='Comma-separated donor segment keys: '
+                        'reg_rep,reg_dem,gave_rep,gave_unk,gave_dem (all if omitted)')
+    p.add_argument('--donor-names-b64', metavar='B64', default=None,
+                   dest='donor_names_b64',
+                   help='Base64-encoded JSON {segment_key: fb_audience_name}')
     return p.parse_known_args()[0]
 
 
@@ -751,6 +1165,16 @@ def main():
     token        = os.getenv('META_ACCESS_TOKEN', '').strip()
     business_ids = [b.strip() for b in os.getenv('META_BUSINESS_IDS', '').split(',') if b.strip()]
 
+    # --fb-account: select a named credential pair from env vars
+    _sfx = ('_' + cli.fb_account.strip()) if getattr(cli, 'fb_account', '').strip() else ''
+    _tok_override = os.getenv(f'META_ACCESS_TOKEN{_sfx}',
+                    os.getenv(f'FB_ACCESS_TOKEN{_sfx}', '')).strip()
+    if _tok_override:
+        token = _tok_override
+    _bids_sfx = os.getenv(f'META_BUSINESS_IDS{_sfx}', '').strip()
+    if _bids_sfx:
+        business_ids = [b.strip() for b in _bids_sfx.split(',') if b.strip()]
+
     if not token:
         sys.exit(
             '\nERROR: META_ACCESS_TOKEN not set.\n'
@@ -758,11 +1182,17 @@ def main():
             '  set it in the portal Settings page (Meta section).\n'
             '  Get a System User token from: Meta Business Manager → Settings → System Users'
         )
-    if not business_ids:
+    _has_direct_account = bool(
+        getattr(cli, 'fb_ad_account_id', None) or
+        os.getenv(f'FB_AD_ACCOUNT_ID{_sfx}', '').strip() or
+        os.getenv('FB_AD_ACCOUNT_ID', '').strip()
+    )
+    if not business_ids and not _has_direct_account:
         sys.exit(
-            '\nERROR: META_BUSINESS_IDS not set.\n'
-            '  Add a comma-separated list of Business Manager IDs to .env.\n'
-            '  Find them at: https://business.facebook.com → Settings → Business Info'
+            '\nERROR: META_BUSINESS_IDS not set and no ad account ID configured.\n'
+            '  Either set META_BUSINESS_IDS in .env / Settings, OR\n'
+            '  set FB_AD_ACCOUNT_ID in Settings, OR pass --fb-ad-account-id <ID>.\n'
+            '  Find Business IDs at: https://business.facebook.com → Settings → Business Info'
         )
 
     meta = MetaClient(token)
@@ -791,10 +1221,47 @@ def main():
         return
 
     # ── Step 1: pick ad account ───────────────────────────────────────────────
-    account      = prompt_account(meta, business_ids)
-    account_id   = (account.get('account_id') or account['id'].replace('act_', ''))
-    account_name = account.get('name', account_id)
-    print(f'\n  Selected: {account_name}  (act_{account_id})')
+    _direct_id = getattr(cli, 'fb_ad_account_id', None)
+    _aid_env   = os.getenv(f'FB_AD_ACCOUNT_ID{_sfx}', '').strip()
+    if not _aid_env:
+        _aid_env = os.getenv('FB_AD_ACCOUNT_ID', '').strip()
+
+    if _direct_id:
+        account_id   = _direct_id.strip().lstrip('act_')
+        account_name = f'act_{account_id}'
+        print(f'\n  Account: act_{account_id}  [from --fb-ad-account-id]')
+    elif _aid_env:
+        account_id   = _aid_env
+        account_name = cli.fb_account.strip() if _sfx else 'Default'
+        print(f'\n  Account: {account_name}  (act_{account_id})  [from settings]')
+    else:
+        account      = prompt_account(meta, business_ids)
+        account_id   = (account.get('account_id') or account['id'].replace('act_', ''))
+        account_name = account.get('name', account_id)
+        print(f'\n  Selected: {account_name}  (act_{account_id})')
+
+    # ── --sheets shortcut: route to bulk upload functions ────────────────────
+    if getattr(cli, 'sheets', None):
+        _sheets   = [s.strip() for s in cli.sheets.split(',') if s.strip()]
+        if getattr(cli, 'statewide', False):
+            _geo2 = None  # explicit statewide — no filter
+        else:
+            _geo_col2 = (
+                'LDName'     if cli.ld     else
+                'SDName'     if cli.sd     else
+                'CDName'     if cli.cd     else
+                'CountyName' if cli.county else None
+            )
+            _geo_val2 = cli.ld or cli.sd or cli.cd or cli.county or None
+            _geo2 = (_geo_col2, _geo_val2) if _geo_col2 else None
+
+        if 'audiences' in _sheets:
+            _upload_all_audiences(meta, account_id, account_name, _geo2, cli)
+        if 'party' in _sheets:
+            _upload_by_party(meta, account_id, account_name, _geo2, cli)
+        if 'donors' in _sheets:
+            _upload_donor_segments(meta, account_id, account_name, _geo2, cli)
+        return
 
     # ── Step 2: audience source ───────────────────────────────────────────────
     # If --audience was passed on the CLI, skip the interactive source prompt
@@ -814,7 +1281,9 @@ def main():
     )
     cli_geo_val = cli.ld or cli.sd or cli.cd or cli.county or None
 
-    if cli_geo_col:
+    if getattr(cli, 'statewide', False):
+        geo_col, geo_val = None, None   # explicit statewide
+    elif cli_geo_col:
         geo_col, geo_val = cli_geo_col, cli_geo_val
     else:
         geo_col, geo_val = prompt_geo()

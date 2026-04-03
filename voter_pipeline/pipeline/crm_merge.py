@@ -33,9 +33,28 @@ Merge rules
 - **Name / company** — fill blanks only (COALESCE behaviour)
 - **Address** — most-recent record always wins (overwrite)
 - **Sources** — comma-separated list of every source that contributed data
+
+Performance
+-----------
+``upsert_contacts`` operates in batches of ``UPSERT_BATCH`` contacts:
+  - ONE ``SELECT … IN (…)`` per batch instead of N individual SELECTs
+  - ONE ``executemany INSERT IGNORE`` for all new contacts in the batch
+  - ONE ``executemany UPDATE`` for all existing contacts in the batch
+  = ~3 queries per UPSERT_BATCH contacts  (was 2×N)
+
+``tag_cm_membership`` operates in batches of ``TAG_BATCH`` emails:
+  - ONE ``SELECT … IN (…)`` per batch
+  - ONE ``executemany UPDATE`` per batch
+  = ~2 queries per TAG_BATCH emails  (was 2×N)
 """
 
 import re
+
+# ---------------------------------------------------------------------------
+# Batch sizes — tunable
+# ---------------------------------------------------------------------------
+UPSERT_BATCH = 500   # contacts per batch in upsert_contacts
+TAG_BATCH    = 1000  # emails per batch in tag_cm_membership
 
 # ---------------------------------------------------------------------------
 # Name cleaning (matches voter_file JOIN pattern)
@@ -131,14 +150,12 @@ def _fill_slots(existing_vals, new_vals, max_slots=5):
 
     Used for **emails** where the original primary should stay in slot 1.
     """
-    # Pad to max_slots
     slots = list(existing_vals) + [None] * max_slots
     slots = slots[:max_slots]
 
     present = {v.lower() for v in slots if v}
     for val in new_vals:
         if val and val.lower() not in present:
-            # Find first empty slot
             for i in range(max_slots):
                 if slots[i] is None:
                     slots[i] = val
@@ -160,19 +177,16 @@ def _prepend_slots(existing_vals, new_vals, max_slots=5):
     result = []
     seen = set()
 
-    # New values first (most recent)
     for val in new_vals:
         if val and val.lower() not in seen and len(result) < max_slots:
             result.append(val)
             seen.add(val.lower())
 
-    # Then existing values (older)
     for val in existing_vals:
         if val and val.lower() not in seen and len(result) < max_slots:
             result.append(val)
             seen.add(val.lower())
 
-    # Pad to max_slots
     while len(result) < max_slots:
         result.append(None)
 
@@ -200,10 +214,15 @@ def _append_tag(existing, new_tag, sep="|"):
 
 
 # ---------------------------------------------------------------------------
-# Bulk membership tagging (called after list sync for segment tagging)
+# Bulk membership tagging  (BATCH-OPTIMISED)
 # ---------------------------------------------------------------------------
 def tag_cm_membership(cur, emails, column, tag_value):
     """Append *tag_value* to *column* for all contacts matching *emails*.
+
+    Processes in batches of TAG_BATCH:
+      - ONE ``SELECT … IN (…)`` per batch
+      - ONE ``executemany UPDATE`` per batch
+    = O(N / TAG_BATCH) queries  (was O(N))
 
     Parameters
     ----------
@@ -219,33 +238,87 @@ def tag_cm_membership(cur, emails, column, tag_value):
     if column not in ("cm_lists", "cm_segments"):
         raise ValueError(f"Invalid column: {column}")
 
+    norm = [e.strip().lower() for e in emails if e]
     updated = 0
-    for email in emails:
-        email = (email or "").strip().lower()
-        if not email:
+
+    for i in range(0, len(norm), TAG_BATCH):
+        batch = norm[i : i + TAG_BATCH]
+        if not batch:
             continue
 
-        cur.execute(f"SELECT id, {column} FROM contacts WHERE email_1 = %s",
-                    (email,))
-        row = cur.fetchone()
-        if row is None:
-            continue
+        ph = ",".join(["%s"] * len(batch))
+        cur.execute(
+            f"SELECT id, {column} FROM contacts WHERE email_1 IN ({ph})",
+            batch,
+        )
+        rows = cur.fetchall()
 
-        row_id, existing = row
-        new_val = _append_tag(existing, tag_value)
-        if new_val != existing:
-            cur.execute(f"UPDATE contacts SET {column} = %s WHERE id = %s",
-                        (new_val, row_id))
-            updated += 1
+        updates = []
+        for row_id, existing in rows:
+            new_val = _append_tag(existing, tag_value)
+            if new_val != existing:
+                updates.append((new_val, row_id))
+
+        if updates:
+            cur.executemany(
+                f"UPDATE contacts SET {column} = %s WHERE id = %s",
+                updates,
+            )
+            updated += len(updates)
 
     return updated
 
 
 # ---------------------------------------------------------------------------
-# Core upsert
+# Internal: normalise one contact dict into typed fields
+# ---------------------------------------------------------------------------
+def _prepare(c):
+    """Return a normalised tuple of fields from a standard contact dict."""
+    primary_email = _normalize_email(c.get("email"))
+    if not primary_email:
+        return None
+
+    seen_e = {primary_email}
+    all_emails = [primary_email]
+    for e in c.get("emails", []):
+        ne = _normalize_email(e)
+        if ne and ne not in seen_e:
+            all_emails.append(ne)
+            seen_e.add(ne)
+
+    mobile = _normalize_phone(c.get("mobile"))
+    all_phones = []
+    for p in c.get("phones", []):
+        np = _normalize_phone(p)
+        if np and np != mobile:
+            all_phones.append(np)
+
+    first_name = (c.get("first_name") or "").strip()[:100] or None
+    last_name  = (c.get("last_name")  or "").strip()[:100] or None
+    address    = (c.get("address")    or "").strip()[:255] or None
+    city       = (c.get("city")       or "").strip()[:100] or None
+    state      = (c.get("state")      or "").strip()[:50]  or None
+    zipval     = (c.get("zip")        or "").strip()[:20]  or None
+    zip5       = zipval[:5] if zipval else None
+    company    = (c.get("company")    or "").strip()[:255] or None
+    cm_lists   = c.get("cm_lists") or None
+
+    return (primary_email, all_emails, mobile, all_phones,
+            first_name, last_name, address, city, state, zipval, zip5,
+            company, cm_lists)
+
+
+# ---------------------------------------------------------------------------
+# Core upsert  (BATCH-OPTIMISED)
 # ---------------------------------------------------------------------------
 def upsert_contacts(cur, contacts, source_tag):
     """Merge a batch of standardised contact dicts into the unified table.
+
+    Processes in batches of UPSERT_BATCH:
+      - ONE ``SELECT … IN (…)`` per batch to fetch all existing records
+      - ONE ``executemany INSERT IGNORE`` for new contacts
+      - ONE ``executemany UPDATE`` for existing contacts
+    = ~3 queries per UPSERT_BATCH contacts  (was 2×N)
 
     Parameters
     ----------
@@ -257,167 +330,167 @@ def upsert_contacts(cur, contacts, source_tag):
     -------
     (inserted, updated) : tuple[int, int]
     """
-    inserted = 0
-    updated = 0
+    total_inserted = 0
+    total_updated  = 0
 
+    for batch_start in range(0, len(contacts), UPSERT_BATCH):
+        batch = contacts[batch_start : batch_start + UPSERT_BATCH]
+        ins, upd = _upsert_batch(cur, batch, source_tag)
+        total_inserted += ins
+        total_updated  += upd
+
+    return total_inserted, total_updated
+
+
+def _upsert_batch(cur, contacts, source_tag):
+    """Process one UPSERT_BATCH of contacts against the DB."""
+
+    # 1. Normalise + deduplicate within this batch
+    #    (same email can appear in multiple HubSpot lists in the same page)
+    by_email = {}
     for c in contacts:
-        primary_email = _normalize_email(c.get("email"))
-        if not primary_email:
-            continue  # email is required
+        prep = _prepare(c)
+        if prep is None:
+            continue
+        email = prep[0]
+        if email not in by_email:
+            by_email[email] = prep
+        else:
+            # Merge duplicate within batch: extend email/phone lists,
+            # keep first non-null name, take most-recent address
+            ex = by_email[email]
+            merged_emails = list(dict.fromkeys(ex[1] + prep[1]))  # preserve order, dedup
+            merged_phones = list(dict.fromkeys(ex[3] + prep[3]))
+            by_email[email] = (
+                email,
+                merged_emails,
+                ex[2] or prep[2],      # mobile: first wins
+                merged_phones,
+                ex[4] or prep[4],      # first_name: first wins
+                ex[5] or prep[5],      # last_name:  first wins
+                prep[6] or ex[6],      # address:    most-recent wins
+                prep[7] or ex[7],
+                prep[8] or ex[8],
+                prep[9] or ex[9],
+                prep[10] or ex[10],
+                ex[11] or prep[11],    # company:    first wins
+                ex[12] or prep[12],    # cm_lists:   first wins
+            )
 
-        # Collect all emails (deduplicated, primary first)
-        seen_emails = set()
-        all_emails = [primary_email]
-        seen_emails.add(primary_email)
-        for e in c.get("emails", []):
-            ne = _normalize_email(e)
-            if ne and ne not in seen_emails:
-                all_emails.append(ne)
-                seen_emails.add(ne)
+    if not by_email:
+        return 0, 0
 
-        # Mobile (dedicated cell number)
-        mobile = _normalize_phone(c.get("mobile"))
+    email_list = list(by_email.keys())
 
-        # Collect all phones (exclude mobile to avoid duplicates)
-        all_phones = []
-        for p in c.get("phones", []):
-            np = _normalize_phone(p)
-            if np and np != mobile:
-                all_phones.append(np)
+    # 2. Fetch all existing records in ONE query
+    ph = ",".join(["%s"] * len(email_list))
+    cur.execute(
+        f"SELECT id, email_1, email_2, email_3, email_4, email_5,"
+        f"       first_name, last_name, mobile,"
+        f"       phone_1, phone_2, phone_3, phone_4, phone_5,"
+        f"       address, city, state, zip, zip5,"
+        f"       company, sources, cm_lists, cm_segments"
+        f" FROM contacts WHERE email_1 IN ({ph})",
+        email_list,
+    )
+    existing_map = {row[1]: row for row in cur.fetchall()}
 
-        first_name = (c.get("first_name") or "").strip()[:100] or None
-        last_name  = (c.get("last_name") or "").strip()[:100] or None
-        address    = (c.get("address") or "").strip()[:255] or None
-        city       = (c.get("city") or "").strip()[:100] or None
-        state      = (c.get("state") or "").strip()[:50] or None
-        zipval     = (c.get("zip") or "").strip()[:20] or None
-        zip5       = zipval[:5] if zipval else None
-        company    = (c.get("company") or "").strip()[:255] or None
+    # 3. Build INSERT rows (new) and UPDATE rows (existing)
+    insert_rows = []
+    update_rows = []
 
-        # CM list name (optional — set by CM loader, absent for HubSpot)
-        cm_lists_val = c.get("cm_lists") or None
+    for email, prep in by_email.items():
+        (_, all_emails, mobile, all_phones,
+         first_name, last_name, address, city, state, zipval, zip5,
+         company, cm_lists_val) = prep
 
-        # -- Check if contact already exists ----------------------------------
-        cur.execute(
-            "SELECT id, email_1, email_2, email_3, email_4, email_5, "
-            "       first_name, last_name, mobile, "
-            "       phone_1, phone_2, phone_3, phone_4, phone_5, "
-            "       address, city, state, zip, zip5, "
-            "       company, sources, cm_lists, cm_segments "
-            "FROM contacts WHERE email_1 = %s",
-            (primary_email,))
-        row = cur.fetchone()
+        if email not in existing_map:
+            # ── NEW contact ──────────────────────────────────────────────
+            email_slots = (all_emails + [None] * 5)[:5]
+            phone_slots = (all_phones + [None] * 5)[:5]
+            insert_rows.append((
+                email_slots[0], email_slots[1], email_slots[2],
+                email_slots[3], email_slots[4],
+                first_name, last_name, mobile,
+                phone_slots[0], phone_slots[1], phone_slots[2],
+                phone_slots[3], phone_slots[4],
+                address, city, state, zipval, zip5,
+                company, source_tag, cm_lists_val,
+                clean_name(first_name), clean_name(last_name),
+            ))
 
-        if row is None:
-            # ---- INSERT new contact ----------------------------------------
-            email_slots = (all_emails + [None]*5)[:5]
-            phone_slots = (all_phones + [None]*5)[:5]
-
-            try:
-                cur.execute("""
-                    INSERT INTO contacts (
-                        email_1, email_2, email_3, email_4, email_5,
-                        first_name, last_name, mobile,
-                        phone_1, phone_2, phone_3, phone_4, phone_5,
-                        address, city, state, zip, zip5,
-                        company, sources, cm_lists,
-                        clean_first, clean_last
-                    ) VALUES (
-                        %s,%s,%s,%s,%s,
-                        %s,%s,%s,
-                        %s,%s,%s,%s,%s,
-                        %s,%s,%s,%s,%s,
-                        %s,%s,%s,
-                        %s,%s
-                    )
-                """, (
-                    email_slots[0], email_slots[1], email_slots[2],
-                    email_slots[3], email_slots[4],
-                    first_name, last_name, mobile,
-                    phone_slots[0], phone_slots[1], phone_slots[2],
-                    phone_slots[3], phone_slots[4],
-                    address, city, state, zipval, zip5,
-                    company, source_tag, cm_lists_val,
-                    clean_name(first_name), clean_name(last_name),
-                ))
-                inserted += 1
-                continue  # successfully inserted — skip update path
-            except Exception as exc:
-                if getattr(exc, 'args', (None,))[0] != 1062:
-                    raise
-                # Duplicate email_1 (same contact in multiple lists/batches).
-                # Re-fetch the existing row and fall through to the update path.
-                cur.execute(
-                    "SELECT id, email_1, email_2, email_3, email_4, email_5, "
-                    "       first_name, last_name, mobile, "
-                    "       phone_1, phone_2, phone_3, phone_4, phone_5, "
-                    "       address, city, state, zip, zip5, "
-                    "       company, sources, cm_lists, cm_segments "
-                    "FROM contacts WHERE email_1 = %s",
-                    (primary_email,))
-                row = cur.fetchone()
-                if row is None:
-                    continue  # can't recover; skip
-
-        # ---- UPDATE existing contact ----------------------------------------
-        if row is not None:
+        else:
+            # ── EXISTING contact — apply merge rules ─────────────────────
+            row = existing_map[email]
             row_id    = row[0]
-            ex_emails = list(row[1:6])    # email_1 .. email_5
-            ex_fn     = row[6]
-            ex_ln     = row[7]
-            ex_mobile = row[8]
-            ex_phones = list(row[9:14])   # phone_1 .. phone_5
-            ex_addr   = row[14]
-            ex_city   = row[15]
-            ex_state  = row[16]
-            ex_zip    = row[17]
-            ex_zip5   = row[18]
-            ex_comp   = row[19]
-            ex_src    = row[20]
-            ex_cm_lists = row[21]
-            ex_cm_segs  = row[22]
+            ex_emails = list(row[1:6])
+            ex_fn     = row[6];   ex_ln    = row[7];  ex_mobile = row[8]
+            ex_phones = list(row[9:14])
+            ex_addr   = row[14];  ex_city  = row[15]; ex_state = row[16]
+            ex_zip    = row[17];  ex_zip5  = row[18]; ex_comp  = row[19]
+            ex_src    = row[20];  ex_cm_l  = row[21]; ex_cm_s  = row[22]
 
-            # Emails: slot-fill (primary stays in slot 1)
             new_emails = _fill_slots(ex_emails, all_emails, 5)
-            # Phones: prepend (most-recently-synced number → phone_1)
             new_phones = _prepend_slots(ex_phones, all_phones, 5)
-            # Mobile: most recent wins
-            new_mobile = mobile if mobile else ex_mobile
-            # Name / company: fill blank only
-            new_fn  = ex_fn  if ex_fn  else first_name
-            new_ln  = ex_ln  if ex_ln  else last_name
-            new_comp = ex_comp if ex_comp else company
-            # Address: most recent wins (overwrite if new source has non-null)
-            new_addr  = address if address else ex_addr
-            new_city  = city    if city   else ex_city
-            new_state = state   if state  else ex_state
-            new_zip   = zipval  if zipval else ex_zip
-            new_zip5  = zip5    if zip5   else ex_zip5
-            # Sources: append
-            new_src = _append_source(ex_src, source_tag)
-            # CM lists: append (pipe-separated)
-            new_cm_lists = _append_tag(ex_cm_lists, cm_lists_val) if cm_lists_val else ex_cm_lists
+            new_fn     = ex_fn    or first_name
+            new_ln     = ex_ln    or last_name
+            new_mobile = mobile   or ex_mobile
+            new_comp   = ex_comp  or company
+            new_addr   = address  or ex_addr
+            new_city   = city     or ex_city
+            new_state  = state    or ex_state
+            new_zip    = zipval   or ex_zip
+            new_zip5   = zip5     or ex_zip5
+            new_src    = _append_source(ex_src, source_tag)
+            new_cm_l   = _append_tag(ex_cm_l, cm_lists_val) if cm_lists_val else ex_cm_l
 
-            cur.execute("""
-                UPDATE contacts SET
-                    email_2=%s, email_3=%s, email_4=%s, email_5=%s,
-                    first_name=%s, last_name=%s, mobile=%s,
-                    phone_1=%s, phone_2=%s, phone_3=%s, phone_4=%s, phone_5=%s,
-                    address=%s, city=%s, state=%s, zip=%s, zip5=%s,
-                    company=%s, sources=%s, cm_lists=%s, cm_segments=%s,
-                    clean_first=%s, clean_last=%s
-                WHERE id=%s
-            """, (
+            update_rows.append((
                 new_emails[1], new_emails[2], new_emails[3], new_emails[4],
                 new_fn, new_ln, new_mobile,
                 new_phones[0], new_phones[1], new_phones[2],
                 new_phones[3], new_phones[4],
                 new_addr, new_city, new_state, new_zip, new_zip5,
-                new_comp, new_src, new_cm_lists, ex_cm_segs,
+                new_comp, new_src, new_cm_l, ex_cm_s,
                 clean_name(new_fn), clean_name(new_ln),
                 row_id,
             ))
-            updated += 1
+
+    # 4. Batch INSERT new contacts
+    inserted = 0
+    if insert_rows:
+        cur.executemany("""
+            INSERT IGNORE INTO contacts (
+                email_1, email_2, email_3, email_4, email_5,
+                first_name, last_name, mobile,
+                phone_1, phone_2, phone_3, phone_4, phone_5,
+                address, city, state, zip, zip5,
+                company, sources, cm_lists,
+                clean_first, clean_last
+            ) VALUES (
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,%s,%s,
+                %s,%s,%s,
+                %s,%s
+            )
+        """, insert_rows)
+        inserted = cur.rowcount
+
+    # 5. Batch UPDATE existing contacts
+    updated = 0
+    if update_rows:
+        cur.executemany("""
+            UPDATE contacts SET
+                email_2=%s, email_3=%s, email_4=%s, email_5=%s,
+                first_name=%s, last_name=%s, mobile=%s,
+                phone_1=%s, phone_2=%s, phone_3=%s, phone_4=%s, phone_5=%s,
+                address=%s, city=%s, state=%s, zip=%s, zip5=%s,
+                company=%s, sources=%s, cm_lists=%s, cm_segments=%s,
+                clean_first=%s, clean_last=%s
+            WHERE id=%s
+        """, update_rows)
+        updated = len(update_rows)
 
     return inserted, updated
 
@@ -434,7 +507,6 @@ def enrich_voter_crm(conn):
     skip already-matched rows.
     """
     with conn.cursor() as cur:
-        # Check contacts table exists
         try:
             cur.execute("SELECT COUNT(*) FROM crm_unified.contacts")
             cnt = cur.fetchone()[0]
@@ -445,7 +517,6 @@ def enrich_voter_crm(conn):
             print("  CRM enrich: skipped (contacts table empty)")
             return
 
-        # Ensure crm_email, crm_phone, crm_mobile columns on voter_file
         cur.execute("""
             SELECT COLUMN_NAME FROM information_schema.COLUMNS
             WHERE TABLE_SCHEMA = 'nys_voter_tagging'
@@ -453,18 +524,15 @@ def enrich_voter_crm(conn):
               AND COLUMN_NAME IN ('crm_email', 'crm_phone', 'crm_mobile')
         """)
         existing = {r[0] for r in cur.fetchall()}
-        for col, sqltype in [("crm_email", "VARCHAR(255)"),
-                             ("crm_phone", "VARCHAR(50)"),
-                             ("crm_mobile", "VARCHAR(50)")]:
+        for col, sqltype in [("crm_email",  "VARCHAR(255)"),
+                              ("crm_phone",  "VARCHAR(50)"),
+                              ("crm_mobile", "VARCHAR(50)")]:
             if col not in existing:
                 cur.execute(
                     f"ALTER TABLE nys_voter_tagging.voter_file "
                     f"ADD COLUMN {col} {sqltype} DEFAULT NULL"
                 )
 
-        # UPDATE…JOIN: voter_file drivers, contacts probed via idx_name_zip.
-        # Uses pre-computed clean_last/clean_first columns from pipeline.
-        # Enriches ALL voters whose crm_email is still NULL.
         cur.execute("""
             UPDATE nys_voter_tagging.voter_file v
             JOIN crm_unified.contacts c
@@ -480,7 +548,6 @@ def enrich_voter_crm(conn):
         new_matched = cur.rowcount
         conn.commit()
 
-        # Report total CRM-enriched voters (new + previously matched)
         cur.execute("SELECT COUNT(*) FROM nys_voter_tagging.voter_file WHERE crm_email IS NOT NULL")
         total = cur.fetchone()[0]
         if new_matched:
@@ -489,5 +556,5 @@ def enrich_voter_crm(conn):
             print(f"  CRM enrich: 0 new matches ({total:,} voters already have CRM data)")
 
 
-# Backward-compat alias — existing callers use enrich_voter_email()
+# Backward-compat alias
 enrich_voter_email = enrich_voter_crm

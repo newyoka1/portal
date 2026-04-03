@@ -14,7 +14,7 @@
 }
 
 /* ── Page background ─────────────────────────────────────────────────────── */
-body { background: #f2f2f2; }
+body { background: #d0d3d9; }
 
 /* ── Navbar ──────────────────────────────────────────────────────────────── */
 .navbar.bg-dark { background-color: var(--pk-black) !important; }

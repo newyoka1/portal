@@ -264,7 +264,7 @@ def create_audience_tab(wb, conn, district_type, district_number, audience_file,
     headers = [
         'StateVoterId', 'FirstName', 'MiddleName', 'LastName',
         'Address', 'City', 'ZIP', 'DOB',
-        'LD', 'SD', 'CD'
+        'LD', 'SD', 'CD', 'Eth (Broad)', 'Eth (Derived)'
     ]
 
     for col_num, header in enumerate(headers, 1):
@@ -288,7 +288,11 @@ def create_audience_tab(wb, conn, district_type, district_number, audience_file,
             f.DOB,
             f.LDName,
             f.SDName,
-            f.CDName
+            f.CDName,
+            CASE WHEN f.ModeledEthnicity IN ('White / Caucasian','Hispanic / Latino','Black / African American','Asian / Pacific Islander','Other / Multi-Racial')
+                 THEN f.ModeledEthnicity ELSE NULL END,
+            CASE WHEN f.ModeledEthnicity NOT IN ('White / Caucasian','Hispanic / Latino','Black / African American','Asian / Pacific Islander','Other / Multi-Racial','Unknown')
+                 AND f.ModeledEthnicity IS NOT NULL THEN f.ModeledEthnicity ELSE NULL END
         FROM voter_file f
         WHERE 1=1 {dist_cond}
           AND (
@@ -540,9 +544,43 @@ def create_modeled_ethnicity_tab(wb, conn, district_type, district_number):
         "Unknown":                 "F2F2F2",
     }
 
+    _BROAD_VALS = {'White / Caucasian','Hispanic / Latino','Black / African American',
+                  'Asian / Pacific Islander','Other / Multi-Racial'}
+    _broad_header_written   = False
+    _derived_header_written = False
+
+    _BROAD_VALS = {'White / Caucasian','Hispanic / Latino','Black / African American',
+                  'Asian / Pacific Islander','Other / Multi-Racial'}
+    _broad_header_written   = False
+    _derived_header_written = False
+
     row = 6
     for r in rows:
         eth = str(r[0]); total = int(r[1]); matched = int(r[2]); unmatched = int(r[3])
+        is_broad = eth in _BROAD_VALS
+        # Insert tier sub-header on first encounter of each tier
+        if is_broad and not _broad_header_written:
+            ws.cell(row=row, column=1, value="── Census / Broad Category (modeled) ──")
+            ws.cell(row=row, column=1).font = Font(bold=True, italic=True, color="1F497D")
+            ws.merge_cells(f"A{row}:G{row}")
+            row += 1; _broad_header_written = True
+        if not is_broad and eth != "Unknown" and not _derived_header_written:
+            ws.cell(row=row, column=1, value="── Surname-Derived Sub-Group ──")
+            ws.cell(row=row, column=1).font = Font(bold=True, italic=True, color="7030A0")
+            ws.merge_cells(f"A{row}:G{row}")
+            row += 1; _derived_header_written = True
+        is_broad = eth in _BROAD_VALS
+        # Insert tier sub-header on first encounter of each tier
+        if is_broad and not _broad_header_written:
+            ws.cell(row=row, column=1, value="── Census / Broad Category (modeled) ──")
+            ws.cell(row=row, column=1).font = Font(bold=True, italic=True, color="1F497D")
+            ws.merge_cells(f"A{row}:G{row}")
+            row += 1; _broad_header_written = True
+        if not is_broad and eth != "Unknown" and not _derived_header_written:
+            ws.cell(row=row, column=1, value="── Surname-Derived Sub-Group ──")
+            ws.cell(row=row, column=1).font = Font(bold=True, italic=True, color="7030A0")
+            ws.merge_cells(f"A{row}:G{row}")
+            row += 1; _derived_header_written = True
         pct_district = total * 100.0 / grand_total if grand_total else 0
         match_rate   = matched * 100.0 / total if total else 0
         miss_rate    = unmatched * 100.0 / total if total else 0
@@ -1571,13 +1609,124 @@ def create_explanation_tab(wb, district_type, district_number, has_cfb=False):
     print("  OK Guide tab created")
 
 
+def create_phones_tab(wb, conn, district_type, district_number):
+    """Voters in district who have at least one phone number."""
+    col = _COL_MAP[district_type]
+    ws  = wb.create_sheet("Phones")
+    ws.sheet_properties.tabColor = "00B0F0"
+
+    ws["A1"] = f"{'Statewide' if district_type=='STATEWIDE' else f'{district_type} {district_number}'} — Voters with Phone Numbers"
+    ws["A1"].font = Font(bold=True, size=12)
+    ws.merge_cells("A1:K1")
+    ws["A2"] = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+
+    headers = ["StateVoterId","FirstName","LastName","PrimaryPhone","Mobile","Landline",
+               "Address","City","Zip","Party","LD","SD","CD","Eth (Broad)","Eth (Derived)"]
+    for ci, h in enumerate(headers, 1):
+        ws.cell(row=4, column=ci, value=h)
+    format_header_row(ws, 4)
+
+    dist_cond = f"AND {col} = %s" if col else ""
+    with conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT StateVoterId, FirstName, LastName,
+                   PrimaryPhone, Mobile, Landline,
+                   PrimaryAddress1, PrimaryCity, PrimaryZip,
+                   OfficialParty, LDName, SDName, CDName,
+                   CASE WHEN ModeledEthnicity IN ('White / Caucasian','Hispanic / Latino','Black / African American','Asian / Pacific Islander','Other / Multi-Racial')
+                        THEN ModeledEthnicity ELSE NULL END,
+                   CASE WHEN ModeledEthnicity NOT IN ('White / Caucasian','Hispanic / Latino','Black / African American','Asian / Pacific Islander','Other / Multi-Racial','Unknown')
+                        AND ModeledEthnicity IS NOT NULL THEN ModeledEthnicity ELSE NULL END
+            FROM voter_file
+            WHERE (PrimaryPhone IS NOT NULL OR Mobile IS NOT NULL) {dist_cond}
+            ORDER BY LastName, FirstName
+            LIMIT 1000000
+        """, (district_number,) if col else ())
+        rows = cur.fetchall()
+
+    ws["A3"] = f"Total: {len(rows):,}"
+    ws["A3"].font = Font(bold=True)
+    for ri, row in enumerate(rows, 5):
+        for ci, val in enumerate(row, 1):
+            ws.cell(row=ri, column=ci, value=val)
+        if ri % 10000 == 0:
+            print(f"    ...{ri-5:,} phones written")
+    auto_adjust_columns(ws)
+    print(f"  OK Phones: {len(rows):,} voters")
+
+
+def create_emails_tab(wb, conn, district_type, district_number):
+    """Voters matched to a CRM email address."""
+    col = _COL_MAP[district_type]
+    ws  = wb.create_sheet("Emails (CRM)")
+    ws.sheet_properties.tabColor = "7030A0"
+
+    ws["A1"] = f"{'Statewide' if district_type=='STATEWIDE' else f'{district_type} {district_number}'} — Voters with CRM Email"
+    ws["A1"].font = Font(bold=True, size=12)
+    ws.merge_cells("A1:K1")
+    ws["A2"] = f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+
+    # Check columns available
+    has_crm_phone_col = _has_crm_phone(conn)
+    if has_crm_phone_col:
+        headers = ["StateVoterId","FirstName","LastName","Email","CRM_Phone","CRM_Mobile",
+                   "Address","City","Zip","Party","LD","SD","CD","Eth (Broad)","Eth (Derived)"]
+        sel = ("StateVoterId, FirstName, LastName, crm_email, crm_phone, crm_mobile, "
+               "PrimaryAddress1, PrimaryCity, PrimaryZip, OfficialParty, LDName, SDName, CDName, "
+               "CASE WHEN ModeledEthnicity IN ('White / Caucasian','Hispanic / Latino',"
+               "'Black / African American','Asian / Pacific Islander','Other / Multi-Racial') "
+               "THEN ModeledEthnicity ELSE NULL END, "
+               "CASE WHEN ModeledEthnicity NOT IN ('White / Caucasian','Hispanic / Latino',"
+               "'Black / African American','Asian / Pacific Islander','Other / Multi-Racial','Unknown') "
+               "AND ModeledEthnicity IS NOT NULL THEN ModeledEthnicity ELSE NULL END")
+    else:
+        headers = ["StateVoterId","FirstName","LastName","Email",
+                   "Address","City","Zip","Party","LD","SD","CD","Eth (Broad)","Eth (Derived)"]
+        sel = ("StateVoterId, FirstName, LastName, crm_email, "
+               "PrimaryAddress1, PrimaryCity, PrimaryZip, OfficialParty, LDName, SDName, CDName, "
+               "CASE WHEN ModeledEthnicity IN ('White / Caucasian','Hispanic / Latino',"
+               "'Black / African American','Asian / Pacific Islander','Other / Multi-Racial') "
+               "THEN ModeledEthnicity ELSE NULL END, "
+               "CASE WHEN ModeledEthnicity NOT IN ('White / Caucasian','Hispanic / Latino',"
+               "'Black / African American','Asian / Pacific Islander','Other / Multi-Racial','Unknown') "
+               "AND ModeledEthnicity IS NOT NULL THEN ModeledEthnicity ELSE NULL END")
+
+    for ci, h in enumerate(headers, 1):
+        ws.cell(row=4, column=ci, value=h)
+    format_header_row(ws, 4)
+
+    dist_cond = f"AND {col} = %s" if col else ""
+    with conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT {sel}
+            FROM voter_file
+            WHERE crm_email IS NOT NULL {dist_cond}
+            ORDER BY LastName, FirstName
+            LIMIT 1000000
+        """, (district_number,) if col else ())
+        rows = cur.fetchall()
+
+    ws["A3"] = f"Total: {len(rows):,}"
+    ws["A3"].font = Font(bold=True)
+    for ri, row in enumerate(rows, 5):
+        for ci, val in enumerate(row, 1):
+            ws.cell(row=ri, column=ci, value=val)
+        if ri % 10000 == 0:
+            print(f"    ...{ri-5:,} emails written")
+    auto_adjust_columns(ws)
+    print(f"  OK Emails (CRM): {len(rows):,} voters")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Export district analysis to Excel')
     parser.add_argument('--ld', type=str, help='Legislative District number (e.g., 63 or 063)')
     parser.add_argument('--sd', type=str, help='State Senate District number (e.g., 5 or 05)')
     parser.add_argument('--cd', type=str, help='Congressional District number (e.g., 3 or 03)')
-    parser.add_argument('--county', type=str, help='County name (e.g., Albany, Erie, Kings)')
-    parser.add_argument('--statewide', action='store_true', help='Export all voters with no geographic filter')
+    parser.add_argument('--county', type=str, metavar='NAME',
+                        help='County name')
+    parser.add_argument('--statewide', action='store_true', help='Export all of NY State')
+    parser.add_argument('--sheets', type=str, default=None,
+                        help='Comma-separated: donors,phones,emails,party,audiences')
     parser.add_argument('--keep', type=int, default=0, help='Number of recent files to keep (default: 0 - delete all old files)')
     parser.add_argument('--no-clean', action='store_true', help='Skip cleaning old files')
     args = parser.parse_args()
@@ -1605,14 +1754,23 @@ def main():
         district_number = str(int(args.cd))  # Remove leading zeros for DB query
     elif args.county:
         district_type = 'COUNTY'
-        district_number_padded = args.county.title()  # Capitalize for consistency (e.g., Albany, Erie)
-        district_number = args.county.title()  # County names don't have leading zeros
+        district_number_padded = args.county.title()
+        district_number = args.county.title()
+    elif getattr(args, 'statewide', False):
+        district_type = 'STATEWIDE'
+        district_number = 'ALL'
+        district_number_padded = 'ALL'
     else:
         # Default to LD 63
         district_type = 'LD'
         district_number = '63'
         district_number_padded = '063'
         print("No district specified, defaulting to LD 63")
+
+    # Parse --sheets (default: all)
+    _all_sheets = {'donors', 'phones', 'emails', 'party', 'audiences'}
+    sheets_arg  = getattr(args, 'sheets', None)
+    sheets = set(s.strip().lower() for s in sheets_arg.split(',')) if sheets_arg else _all_sheets
 
     label = 'STATEWIDE (all voters)' if district_type == 'STATEWIDE' else f'{district_type} {district_number}'
     print(f"\n{'='*80}")
@@ -1667,15 +1825,12 @@ def main():
         from pipeline.crm_merge import enrich_voter_email
         enrich_voter_email(conn)
 
-        print('Creating BOE Donors tab...')
-        create_boe_donor_tab(wb, conn, district_type, district_number)
-
         # Check if National donor columns exist - REQUIRED
         has_national_donors = False
         try:
             with conn.cursor() as cur:
-                # Check for all required National columns
-                required_cols = ['is_national_donor', 'national_total_amount', 'national_democratic_amount', 'national_republican_amount']
+                required_cols = ['is_national_donor', 'national_total_amount',
+                                  'national_democratic_amount', 'national_republican_amount']
                 cur.execute(f"SELECT {', '.join(required_cols)} FROM voter_file LIMIT 0")
                 has_national_donors = True
         except:
@@ -1688,12 +1843,8 @@ def main():
             print("\nNational donor columns not found in voter_file.")
             print("\nYou must run donor enrichment before exporting:")
             print("\n  python main.py donors")
-            print("\nThis will add both BOE (state) and National donor data.")
             print("="*80 + "\n")
             sys.exit(1)
-        
-        print('Creating National Donor tab...')
-        create_national_donor_tab(wb, conn, district_type, district_number)
 
         # Check if CFB donor columns exist (optional - NYC districts only)
         has_cfb_donors = False
@@ -1704,44 +1855,86 @@ def main():
         except Exception:
             pass
 
-        if has_cfb_donors:
-            print('Creating CFB Donors tab...')
-            create_cfb_donor_tab(wb, conn, district_type, district_number)
-        else:
-            print('  Skipping CFB Donors tab (cfb columns not found - run: python main.py cfb-enrich)')
+        # Check if National donor columns exist - REQUIRED
+        has_national_donors = False
+        try:
+            with conn.cursor() as cur:
+                required_cols = ['is_national_donor', 'national_total_amount',
+                                  'national_democratic_amount', 'national_republican_amount']
+                cur.execute(f"SELECT {', '.join(required_cols)} FROM voter_file LIMIT 0")
+                has_national_donors = True
+        except:
+            pass
 
-        # Create explanation / guide tab (inserted at position 0, before Summary)
+        if not has_national_donors:
+            print("\n" + "="*80)
+            print("  ERROR: NATIONAL DONOR DATA MISSING")
+            print("="*80)
+            print("\nNational donor columns not found in voter_file.")
+            print("\nYou must run donor enrichment before exporting:")
+            print("\n  python main.py donors")
+            print("="*80 + "\n")
+            sys.exit(1)
+
+        # Check if CFB donor columns exist (optional - NYC districts only)
+        has_cfb_donors = False
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT cfb_total_amt FROM voter_file LIMIT 0")
+                has_cfb_donors = True
+        except Exception:
+            pass
+
+        if 'donors' in sheets:
+            print('Creating BOE Donors tab...')
+            create_boe_donor_tab(wb, conn, district_type, district_number)
+            print('Creating National Donor tab...')
+            create_national_donor_tab(wb, conn, district_type, district_number)
+            if has_cfb_donors:
+                print('Creating CFB Donors tab...')
+                create_cfb_donor_tab(wb, conn, district_type, district_number)
+            else:
+                print('  Skipping CFB Donors tab (cfb columns not found - run: python main.py cfb-enrich)')
+
+        # Create explanation / guide tab (always present)
         print("Creating Guide tab...")
         create_explanation_tab(wb, district_type, district_number, has_cfb=has_cfb_donors)
-        # Move Guide to be the very first sheet
         wb.move_sheet("Guide", offset=-(len(wb.sheetnames)-1))
 
+        if 'party' in sheets:
+            print('Creating Registered Democrats tab...')
+            create_party_voter_tab(wb, conn, district_type, district_number,
+                                   "Registered Democrats", ["Democrat"], "1F4E79")
+            print('Creating Republicans & Conservatives tab...')
+            create_party_voter_tab(wb, conn, district_type, district_number,
+                                   "Republicans & Conservatives", ["Republican", "Conservative"], "8B0000")
 
-        # Party voter roster tabs
-        print('Creating Registered Democrats tab...')
-        create_party_voter_tab(wb, conn, district_type, district_number,
-                               "Registered Democrats", ["Democrat"], "1F4E79")
+        if 'phones' in sheets:
+            print('Creating Phones tab...')
+            create_phones_tab(wb, conn, district_type, district_number)
 
-        print('Creating Republicans & Conservatives tab...')
-        create_party_voter_tab(wb, conn, district_type, district_number,
-                               "Republicans & Conservatives", ["Republican", "Conservative"], "8B0000")
+        if 'emails' in sheets:
+            print('Creating Emails tab...')
+            create_emails_tab(wb, conn, district_type, district_number)
 
         # Split audience list into issues and turnout, create in order
         _TP = ('HT ', 'MT ', 'LT ')
         issues_list  = [(a, v) for a, v in audience_list if not a.upper().startswith(_TP)]
         turnout_list = [(a, v) for a, v in audience_list if a.upper().startswith(_TP)]
 
-        print(f"\nCreating {len(issues_list)} issue tabs...")
-        for i, (audience_file, voters) in enumerate(issues_list, 1):
-            tab_name = audience_file.replace('.csv', '').replace('INDV NYS_', '')[:31]
-            print(f"\n[{i}/{len(issues_list)}] {audience_file}")
-            create_audience_tab(wb, conn, district_type, district_number, audience_file, tab_name, tab_color="E26B0A")
-
-        print(f"\nCreating {len(turnout_list)} turnout tabs...")
-        for i, (audience_file, voters) in enumerate(turnout_list, 1):
-            tab_name = audience_file.replace('.csv', '').replace('INDV NYS_', '')[:31]
-            print(f"\n[{i}/{len(turnout_list)}] {audience_file}")
-            create_audience_tab(wb, conn, district_type, district_number, audience_file, tab_name, tab_color="00B050")
+        if 'audiences' in sheets:
+            print(f"\nCreating {len(issues_list)} issue tabs...")
+            for i, (audience_file, voters) in enumerate(issues_list, 1):
+                tab_name = audience_file.replace('.csv', '').replace('INDV NYS_', '')[:31]
+                print(f"\n[{i}/{len(issues_list)}] {audience_file}")
+                create_audience_tab(wb, conn, district_type, district_number,
+                                    audience_file, tab_name, tab_color="E26B0A")
+            print(f"\nCreating {len(turnout_list)} turnout tabs...")
+            for i, (audience_file, voters) in enumerate(turnout_list, 1):
+                tab_name = audience_file.replace('.csv', '').replace('INDV NYS_', '')[:31]
+                print(f"\n[{i}/{len(turnout_list)}] {audience_file}")
+                create_audience_tab(wb, conn, district_type, district_number,
+                                    audience_file, tab_name, tab_color="00B050")
 
         # Create unmatched voters tab
         print("\nCreating Unmatched Voters tab...")

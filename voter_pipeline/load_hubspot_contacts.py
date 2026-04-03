@@ -35,8 +35,66 @@ from dotenv import load_dotenv
 import pymysql
 import requests
 
+# ---------------------------------------------------------------------------
+# Progress helpers
+# ---------------------------------------------------------------------------
+def _fmt_elapsed(seconds):
+    """Format seconds as '4m 12s' or '47s'."""
+    s = int(seconds)
+    return f"{s//60}m {s%60:02d}s" if s >= 60 else f"{s}s"
+
+
+class _Progress:
+    """Time-gated progress reporter — emits a line at most every *interval* seconds.
+
+    Works in both terminal and browser log (no \r tricks — each line is
+    a complete standalone update).
+    """
+    def __init__(self, label, total=None, indent="    ", interval=8.0):
+        self.label    = label
+        self.total    = total
+        self.indent   = indent
+        self.interval = interval
+        self.n        = 0
+        self.t0       = time.time()
+        self._t_last  = self.t0 - interval  # emit first tick immediately
+
+    def update(self, n):
+        self.n = n
+        now = time.time()
+        if now - self._t_last >= self.interval:
+            self._emit(now)
+            self._t_last = now
+
+    def _emit(self, now=None):
+        if now is None:
+            now = time.time()
+        elapsed = now - self.t0
+        rate    = self.n / elapsed if elapsed > 0 else 0
+        e_str   = _fmt_elapsed(elapsed)
+        if self.total and self.total > 0 and self.n <= self.total:
+            pct      = 100 * self.n / self.total
+            bar_w    = 25
+            filled   = int(pct * bar_w / 100)
+            bar      = "█" * filled + "░" * (bar_w - filled)
+            eta      = (self.total - self.n) / rate if rate > 0 else 0
+            eta_str  = f"  ETA {_fmt_elapsed(eta)}" if eta > 1 else ""
+            print(f"{self.indent}[{bar}] {self.n:>8,} / {self.total:,}"
+                  f"  {rate:,.0f}/s  {e_str}{eta_str}", flush=True)
+        else:
+            print(f"{self.indent}↻ {self.label}:  {self.n:,}  ({rate:,.0f}/s  {e_str})",
+                  flush=True)
+
+    def done(self, extra=""):
+        elapsed = time.time() - self.t0
+        rate    = self.n / elapsed if elapsed > 0 else 0
+        e_str   = _fmt_elapsed(elapsed)
+        suffix  = f"  — {extra}" if extra else ""
+        print(f"{self.indent}✓ {self.label}: {self.n:,}  ({rate:,.0f}/s  {e_str}){suffix}",
+              flush=True)
+
+
 # Shared merge logic
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pipeline.crm_merge import (
     clean_name, upsert_contacts as merge_upsert, CONTACTS_DDL,
 )
@@ -71,6 +129,23 @@ DEAL_PROPERTIES = [
     "recurring", "donation_status",
     "amount_before_fees", "amount_refunded", "donor_covered_fees",
     "lastmodifieddate",
+]
+
+# Properties safe to include in the Search API body.
+# HubSpot's POST /search validates every property name against the portal schema
+# and returns a generic 400 for any unknown name — stricter than the GET list
+# endpoint which silently ignores unknowns.  Only include standard HubSpot
+# system properties here; custom/portal-specific props go in CONTACT_PROPERTIES
+# / DEAL_PROPERTIES for the full-sync list fetch.
+_CONTACT_SEARCH_PROPS = [
+    "email", "firstname", "lastname",
+    "phone", "mobilephone",
+    "address", "city", "state", "zip",
+    "company", "createdate", "lastmodifieddate",
+]
+_DEAL_SEARCH_PROPS = [
+    "dealname", "amount", "closedate", "dealstage", "dealtype",
+    "pipeline", "createdate", "lastmodifieddate",
 ]
 
 # ---------------------------------------------------------------------------
@@ -284,7 +359,15 @@ def api_post(token, url, body):
         if resp.status_code >= 500 and attempt < 3:
             time.sleep(2 ** attempt)
             continue
-        resp.raise_for_status()
+        # Include response body in error so we know WHY it failed
+        try:
+            err_body = resp.json()
+        except Exception:
+            err_body = resp.text[:500]
+        raise requests.exceptions.HTTPError(
+            f"{resp.status_code} {resp.reason} — {err_body}",
+            response=resp,
+        )
     return {}
 
 
@@ -462,21 +545,47 @@ def sync_contacts(cur, token, account, full=False):
     else:
         # Try incremental
         print(f"  Contacts: incremental (since {watermark})")
-        results, hit_limit = fetch_modified(
-            token, "contacts", CONTACT_PROPERTIES, watermark)
+        try:
+            # Use a safe minimal property list for the Search API — it validates
+            # every property name and returns 400 for any unknown/custom field.
+            # We batch-read the full CONTACT_PROPERTIES after getting the IDs.
+            slim, hit_limit = fetch_modified(
+                token, "contacts", _CONTACT_SEARCH_PROPS, watermark)
+        except Exception as e:
+            print(f"    Search API error — {e}")
+            print(f"    Falling back to full sync")
+            clear_watermark(cur, load_type)
+            hit_limit = True
+            slim = []
         if hit_limit:
-            print(f"    >10K changes -- falling back to full sync")
+            print(f"    Falling back to full sync")
             clear_watermark(cur, load_type)
             mode = "full"
         else:
+            # Batch-read full properties (including custom) for changed IDs
+            if slim:
+                ids = [r["id"] for r in slim]
+                enriched = []
+                for i in range(0, len(ids), 100):
+                    chunk = ids[i:i+100]
+                    body = {
+                        "inputs": [{"id": str(cid)} for cid in chunk],
+                        "properties": CONTACT_PROPERTIES,
+                    }
+                    resp = api_post(
+                        token, f"{API_BASE}/contacts/batch/read", body)
+                    enriched.extend(resp.get("results", []))
+                    time.sleep(0.1)
+            else:
+                enriched = []
             # Incremental merge
-            std = map_hubspot_to_standard(results)
+            std = map_hubspot_to_standard(enriched)
             ins, upd = merge_upsert(cur, std, source_tag)
             total = ins + upd
-            print(f"    Merged {total:,} contacts ({ins:,} new, {upd:,} updated)")
-            if results:
+            print(f"    ✓ Contacts: {total:,} merged  ({ins:,} new  {upd:,} updated)")
+            if slim:
                 max_mod = max(
-                    (r["properties"].get("lastmodifieddate", "") for r in results),
+                    (r["properties"].get("lastmodifieddate", "") for r in slim),
                     default=watermark)
                 store_watermark(cur, load_type, max_mod, total)
             return total
@@ -484,12 +593,10 @@ def sync_contacts(cur, token, account, full=False):
     # Full sync path
     total_ins = 0
     total_upd = 0
-    max_mod = ""
-    page_num = 0
-    t0 = time.time()
+    max_mod   = ""
+    prog = _Progress("Contacts", indent="    ")
 
     for page in fetch_all(token, "contacts", CONTACT_PROPERTIES):
-        page_num += 1
         std = map_hubspot_to_standard(page)
         ins, upd = merge_upsert(cur, std, source_tag)
         total_ins += ins
@@ -500,13 +607,10 @@ def sync_contacts(cur, token, account, full=False):
             if mod > max_mod:
                 max_mod = mod
 
-        if page_num % 100 == 0:
-            total = total_ins + total_upd
-            rate = total / (time.time() - t0) if time.time() - t0 > 0 else 0
-            print(f"\r    {total:,} contacts ({rate:.0f}/sec)", end="", flush=True)
+        prog.update(total_ins + total_upd)
 
     total = total_ins + total_upd
-    print(f"\r    {total:,} contacts synced ({total_ins:,} new, {total_upd:,} updated)")
+    prog.done(f"{total_ins:,} new  {total_upd:,} updated")
     if max_mod:
         store_watermark(cur, load_type, max_mod, total)
     return total
@@ -593,29 +697,42 @@ def sync_deals(cur, token, account, full=False):
     else:
         # Try incremental (no associations in search -- backfill contact_id later)
         print(f"  Deals: incremental (since {watermark})")
-        results, hit_limit = fetch_modified(
-            token, "deals", DEAL_PROPERTIES, watermark)
+        try:
+            # Search with safe minimal props; custom deal props fetched later
+            # via batch/read so the Search API doesn't 400 on unknown fields.
+            results, hit_limit = fetch_modified(
+                token, "deals", _DEAL_SEARCH_PROPS, watermark)
+        except Exception as e:
+            print(f"    Search API error ({e}) — falling back to full sync")
+            clear_watermark(cur, load_type)
+            cur.execute("DELETE FROM deals WHERE account = %s", (account,))
+            hit_limit = True
+            results   = []
         if hit_limit:
-            print(f"    >10K changes -- falling back to full sync")
+            print(f"    Falling back to full sync")
             clear_watermark(cur, load_type)
             cur.execute("DELETE FROM deals WHERE account = %s", (account,))
             mode = "full"
         else:
-            # Incremental: search API doesn't return associations,
-            # so fetch each changed deal individually with associations
+            # Incremental: use batch-read API to fetch all changed deals
+            # with associations in one POST (100 per call) instead of N GETs
             if results:
                 enriched = []
-                for r in results:
-                    detail = api_get(token,
-                        f"{API_BASE}/deals/{r['id']}",
-                        {"properties": ",".join(DEAL_PROPERTIES),
-                         "associations": "contacts"})
-                    enriched.append(detail)
+                ids = [r['id'] for r in results]
+                for i in range(0, len(ids), 100):
+                    chunk = ids[i:i+100]
+                    body = {
+                        'inputs': [{'id': str(did)} for did in chunk],
+                        'properties': DEAL_PROPERTIES,
+                        'associations': ['contacts'],
+                    }
+                    resp = api_post(token, f'{API_BASE}/deals/batch/read', body)
+                    enriched.extend(resp.get('results', []))
                     time.sleep(0.1)
                 total = upsert_deals(cur, enriched, account)
             else:
                 total = 0
-            print(f"    Updated {total:,} deals")
+            print(f"    ✓ Deals: {total:,} updated")
             if results:
                 max_mod = max(
                     (r["properties"].get("lastmodifieddate", "") for r in results),
@@ -624,13 +741,11 @@ def sync_deals(cur, token, account, full=False):
             return total
 
     # Full sync path -- List API supports associations param
-    total = 0
+    total   = 0
     max_mod = ""
-    page_num = 0
-    t0 = time.time()
+    prog = _Progress("Deals", indent="    ")
 
     for page in fetch_all(token, "deals", DEAL_PROPERTIES, associations="contacts"):
-        page_num += 1
         count = upsert_deals(cur, page, account)
         total += count
 
@@ -639,11 +754,9 @@ def sync_deals(cur, token, account, full=False):
             if mod > max_mod:
                 max_mod = mod
 
-        if page_num % 50 == 0:
-            rate = total / (time.time() - t0) if time.time() - t0 > 0 else 0
-            print(f"\r    {total:,} deals ({rate:.0f}/sec)", end="", flush=True)
+        prog.update(total)
 
-    print(f"\r    {total:,} deals synced")
+    prog.done()
     if max_mod:
         store_watermark(cur, load_type, max_mod, total)
     return total
@@ -685,9 +798,7 @@ def main():
             print(f"  Available accounts: {', '.join(a['name'] for a in discover_accounts())}")
             sys.exit(1)
 
-    print("=" * 70)
-    print("HUBSPOT CRM SYNC")
-    print("=" * 70)
+    print("\n━━━ HubSpot CRM Sync " + "━" * 50)
     print(f"  Accounts: {', '.join(a['name'] for a in accounts)}")
     print(f"  Mode: {'full' if args.full else 'incremental'}\n")
 
@@ -701,7 +812,8 @@ def main():
     for acct in accounts:
         name = acct["name"]
         token = acct["token"]
-        print(f"--- Account: {name} ---")
+        print(f"\n  Account: {name.upper()}")
+        print(f"  {'─' * 40}")
 
         contact_count = sync_contacts(cur, token, name, full=args.full)
         deal_count = sync_deals(cur, token, name, full=args.full)
@@ -711,14 +823,12 @@ def main():
 
     # Summary
     elapsed = time.time() - t0
-    print("=" * 70)
-    print("SYNC COMPLETE")
-    print("=" * 70)
+    print("\n━━━ Complete " + "━" * 57)
 
     grand_contacts = 0
     grand_deals = 0
     for name, counts in totals.items():
-        print(f"  [{name}]  contacts: {counts['contacts']:,}  deals: {counts['deals']:,}")
+        print(f"  {name:<20}  contacts: {counts['contacts']:>8,}  deals: {counts['deals']:>7,}")
         grand_contacts += counts["contacts"]
         grand_deals += counts["deals"]
 

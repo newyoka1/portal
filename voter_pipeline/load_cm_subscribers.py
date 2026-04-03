@@ -34,8 +34,61 @@ from dotenv import load_dotenv
 import pymysql
 import requests
 
+# ---------------------------------------------------------------------------
+# Progress helpers
+# ---------------------------------------------------------------------------
+def _fmt_elapsed(seconds):
+    s = int(seconds)
+    return f"{s//60}m {s%60:02d}s" if s >= 60 else f"{s}s"
+
+
+class _Progress:
+    """Time-gated progress reporter (no \r — works in browser log)."""
+    def __init__(self, label, total=None, indent="      ", interval=8.0):
+        self.label    = label
+        self.total    = total
+        self.indent   = indent
+        self.interval = interval
+        self.n        = 0
+        self.t0       = time.time()
+        self._t_last  = self.t0 - interval
+
+    def update(self, n):
+        self.n = n
+        now = time.time()
+        if now - self._t_last >= self.interval:
+            self._emit(now)
+            self._t_last = now
+
+    def _emit(self, now=None):
+        if now is None:
+            now = time.time()
+        elapsed = now - self.t0
+        rate    = self.n / elapsed if elapsed > 0 else 0
+        e_str   = _fmt_elapsed(elapsed)
+        if self.total and self.total > 0 and self.n <= self.total:
+            pct    = 100 * self.n / self.total
+            bar_w  = 25
+            filled = int(pct * bar_w / 100)
+            bar    = "█" * filled + "░" * (bar_w - filled)
+            eta    = (self.total - self.n) / rate if rate > 0 else 0
+            eta_s  = f"  ETA {_fmt_elapsed(eta)}" if eta > 1 else ""
+            print(f"{self.indent}[{bar}] {self.n:>8,} / {self.total:,}"
+                  f"  {rate:,.0f}/s  {e_str}{eta_s}", flush=True)
+        else:
+            print(f"{self.indent}↻ {self.label}:  {self.n:,}  ({rate:,.0f}/s  {e_str})",
+                  flush=True)
+
+    def done(self, extra=""):
+        elapsed = time.time() - self.t0
+        rate    = self.n / elapsed if elapsed > 0 else 0
+        e_str   = _fmt_elapsed(elapsed)
+        suffix  = f"  — {extra}" if extra else ""
+        print(f"{self.indent}✓ {self.label}: {self.n:,}  ({rate:,.0f}/s  {e_str}){suffix}",
+              flush=True)
+
+
 # Shared merge logic
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from pipeline.crm_merge import (
     upsert_contacts as merge_upsert, CONTACTS_DDL, tag_cm_membership,
 )
@@ -307,9 +360,9 @@ def sync_segments(cur, api_key, list_id, list_name):
 
         if emails:
             tagged = tag_cm_membership(cur, emails, "cm_segments", seg_title)
-            print(f"        {seg_title}: {len(emails)} members, {tagged} tagged")
+            print(f"      ✓ Segment [{seg_title}]: {len(emails):,} members  {tagged:,} tagged")
         else:
-            print(f"        {seg_title}: 0 members")
+            print(f"      · Segment [{seg_title}]: 0 members  (skipped)")
 
 
 # ---------------------------------------------------------------------------
@@ -454,11 +507,9 @@ def sync_list(cur, api_key, account_name, list_id, list_name,
 
     total_ins = 0
     total_upd = 0
-    page_num = 0
-    t0 = time.time()
+    prog = _Progress(list_name[:40])
 
     for page in fetch_subscribers(api_key, list_id, since_date=since_date):
-        page_num += 1
         std = map_cm_to_standard(page)
 
         # Tag each contact with the list name for cm_lists column
@@ -468,14 +519,10 @@ def sync_list(cur, api_key, account_name, list_id, list_name,
         ins, upd = merge_upsert(cur, std, source_tag)
         total_ins += ins
         total_upd += upd
-
-        if page_num % 50 == 0:
-            total = total_ins + total_upd
-            rate = total / (time.time() - t0) if time.time() - t0 > 0 else 0
-            print(f"\r      {total:,} subscribers ({rate:.0f}/sec)", end="", flush=True)
+        prog.update(total_ins + total_upd)
 
     total = total_ins + total_upd
-    print(f"      {total:,} subscribers ({total_ins:,} new, {total_upd:,} updated)")
+    prog.done(f"{total_ins:,} new  {total_upd:,} updated")
 
     # Store watermark as today's date for next incremental run
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -528,9 +575,7 @@ def main():
             print(f"  Available accounts: {', '.join(a['name'] for a in all_accounts)}")
             sys.exit(1)
 
-    print("=" * 70)
-    print("CAMPAIGN MONITOR SYNC")
-    print("=" * 70)
+    print("\n━━━ Campaign Monitor Sync " + "━" * 45)
     print(f"  Accounts: {', '.join(a['name'] for a in accounts)}")
     print(f"  Mode: {'full' if args.full else 'incremental'}\n")
 
@@ -545,7 +590,8 @@ def main():
     for acct in accounts:
         name = acct["name"]
         api_key = acct["api_key"]
-        print(f"--- Account: {name} ---")
+        print(f"\n  Account: {name.upper()}")
+        print(f"  {'─' * 40}")
 
         # Auto-discover all lists for this account
         print(f"  Discovering lists...")
@@ -570,7 +616,7 @@ def main():
             clients[cn].append(lst)
 
         for client_name, client_lists in clients.items():
-            print(f"  Client: {client_name} ({len(client_lists)} lists)")
+            print(f"  Client: {client_name}  ({len(client_lists)} list(s))")
             for lst in client_lists:
                 count = sync_list(cur, api_key, name, lst["list_id"],
                                   lst["list_name"], full=args.full,
@@ -581,10 +627,8 @@ def main():
         print()
 
     elapsed = time.time() - t0
-    print("=" * 70)
-    print("SYNC COMPLETE")
-    print("=" * 70)
-    print(f"  Total subscribers merged: {grand_total:,}")
+    print("\n━━━ Complete " + "━" * 57)
+    print(f"  Subscribers merged:  {grand_total:,}")
 
     cur.execute("SELECT COUNT(*) FROM contacts")
     total_contacts = cur.fetchone()[0]

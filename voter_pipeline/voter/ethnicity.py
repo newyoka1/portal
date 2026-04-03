@@ -1,18 +1,7 @@
 import os, sys, time, argparse
 import pymysql
-from dotenv import load_dotenv
-
-load_dotenv()
-
-DB_CONFIG = {
-    "host":     os.getenv("MYSQL_HOST", "127.0.0.1"),
-    "port":     int(os.getenv("MYSQL_PORT", 3306)),
-    "user":     os.getenv("MYSQL_USER", "root"),
-    "password": os.getenv("MYSQL_PASSWORD", ""),
-    "database": "nys_voter_tagging",
-    "charset":  "utf8mb4",
-    "autocommit": False,
-}
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.db import get_conn
 
 VOTER_TABLE  = "voter_file"
 LOOKUP_TABLE = "ref_surname_lookup"
@@ -147,7 +136,7 @@ MIDDLE_EASTERN_SURNAMES = {
 }
 
 def get_connection():
-    return pymysql.connect(**DB_CONFIG)
+    return get_conn(database="nys_voter_tagging", autocommit=False)
 
 def build_lookup_table(cur, rebuild=False):
     if rebuild:

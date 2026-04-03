@@ -8,7 +8,7 @@ changes from previous snapshots.
 Table: voter_party_snapshot
   StateVoterId  VARCHAR(20)
   snapshot_date DATE
-  party         VARCHAR(5)
+  party         VARCHAR(30)
   PRIMARY KEY (StateVoterId, snapshot_date)
 
 Columns added to voter_file:
@@ -25,22 +25,16 @@ Called by: python main.py party-snapshot
 """
 
 import os, sys, time, argparse
-from dotenv import load_dotenv
 import pymysql
-
-load_dotenv()
-
-MYSQL_HOST     = os.getenv("MYSQL_HOST", "127.0.0.1")
-MYSQL_PORT     = int(os.getenv("MYSQL_PORT", "3306"))
-MYSQL_USER     = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD")
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.db import get_conn
 
 VOTER_TABLE = "voter_file"
 
 SNAPSHOT_TABLE = "voter_party_snapshot"
 
 SWITCHER_COLUMNS = [
-    ("prior_party",       "VARCHAR(5)  DEFAULT NULL"),
+    ("prior_party",       "VARCHAR(30) DEFAULT NULL"),
     ("party_change_date", "DATE        DEFAULT NULL"),
     ("is_party_switcher", "TINYINT(1)  DEFAULT 0"),
 ]
@@ -49,19 +43,14 @@ CREATE_SNAPSHOT = f"""
 CREATE TABLE IF NOT EXISTS {SNAPSHOT_TABLE} (
     StateVoterId  VARCHAR(20)  NOT NULL,
     snapshot_date DATE         NOT NULL,
-    party         VARCHAR(5)   DEFAULT NULL,
+    party         VARCHAR(30)   DEFAULT NULL,
     PRIMARY KEY (StateVoterId, snapshot_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
 """
 
 
 def connect():
-    return pymysql.connect(
-        host=MYSQL_HOST, port=MYSQL_PORT,
-        user=MYSQL_USER, password=MYSQL_PASSWORD,
-        database="nys_voter_tagging",
-        charset="utf8mb4", autocommit=True
-    )
+    return get_conn(database="nys_voter_tagging", autocommit=True)
 
 
 def ensure_columns(cur, columns):
@@ -96,6 +85,9 @@ def main():
     # Step 1: Create snapshot table + voter_file columns
     print("\n[1] Ensuring snapshot table and columns...")
     cur.execute(CREATE_SNAPSHOT)
+    # Widen party column if table pre-existed with VARCHAR(5)
+    cur.execute("ALTER TABLE voter_party_snapshot MODIFY COLUMN party VARCHAR(30) DEFAULT NULL")
+    cur.execute("ALTER TABLE voter_file MODIFY COLUMN prior_party VARCHAR(30) DEFAULT NULL")
     added = ensure_columns(cur, SWITCHER_COLUMNS)
     if added:
         print(f"  Added {added} column(s) to voter_file")

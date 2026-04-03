@@ -40,6 +40,8 @@ class User(Base):
     email         = Column(String(200), unique=True, nullable=False, index=True)
     password_hash = Column(String(200), nullable=False)
     is_admin      = Column(Boolean, default=False)
+    voter_role    = Column(String(20), nullable=True, default=None)
+    # voter_role: None = no pipeline access, "full" = all tabs, "export_viewer" = export+status+issues
     created_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     approvals     = relationship("Approval", back_populates="user")

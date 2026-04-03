@@ -21,7 +21,24 @@ boe_donor_summary for direct join in export queries):
 Called by: python main.py boe-enrich
 """
 
-import os, sys, time, datetime
+import os, sys, time, datetime, threading
+
+
+def _start_heartbeat(label: str, interval: int = 20):
+    """Daemon thread that prints elapsed time every `interval` seconds.
+    Returns a stop callable to invoke once the blocking query finishes."""
+    t0 = time.time()
+    stop = threading.Event()
+
+    def _beat():
+        while not stop.wait(interval):
+            elapsed = time.time() - t0
+            m, s = divmod(int(elapsed), 60)
+            print(f"    ... {label} [{m}m {s:02d}s elapsed]", flush=True)
+
+    t = threading.Thread(target=_beat, daemon=True)
+    t.start()
+    return lambda: (stop.set(), t.join(timeout=2))
 
 # Allow imports from the project root regardless of CWD
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -138,18 +155,32 @@ def main():
     print("Step 3: Clearing existing BOE values...")
     t0 = time.time()
     set_null = ", ".join([f"{col} = NULL" for col, _ in BOE_COLUMNS])
-    cur.execute(f"""
-        UPDATE voter_file SET {set_null}
-        WHERE boe_total_amt IS NOT NULL OR boe_last_date IS NOT NULL
-    """)
-    print(f"  Cleared {cur.rowcount:,} rows  ({time.time()-t0:.1f}s)")
+    cur.execute("SELECT COUNT(*) FROM voter_file WHERE boe_total_amt IS NOT NULL OR boe_last_date IS NOT NULL")
+    prev = cur.fetchone()[0]
+    if prev:
+        print(f"  Clearing {prev:,} previously enriched rows...", flush=True)
+        stop = _start_heartbeat("clearing previous BOE data", interval=20)
+        cur.execute(f"""
+            UPDATE voter_file SET {set_null}
+            WHERE boe_total_amt IS NOT NULL OR boe_last_date IS NOT NULL
+        """)
+        stop()
+    else:
+        cur.execute(f"""
+            UPDATE voter_file SET {set_null}
+            WHERE boe_total_amt IS NOT NULL OR boe_last_date IS NOT NULL
+        """)
+    print(f"  Cleared {cur.rowcount:,} rows  ({time.time()-t0:.1f}s)", flush=True)
     print()
 
     # ------------------------------------------------------------------
     # Step 4: JOIN boe_donor_summary -> voter_file
     # ------------------------------------------------------------------
-    print("Step 4: Enriching voter_file from boe_donor_summary...")
+    cur.execute("SELECT COUNT(*) FROM boe_donors.boe_donor_summary")
+    summary_rows = cur.fetchone()[0]
+    print(f"Step 4: Enriching voter_file from boe_donor_summary ({summary_rows:,} summary rows)...", flush=True)
     t0 = time.time()
+    stop = _start_heartbeat("JOIN boe_donor_summary → voter_file", interval=20)
     cur.execute("""
         UPDATE nys_voter_tagging.voter_file v
         JOIN boe_donors.boe_donor_summary b ON v.StateVoterId = b.StateVoterId
@@ -165,8 +196,9 @@ def main():
             v.boe_last_date     = b.last_date,
             v.boe_last_filer    = b.last_filer
     """)
+    stop()
     matched = cur.rowcount
-    print(f"  Enriched {matched:,} voters  ({time.time()-t0:.1f}s)")
+    print(f"  Enriched {matched:,} voters  ({time.time()-t0:.1f}s)", flush=True)
     print()
 
     # ------------------------------------------------------------------

@@ -317,8 +317,44 @@ def ensure_database():
     finally:
         root.close()
 
+# VARCHAR sizes for voter file columns — sized to ~2x observed max values.
+# Prevents TEXT columns which cause off-page InnoDB storage and block indexing.
+_VARCHAR_SIZES = {
+    # Address
+    "PrimaryAddress1": 80, "PrimaryCity": 50, "PrimaryOddEvenCode": 5,
+    "PrimaryHouseNumber": 20, "PrimaryHouseHalf": 5, "PrimaryStreetPre": 5,
+    "PrimaryStreetName": 60, "PrimaryStreetType": 10, "PrimaryStreetPost": 5,
+    "PrimaryUnit": 20, "PrimaryUnitNumber": 15,
+    "SecondaryAddress1": 80, "SecondaryCity": 50, "SecondaryUnit": 20,
+    "SecondaryUnitNumber": 20,
+    # Phone
+    "PrimaryPhone": 20, "PrimaryPhoneTRC": 5, "Landline": 20, "UserLandline": 20,
+    "LandlineTRC": 5, "LandlineDNC": 10, "HasPrimaryPhone": 10,
+    "Mobile": 20, "MobileTRC": 5, "UserMobile": 20, "MobileDNC": 10,
+    # Demographics
+    "AgeRange": 15, "Age": 5, "Gender": 5,
+    "ObservedParty": 30, "OfficialParty": 30, "CalculatedParty": 30,
+    "HouseholdParty": 30, "RegistrationStatus": 30,
+    # Voting behavior
+    "GeneralFrequency": 5, "PrimaryFrequency": 5, "MailSortCodeRoute": 10,
+    "MailDeliveryPt": 5, "MailDeliveryPtChkDigit": 5, "MailLineOfTravel": 10,
+    "MailLineOfTravelOrder": 5, "MailDPVStatus": 5, "NeighborhoodId": 5,
+    "NeighborhoodSegmentId": 5, "OverAllFrequency": 5,
+    "GeneralAbsenteeStatus": 20, "PrimaryAbsenteeStatus": 20, "AbsenteeStatus": 20,
+    "GeneralRegularity": 10, "PrimaryRegularity": 10, "Moved": 10,
+    # Geography
+    "CountyName": 30, "CountyNumber": 5, "PrecinctNumber": 15,
+    "PrecinctName": 60, "DMA": 50, "Turf": 10, "CensusBlock": 30,
+    # IDs
+    "VoterKey": 15, "HHRecId": 15, "HHMemberId": 5, "HHCode": 5,
+    "JurisdictionalVoterId": 20, "ClientId": 20, "RNCRegId": 50, "MapCode": 5,
+    # Ethnicity / origin
+    "StateEthnicity": 30, "ModeledEthnicity": 50, "ObservedEthnicity": 30,
+    "origin": 160,
+}
+
 def _coltype_for_fullvoter(col: str) -> str:
-    """Map column names to MySQL types"""
+    """Map column names to MySQL types — never returns TEXT."""
     if col == "StateVoterId":
         return "VARCHAR(50) NOT NULL"
     if col in ("PrimaryZip", "SecondaryZip"):
@@ -334,12 +370,16 @@ def _coltype_for_fullvoter(col: str) -> str:
     if col in ("Latitude", "Longitude"):
         return "DECIMAL(9,6) NULL"
     if col in ("CDName", "LDName", "SDName"):
-        return "VARCHAR(50) NOT NULL DEFAULT ''"  # Must be NOT NULL for partitioning
+        return "VARCHAR(50) NOT NULL DEFAULT \'\'"  # Must be NOT NULL for partitioning
     if col in ("FirstName", "LastName", "MiddleName"):
         return "VARCHAR(100) NULL"
     if col == "SuffixName":
         return "VARCHAR(50) NULL"
-    return "TEXT NULL"
+    # Look up known column sizes — fall back to VARCHAR(255), never TEXT
+    size = _VARCHAR_SIZES.get(col)
+    if size:
+        return f"VARCHAR({size}) NULL"
+    return "VARCHAR(255) NULL"
 
 def _load_expr(col: str, var: str) -> str:
     """Generate a LOAD DATA SET expression that coerces @var into the correct type for col."""
@@ -388,7 +428,7 @@ def rebuild_tables(conn, fullvoter_header: list[str]):
     sanitized = [sanitize_identifier(c) for c in fullvoter_header]
     for c in sanitized:
         col_defs.append(f"{qident(c)} {_coltype_for_fullvoter(c)}")
-    col_defs.append("`origin` TEXT NULL")
+    col_defs.append("`origin` VARCHAR(160) NULL")
 
     create_sql = f"""
     CREATE TABLE voter_file (

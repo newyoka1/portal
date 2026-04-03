@@ -554,6 +554,8 @@ def main():
         help="Atomically replace audience (requires --fb-audience-id)")
     p_fbpush.add_argument("--dry-run", action="store_true",
         help="Hash and prepare records but do not upload to Facebook")
+    p_fbpush.add_argument("--fb-account", metavar="NAME", default="",
+        help="Named FB account suffix (FB_ACCESS_TOKEN_NAME / FB_AD_ACCOUNT_ID_NAME)")
 
     # fb-audiences — interactive by default; optional CLI flags bypass the prompts
     p_fb = sub.add_parser(
@@ -574,6 +576,7 @@ def main():
     fb_dist.add_argument("--sd",     metavar="NUM",  help="Filter to State Senate District")
     fb_dist.add_argument("--cd",     metavar="NUM",  help="Filter to Congressional District")
     fb_dist.add_argument("--county", metavar="NAME", help="Filter to county (e.g. Nassau)")
+    fb_dist.add_argument("--statewide", action="store_true", help="No geographic filter (all of NY State)")
     p_fb.add_argument(
         "--fb-audience-id", metavar="ID",
         help="Existing Facebook Custom Audience ID to update (omit to create new)",
@@ -588,9 +591,12 @@ def main():
     )
     p_fb.add_argument("--dry-run", action="store_true",
         help="Hash records but do not upload to Facebook")
+    p_fb.add_argument("--fb-account", metavar="NAME", default="",
+        help="Named FB account suffix (FB_ACCESS_TOKEN_NAME / FB_AD_ACCOUNT_ID_NAME)")
 
 
-    args = parser.parse_args()
+    args, _extra_args = parser.parse_known_args()
+    args._extra_args = _extra_args  # passthrough for fb-audiences
 
     verbosity = 'normal'
     if args.debug:   verbosity = 'debug';   print("DEBUG MODE")
@@ -628,6 +634,13 @@ def _dispatch(args, verbosity):
     # ── pipeline / voter-file-load ────────────────────────────────────────────
     elif args.command in ("pipeline", "voter-file-load"):
         run("pipeline/pipeline.py", verbosity_level=verbosity)
+        # Rebuild district lookup table so portal dropdowns reflect the new voter file
+        print("Rebuilding district_values lookup table...")
+        try:
+            from rebuild_district_values import rebuild as _rebuild_dv
+            _rebuild_dv(verbose=True)
+        except Exception as _e:
+            print(f"  Warning: district_values rebuild failed: {_e}")
 
     # ── export ────────────────────────────────────────────────────────────────
     elif args.command == "export":
@@ -663,11 +676,11 @@ def _dispatch(args, verbosity):
                 except PipelineError as e:
                     print(f"  WARNING: {col} {district} failed (code {e.returncode}) — continuing...")
         else:
-            run("export/export.py", district_args(args), verbosity_level=verbosity)
+            run("export/export.py", district_args(args) + getattr(args, "_extra_args", []), verbosity_level=verbosity)
 
     # ── voter-contact ──────────────────────────────────────────────────────
     elif args.command == "voter-contact":
-        run("export/export_contact.py", district_args(args), verbosity_level=verbosity)
+        run("export/export_contact.py", district_args(args) + getattr(args, "_extra_args", []), verbosity_level=verbosity)
 
     # ── both ──────────────────────────────────────────────────────────────────
     elif args.command == "both":
@@ -831,14 +844,19 @@ def _dispatch(args, verbosity):
             extra.append("--list-audiences")
         elif getattr(args, 'audience', None):
             extra += ["--audience", args.audience]
-        if getattr(args, 'ld', None):     extra += ["--ld", args.ld]
-        elif getattr(args, 'sd', None):   extra += ["--sd", args.sd]
-        elif getattr(args, 'cd', None):   extra += ["--cd", args.cd]
-        elif getattr(args, 'county', None): extra += ["--county", args.county]
+        # Geographic filter — mutually exclusive group
+        if getattr(args, 'statewide', False): extra.append("--statewide")
+        elif getattr(args, 'ld', None):       extra += ["--ld", args.ld]
+        elif getattr(args, 'sd', None):       extra += ["--sd", args.sd]
+        elif getattr(args, 'cd', None):       extra += ["--cd", args.cd]
+        elif getattr(args, 'county', None):   extra += ["--county", args.county]
         if getattr(args, 'fb_audience_id', None): extra += ["--fb-audience-id", args.fb_audience_id]
         if getattr(args, 'replace', False):       extra.append("--replace")
         if getattr(args, 'fb_audience_name', None): extra += ["--audience-name", args.fb_audience_name]
         if getattr(args, 'dry_run', False):       extra.append("--dry-run")
+        if getattr(args, 'fb_account', '').strip(): extra += ["--fb-account", args.fb_account]
+        # Forward any additional flags (--sheets, --yes, --fb-ad-account-id, etc.)
+        extra += getattr(args, "_extra_args", [])
         run("export/facebook_donor_audience.py", extra, verbosity_level=verbosity)
 
     # ── crm-extended-match ────────────────────────────────────────────────────
@@ -869,6 +887,7 @@ def _dispatch(args, verbosity):
             extra += ["--fb-audience-id", args.fb_audience_id]
         if getattr(args, "replace",  False): extra.append("--replace")
         if getattr(args, "dry_run",  False): extra.append("--dry-run")
+        if getattr(args, "fb_account", "").strip(): extra += ["--fb-account", args.fb_account]
         run("export/facebook_audience.py", extra, verbosity_level=verbosity)
 
     # ── reset ─────────────────────────────────────────────────────────────────
