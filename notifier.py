@@ -77,19 +77,47 @@ def _safe_substitute(template: str, variables: dict) -> str:
         return result
 
 
+def _ensure_send_as_name(send_as_email: str, display_name: str) -> None:
+    """Update the Gmail Send-As alias display name so recipients see the right name."""
+    if not display_name or not send_as_email:
+        return
+    try:
+        service = _gmail_service()
+        # Get current Send-As settings for this address
+        send_as = service.users().settings().sendAs().get(
+            userId="me", sendAsEmail=send_as_email
+        ).execute()
+        if send_as.get("displayName") != display_name:
+            service.users().settings().sendAs().update(
+                userId="me",
+                sendAsEmail=send_as_email,
+                body={"displayName": display_name, "sendAsEmail": send_as_email},
+            ).execute()
+            logger.info("Updated Send-As display name for %s to '%s'", send_as_email, display_name)
+    except HttpError as exc:
+        # 404 = not a registered alias; 403 = no permission — both are non-fatal
+        logger.debug("Could not update Send-As name for %s: %s", send_as_email, exc)
+    except Exception as exc:
+        logger.debug("Send-As name update skipped: %s", exc)
+
+
 def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
     """
     Send approval-request emails and SMS.
     *approval_pairs* is a list of (name, email_addr, phone, token_str) tuples.
     Returns {"emails": N, "sms": M} counts.
     """
+    from email.utils import formataddr
     from portal_config import get_setting
     # Use per-client from_email if set, otherwise fall back to global setting
     client_sender = email.client.from_email if email.client and email.client.from_email else ""
     sender_email = client_sender or get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
-    # Build "Display Name <email>" format if from_name is set
+    # Build proper RFC 2822 "Display Name <email>" format
     sender_name = email.client.from_name if email.client and email.client.from_name else ""
-    sender = f"{sender_name} <{sender_email}>" if sender_name else sender_email
+    sender = formataddr((sender_name, sender_email)) if sender_name else sender_email
+
+    # Update Gmail Send-As alias display name if needed
+    _ensure_send_as_name(sender_email, sender_name)
     try:
         service = _gmail_service()
     except Exception as exc:
