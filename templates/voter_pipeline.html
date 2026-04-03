@@ -496,7 +496,7 @@
     <!-- Past Reports -->
     <div class="card shadow-sm">
       <div class="card-header fw-semibold py-2">
-        <i class="bi bi-clock-history me-1"></i>Past Reports
+        <i class="bi bi-download me-1"></i>Reports Download
       </div>
       <div id="export-reports-body" class="card-body py-2">
         <div class="text-center text-muted py-2"><span class="spinner-border spinner-border-sm me-2"></span>Loading&hellip;</div>
@@ -2017,6 +2017,7 @@ async function _pollTask(taskId, container, dlBarCallback, cmd, killBtnId) {
           _recordLastRun(cmd);
           if (_ENRICH_REFRESH_CMDS.has(cmd)) setTimeout(() => loadEnrichStats(true), 1500);
           if (cmd === 'pipeline') setTimeout(() => loadAudienceStatus(), 2500);
+          if (cmd === 'export') setTimeout(() => loadExportReports(), 1000);
         }
         localStorage.removeItem('vp_task');
         break;
