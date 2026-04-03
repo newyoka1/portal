@@ -102,6 +102,28 @@ async def save_settings(
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
 
+@router.post("/test-sms", response_class=JSONResponse)
+async def test_sms(
+    request: Request,
+    current_user: User = Depends(require_admin),
+):
+    """Send a test SMS to verify Twilio credentials."""
+    body = await request.json()
+    to = body.get("to", "").strip()
+    if not to:
+        return JSONResponse({"ok": False, "error": "No phone number provided"}, status_code=400)
+
+    from notifier import _send_sms
+    ok = _send_sms(to=to, body="Politika Portal — Twilio test SMS. Your connection is working!")
+    if ok:
+        return {"ok": True}
+    else:
+        return JSONResponse(
+            {"ok": False, "error": "SMS failed — check your Twilio credentials in the fields above and click Save All first."},
+            status_code=400,
+        )
+
+
 @router.delete("/{key}", response_class=JSONResponse)
 def delete_setting(
     key: str,

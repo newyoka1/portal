@@ -67,7 +67,7 @@ DEFAULTS = [
     ("GMAIL_SENDER_EMAIL",  "", "Gmail Sender Email",        "email",  False),
     ("GMAIL_ADDRESS",       "", "Gmail Poller Address (impersonate)", "email", False),
     ("GMAIL_APP_PASSWORD",  "", "Gmail App Password",        "email",  True),
-    ("APP_URL",             "https://connect.politikanyc.com", "Portal URL (for approval links)", "email", False),
+    ("APP_URL",             "https://politika.run", "Portal URL (for approval links)", "email", False),
 
     # Email Approval
     ("EMAIL_SUBJECT_FILTER", "test", "Subject Filter Word (only ingest emails containing this)", "email_approval", False),
@@ -78,7 +78,7 @@ DEFAULTS = [
     ("TWILIO_PHONE_NUMBER", "", "Twilio Phone Number (e.g. +1...)", "twilio", False),
 
     # FB Ad Approval
-    ("BASE_URL", "https://connect.politikanyc.com/fb", "FB Ad Approval Base URL", "fb_approval", False),
+    ("BASE_URL", "https://politika.run/fb", "FB Ad Approval Base URL", "fb_approval", False),
 
     # Voter Pipeline tokens are managed dynamically via the settings UI
     # (HUBSPOT_TOKEN_*, CM_API_KEY_*, MAILCHIMP_KEY_* rows are user-created)

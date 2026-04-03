@@ -102,6 +102,38 @@
     </h6>
   </div>
   <div class="card-body">
+    {% if cat_key == 'twilio' %}
+    <div class="alert alert-info d-flex align-items-start gap-2 mb-3 py-2" style="font-size:.85rem">
+      <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
+      <div>
+        <strong>How to set up Twilio SMS</strong>
+        <ol class="mb-0 ps-3 mt-1">
+          <li>Sign up at <a href="https://www.twilio.com/try-twilio" target="_blank">twilio.com</a> (free trial includes test credits).</li>
+          <li class="mt-1"><strong>Account SID</strong> &amp; <strong>Auth Token</strong> &mdash; Find these on your
+            <a href="https://console.twilio.com/" target="_blank">Twilio Console</a> dashboard.</li>
+          <li class="mt-1"><strong>Phone Number</strong> &mdash; Buy a number in
+            <a href="https://console.twilio.com/us1/develop/phone-numbers/manage/incoming" target="_blank">
+              Phone Numbers &rarr; Manage &rarr; Buy a Number</a>.
+            Use the full E.164 format (e.g. <code>+12125551234</code>).</li>
+        </ol>
+        <div class="mt-2">
+          <strong>Test your connection:</strong> Enter your credentials, click <strong>Save All</strong>, then use the button below.
+        </div>
+      </div>
+    </div>
+    <div class="mb-3">
+      <div class="input-group" style="max-width:420px">
+        <input type="tel" class="form-control" id="test_sms_to"
+               placeholder="Recipient phone (e.g. +12125551234)">
+        <button class="btn btn-outline-primary" type="button" onclick="testTwilio()">
+          <i class="bi bi-send me-1"></i>Send Test SMS
+        </button>
+      </div>
+      <span id="testSmsStatus" class="small mt-1 d-block"></span>
+    </div>
+    <hr class="my-3">
+    {% endif %}
+
     {% if cat_key == 'meta' %}
     <div class="alert alert-info d-flex align-items-start gap-2 mb-3 py-2" style="font-size:.85rem">
       <i class="bi bi-info-circle-fill mt-1 flex-shrink-0"></i>
@@ -356,6 +388,32 @@ async function deleteFbAccount(suffix, btn) {
     }
   }
   row.remove();
+}
+
+async function testTwilio() {
+  const to = document.getElementById('test_sms_to').value.trim();
+  const status = document.getElementById('testSmsStatus');
+  if (!to) { status.className = 'small mt-1 d-block text-danger'; status.textContent = 'Enter a phone number first.'; return; }
+  status.className = 'small mt-1 d-block text-muted';
+  status.textContent = 'Sending...';
+  try {
+    const resp = await fetch('/settings/test-sms', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({to: to}),
+    });
+    const result = await resp.json();
+    if (result.ok) {
+      status.className = 'small mt-1 d-block text-success';
+      status.textContent = 'Test SMS sent successfully!';
+    } else {
+      status.className = 'small mt-1 d-block text-danger';
+      status.textContent = 'Failed: ' + (result.error || 'unknown error');
+    }
+  } catch (err) {
+    status.className = 'small mt-1 d-block text-danger';
+    status.textContent = 'Error: ' + err.message;
+  }
 }
 
 async function saveAllSettings() {
