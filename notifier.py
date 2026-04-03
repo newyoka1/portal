@@ -148,8 +148,17 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
     return {"emails": sent_email, "sms": sent_sms}
 
 
+def _normalize_phone(number: str) -> str:
+    """Ensure phone number is in E.164 format (e.g. +12125551234)."""
+    number = number.strip()
+    if not number.startswith("+"):
+        number = "+1" + number.lstrip("1")  # assume US if no country code
+    return number
+
+
 def _send_sms(to: str, body: str) -> bool:
     """Send an SMS via Twilio. Returns True on success, False on failure or if unconfigured."""
+    to = _normalize_phone(to)
     from portal_config import get_setting
 
     sid   = get_setting("TWILIO_ACCOUNT_SID", "")

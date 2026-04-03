@@ -113,6 +113,10 @@ async def test_sms(
     if not to:
         return JSONResponse({"ok": False, "error": "No phone number provided"}, status_code=400)
 
+    # Auto-prepend +1 for bare US numbers
+    if not to.startswith("+"):
+        to = "+1" + to.lstrip("1")
+
     from notifier import _send_sms
     ok = _send_sms(to=to, body="Politika Portal — Twilio test SMS. Your connection is working!")
     if ok:
