@@ -4,8 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Email Approval — Politika</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" media="print" onload="this.media='all'">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -357,10 +360,11 @@
           </div>
         </div>
         <iframe
+          id="email-frame"
           class="email-body-frame"
           sandbox="allow-same-origin allow-popups"
-          srcdoc="{{ email.html_body | e }}"
           onload="autoHeight(this)"
+          loading="lazy"
         ></iframe>
       </div>
     </div>
@@ -457,13 +461,11 @@
 function autoHeight(frame) {
   try {
     const doc = frame.contentDocument;
-    // Immediate resize based on current content
     const resize = () => {
       const h = doc.body.scrollHeight;
       frame.style.height = Math.max(h + 32, 300) + 'px';
     };
     resize();
-    // Resize again after all images finish loading
     const imgs = doc.querySelectorAll('img');
     let pending = imgs.length;
     if (!pending) return;
@@ -474,6 +476,14 @@ function autoHeight(frame) {
     });
   } catch(e) {}
 }
+
+// Inject email body after page paint so layout renders instantly
+{% if email and not done %}
+requestAnimationFrame(() => {
+  const frame = document.getElementById('email-frame');
+  if (frame) frame.srcdoc = {{ email.html_body | tojson }};
+});
+{% endif %}
 </script>
 </body>
 </html>
