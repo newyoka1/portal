@@ -205,6 +205,15 @@ def _startup() -> BackgroundScheduler:
     scheduler.add_job(purge_expired_sessions, "interval", hours=1, id="session_cleanup")
 
     scheduler.start()
+
+    # Pre-warm enrichment stats cache in background thread
+    try:
+        from routers.voter_pipeline import refresh_enrich_cache
+        refresh_enrich_cache()
+        logging.info("Enrichment stats: background computation started")
+    except Exception as e:
+        logging.warning("Enrichment stats pre-warm failed: %s", e)
+
     return scheduler
 
 

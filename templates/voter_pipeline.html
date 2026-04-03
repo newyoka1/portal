@@ -1752,7 +1752,7 @@ function toggleEnrichCard() {
   const open    = body.style.display === 'none';
   body.style.display     = open ? '' : 'none';
   chevron.style.transform = open ? 'rotate(180deg)' : 'rotate(0deg)';
-  if (open && body.querySelector('.spinner-border')) loadEnrichStats();
+  if (open && body.querySelector('.spinner-border')) loadEnrichStats(true);
 }
 
 /* ── CRM Health loader ─────────────────────────────────────────────────── */
@@ -1866,8 +1866,20 @@ async function loadEnrichStats(silent) {
   if (accordion) accordion.innerHTML = '';
 
   try {
-    const resp = await fetch('/voter-pipeline/enrichment-stats');
+    const url = silent ? '/voter-pipeline/enrichment-stats' : '/voter-pipeline/enrichment-stats?refresh=1';
+    const resp = await fetch(url);
     const d    = await resp.json();
+
+    // Background computation in progress — poll every 3s
+    if (d.loading) {
+      if (loading) {
+        loading.classList.remove('d-none');
+        loading.innerHTML = '<div class="spinner-border spinner-border-sm me-2" role="status"></div>Computing stats in background\u2026 <span class="text-muted" style="font-size:.78rem">(auto-refreshes when ready)</span>';
+      }
+      setTimeout(function() { loadEnrichStats(true); }, 3000);
+      return;
+    }
+
     if (loading) loading.classList.add('d-none');
 
     if (d.error) {

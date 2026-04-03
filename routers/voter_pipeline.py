@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import zipfile
+import threading
 import time as _time
 
 import uuid
@@ -27,9 +28,9 @@ def _has_voter_access(user: User) -> bool:
     """True if user can access any part of the voter pipeline."""
     return bool(user.is_admin or user.voter_role in ("full", "export_viewer"))
 
-# -- Enrichment stats cache (avoids 80s+ query on every click) --
-_enrich_cache = {"data": None, "ts": 0}
-_ENRICH_CACHE_TTL = 600  # 10 minutes
+# -- Enrichment stats: background computation + cache -------------------------
+_enrich_cache = {"data": None, "ts": 0, "computing": False}
+_ENRICH_CACHE_TTL = 3600  # 1 hour — data rarely changes
 
 
 def _is_export_viewer(user: User) -> bool:
@@ -467,20 +468,15 @@ def fb_donor_audiences(dist_type: str = "", dist_val: str = "", current_user: Us
 
 
 
-@router.get("/enrichment-stats")
-def enrichment_stats(current_user: User = Depends(require_voter_full)):
-    """Return voter file enrichment coverage statistics."""
-    # Serve from cache if fresh
-    if _enrich_cache["data"] and (_time.time() - _enrich_cache["ts"]) < _ENRICH_CACHE_TTL:
-        return JSONResponse(_enrich_cache["data"])
-    env = _build_env()
+def _compute_enrich_stats():
+    """Heavy DB work — runs in a background thread. Stores result in _enrich_cache."""
+    import logging
+    log = logging.getLogger(__name__)
+    _enrich_cache["computing"] = True
     try:
+        env = _build_env()
         conn = _crm_connect(env, database="nys_voter_tagging",
-                            read_timeout=120, connect_timeout=15)
-    except Exception as exc:
-        return JSONResponse({"error": f"DB connect failed: {exc}"}, status_code=500)
-
-    try:
+                            read_timeout=180, connect_timeout=15)
         cur = conn.cursor()
 
         # Detect optional columns
@@ -677,11 +673,46 @@ def enrichment_stats(current_user: User = Depends(require_voter_full)):
         }
         _enrich_cache["data"] = payload
         _enrich_cache["ts"] = _time.time()
-        return JSONResponse(payload)
+        log.info("Enrichment stats computed successfully (%d voters)", total)
     except Exception as exc:
-        try: conn.close()
-        except Exception: pass
-        return JSONResponse({"error": str(exc)}, status_code=500)
+        log.error("Enrichment stats computation failed: %s", exc)
+        _enrich_cache["data"] = {"error": str(exc)}
+        _enrich_cache["ts"] = _time.time()
+    finally:
+        _enrich_cache["computing"] = False
+
+
+def refresh_enrich_cache():
+    """Kick off background thread to recompute enrichment stats (if not already running)."""
+    if _enrich_cache["computing"]:
+        return
+    threading.Thread(target=_compute_enrich_stats, daemon=True).start()
+
+
+@router.get("/enrichment-stats")
+def enrichment_stats(
+    current_user: User = Depends(require_voter_full),
+    refresh: int = 0,
+):
+    """Return cached enrichment stats instantly. Returns {loading:true} while computing."""
+    # Force refresh requested
+    if refresh:
+        _enrich_cache["data"] = None
+        _enrich_cache["ts"] = 0
+        refresh_enrich_cache()
+        return JSONResponse({"loading": True})
+
+    # Cache is fresh — serve instantly
+    if _enrich_cache["data"] and (_time.time() - _enrich_cache["ts"]) < _ENRICH_CACHE_TTL:
+        return JSONResponse(_enrich_cache["data"])
+
+    # Background computation in progress — tell JS to poll
+    if _enrich_cache["computing"]:
+        return JSONResponse({"loading": True})
+
+    # No data and not computing — kick off background thread
+    refresh_enrich_cache()
+    return JSONResponse({"loading": True})
 
 
 
