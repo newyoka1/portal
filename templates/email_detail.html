@@ -39,11 +39,10 @@
         </div>
       </div>
 
-      <!-- Sandboxed HTML email renderer -->
+      <!-- Sandboxed HTML email renderer (injected via JS for fast page load) -->
       <iframe
         id="email-frame"
         sandbox="allow-same-origin allow-popups"
-        srcdoc="{{ email.html_body | e }}"
         onload="autoHeight(this)"
       ></iframe>
     </div>
@@ -295,12 +294,30 @@
 
 {% block scripts %}
 <script>
-// Auto-size iframe to its content height
+// Auto-size iframe to its content height (progressive: immediate + after images)
 function autoHeight(frame) {
   try {
-    frame.style.height = frame.contentDocument.body.scrollHeight + 32 + 'px';
-  } catch(e) { /* cross-origin content — leave min-height */ }
+    const doc = frame.contentDocument;
+    const resize = () => {
+      frame.style.height = Math.max(doc.body.scrollHeight + 32, 300) + 'px';
+    };
+    resize();
+    const imgs = doc.querySelectorAll('img');
+    let pending = imgs.length;
+    if (!pending) return;
+    imgs.forEach(img => {
+      if (img.complete) { pending--; return; }
+      img.addEventListener('load', () => { pending--; if (!pending) resize(); });
+      img.addEventListener('error', () => { pending--; if (!pending) resize(); });
+    });
+  } catch(e) {}
 }
+
+// Inject email body after page paint so the page shell renders instantly
+requestAnimationFrame(() => {
+  const frame = document.getElementById('email-frame');
+  if (frame) frame.srcdoc = {{ email.html_body | tojson }};
+});
 
 function toggleCommentOnly(e) {
   e.preventDefault();
