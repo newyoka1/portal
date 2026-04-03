@@ -1533,6 +1533,75 @@ async function runCrmStream(cmd, extra, triggerBtn) {
   }
 }
 
+/* ── Export progress bar (global so resume path can use it too) ─────────── */
+var _exSteps = 0, _exDone = 0, _exCur = '', _exAudTotal = 0;
+function _resetExportBar() {
+  _exSteps = 0; _exDone = 0; _exCur = ''; _exAudTotal = 0;
+  var pw = document.getElementById('export-progress');
+  if (pw) pw.classList.add('d-none');
+  var bar = document.getElementById('export-prog-bar');
+  if (bar) { bar.style.width = '0%'; bar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-info'; }
+}
+function _updateExportBar(chunk) {
+  var pw = document.getElementById('export-progress');
+  if (!pw) return;
+
+  // "Creating X tab..." — a new core step
+  var creating = chunk.match(/Creating (.+?) tab\.\.\./);
+  if (creating) { _exSteps++; _exCur = creating[1]; pw.classList.remove('d-none'); }
+
+  // "Creating N issue/turnout tabs..." — batch of audience tabs
+  var batch = chunk.match(/Creating (\d+) (issue|turnout) tabs/);
+  if (batch) { var n = parseInt(batch[1]); _exAudTotal += n; _exSteps += n; _exCur = batch[2] + ' audiences'; pw.classList.remove('d-none'); }
+
+  // "[2/15] filename.csv" — audience tab start
+  var aud = chunk.match(/\[(\d+)\/(\d+)\]\s+(.+\.csv)/);
+  if (aud) { _exCur = aud[3].replace('.csv',''); }
+
+  // "OK X" — step completed
+  var okLines = chunk.match(/^\s*OK /gm);
+  if (okLines) { _exDone += okLines.length; }
+
+  // CRM enrich (inline, no "Creating")
+  if (/CRM enrich:/.test(chunk) && !/Creating/.test(chunk)) { _exSteps++; _exDone++; }
+
+  // "Saving workbook..."
+  if (/Saving workbook/.test(chunk)) { _exCur = 'Saving workbook'; }
+
+  if (_exSteps === 0) return;
+  pw.classList.remove('d-none');
+
+  var pct = Math.min(100, Math.round(_exDone / _exSteps * 100));
+  var bar = document.getElementById('export-prog-bar');
+  var stepEl = document.getElementById('export-prog-step');
+  var pctEl = document.getElementById('export-prog-pct');
+  var detailEl = document.getElementById('export-prog-detail');
+
+  if (bar) bar.style.width = pct + '%';
+  if (pctEl) pctEl.textContent = pct + '% \u00b7 ' + _exDone + '/' + _exSteps + ' tabs';
+  if (stepEl) stepEl.textContent = _exDone < _exSteps ? _exCur + '\u2026' : 'Finishing\u2026';
+
+  // Sub-progress: "...X voters/phones/emails written"
+  var sub = chunk.match(/\.\.\.([\d,]+)\s+(voters|phones|emails|donors|unmatched voters)\s+written/);
+  if (sub && detailEl) detailEl.textContent = sub[1] + ' ' + sub[2] + ' written';
+  if (okLines && detailEl) detailEl.textContent = '';
+
+  // SUCCESS
+  if (/SUCCESS!/.test(chunk)) {
+    if (bar) { bar.style.width = '100%'; bar.className = 'progress-bar bg-success'; }
+    if (pctEl) pctEl.textContent = '100%';
+    if (stepEl) stepEl.textContent = 'Export complete';
+    if (detailEl) detailEl.textContent = '';
+  }
+
+  // Error
+  if (/Traceback|ERROR:/.test(chunk)) {
+    if (bar) bar.className = 'progress-bar bg-danger';
+    if (stepEl) stepEl.textContent = 'Error';
+    if (detailEl) detailEl.textContent = '';
+  }
+}
+
 /* ── Generic stream (non-CRM tabs) ──────────────────────────────────────── */
 async function runStream(cmd, extra, tab, triggerBtn) {
   const container = document.getElementById('log-' + tab);
@@ -1551,8 +1620,7 @@ async function runStream(cmd, extra, tab, triggerBtn) {
 `;
 
   // Reset export progress bar
-  var _epw = document.getElementById('export-progress');
-  if (_epw) _epw.classList.add('d-none');
+  _resetExportBar();
   if (!wrap) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   if (triggerBtn) {
@@ -1649,69 +1717,6 @@ async function runStream(cmd, extra, tab, triggerBtn) {
       if (bar2) { bar2.style.width = '100%'; bar2.className = 'progress-bar bg-success'; }
       var pctEl2 = document.getElementById('bridge-prog-pct');
       if (pctEl2) pctEl2.textContent = 'done';
-    }
-  }
-
-  // ── Export step progress bar ──────────────────────────────────────────
-  let _exSteps = 0, _exDone = 0, _exCur = '', _exAudTotal = 0, _exAudDone = 0;
-  function _updateExportBar(chunk) {
-    var pw = document.getElementById('export-progress');
-    if (!pw) return;
-
-    // "Creating X tab..." — a new core step
-    var creating = chunk.match(/Creating (.+?) tab\.\.\./);
-    if (creating) { _exSteps++; _exCur = creating[1]; pw.classList.remove('d-none'); }
-
-    // "Creating N issue/turnout tabs..." — batch of audience tabs
-    var batch = chunk.match(/Creating (\d+) (issue|turnout) tabs/);
-    if (batch) { var n = parseInt(batch[1]); _exAudTotal += n; _exSteps += n; _exCur = batch[2] + ' audiences'; pw.classList.remove('d-none'); }
-
-    // "[2/15] filename.csv" — audience tab start
-    var aud = chunk.match(/\[(\d+)\/(\d+)\]\s+(.+\.csv)/);
-    if (aud) { _exCur = aud[3].replace('.csv',''); }
-
-    // "OK X" — step completed
-    var okLines = chunk.match(/^\s*OK /gm);
-    if (okLines) { _exDone += okLines.length; }
-
-    // CRM enrich (inline, no "Creating")
-    if (/CRM enrich:/.test(chunk) && !/Creating/.test(chunk)) { _exSteps++; _exDone++; }
-
-    // "Saving workbook..."
-    if (/Saving workbook/.test(chunk)) { _exCur = 'Saving workbook'; }
-
-    if (_exSteps === 0) return;
-    pw.classList.remove('d-none');
-
-    var pct = Math.min(100, Math.round(_exDone / _exSteps * 100));
-    var bar = document.getElementById('export-prog-bar');
-    var stepEl = document.getElementById('export-prog-step');
-    var pctEl = document.getElementById('export-prog-pct');
-    var detailEl = document.getElementById('export-prog-detail');
-
-    if (bar) bar.style.width = pct + '%';
-    if (pctEl) pctEl.textContent = pct + '% \u00b7 ' + _exDone + '/' + _exSteps + ' tabs';
-    if (stepEl) stepEl.textContent = _exDone < _exSteps ? _exCur + '\u2026' : 'Finishing\u2026';
-
-    // Sub-progress: "...X voters/phones/emails written"
-    var sub = chunk.match(/\.\.\.([\d,]+)\s+(voters|phones|emails|donors|unmatched voters)\s+written/);
-    if (sub && detailEl) detailEl.textContent = sub[1] + ' ' + sub[2] + ' written';
-    // Clear detail on step complete
-    if (okLines && detailEl) detailEl.textContent = '';
-
-    // SUCCESS
-    if (/SUCCESS!/.test(chunk)) {
-      if (bar) { bar.style.width = '100%'; bar.className = 'progress-bar bg-success'; }
-      if (pctEl) pctEl.textContent = '100%';
-      if (stepEl) stepEl.textContent = 'Export complete';
-      if (detailEl) detailEl.textContent = '';
-    }
-
-    // Error
-    if (/Traceback|ERROR:/.test(chunk)) {
-      if (bar) bar.className = 'progress-bar bg-danger';
-      if (stepEl) stepEl.textContent = 'Error';
-      if (detailEl) detailEl.textContent = '';
     }
   }
 
@@ -2142,7 +2147,7 @@ async function _pollTask(taskId, container, dlBarCallback, cmd, killBtnId) {
     container.classList.remove('d-none');
     container.textContent = `▶ Resuming: ${cmd}\n`;
     const killBtnId = KILL_BTN_MAP[tab] || 'kill-task-btn';
-    _pollTask(id, container, null, cmd, killBtnId).then(() => {
+    _pollTask(id, container, _updateExportBar, cmd, killBtnId).then(() => {
       localStorage.removeItem('vp_task');
     });
   } catch (e) { localStorage.removeItem('vp_task'); }
