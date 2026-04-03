@@ -379,8 +379,19 @@
               <button class="btn btn-sm btn-outline-light py-0" onclick="document.getElementById('log-export-wrap').classList.add('d-none')">&#215;</button>
             </div>
           </div>
+          <!-- Export progress bar -->
+          <div id="export-progress" class="d-none" style="background:#1a1d21;padding:.5rem .75rem">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <span class="text-light small fw-semibold" id="export-prog-step"></span>
+              <span class="text-info small fw-semibold" id="export-prog-pct"></span>
+            </div>
+            <div class="progress" style="height:6px">
+              <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" id="export-prog-bar" style="width:0%"></div>
+            </div>
+            <div class="text-muted mt-1" style="font-size:.7rem" id="export-prog-detail"></div>
+          </div>
           <div id="log-export" class="bg-dark text-light p-3 rounded-bottom small"
-               style="max-height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
+               style="max-height:250px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;font-family:monospace"></div>
         </div>
       </div>
 
@@ -1538,6 +1549,10 @@ async function runStream(cmd, extra, tab, triggerBtn) {
   container.classList.remove('d-none');
   container.textContent = `▶ Running: ${cmd}${extra ? ' ' + extra : ''}
 `;
+
+  // Reset export progress bar
+  var _epw = document.getElementById('export-progress');
+  if (_epw) _epw.classList.add('d-none');
   if (!wrap) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   if (triggerBtn) {
@@ -1637,7 +1652,70 @@ async function runStream(cmd, extra, tab, triggerBtn) {
     }
   }
 
-  function _updateBars(chunk) { _updateDlBar(chunk); _updateBridgeBar(chunk); }
+  // ── Export step progress bar ──────────────────────────────────────────
+  let _exSteps = 0, _exDone = 0, _exCur = '', _exAudTotal = 0, _exAudDone = 0;
+  function _updateExportBar(chunk) {
+    var pw = document.getElementById('export-progress');
+    if (!pw) return;
+
+    // "Creating X tab..." — a new core step
+    var creating = chunk.match(/Creating (.+?) tab\.\.\./);
+    if (creating) { _exSteps++; _exCur = creating[1]; pw.classList.remove('d-none'); }
+
+    // "Creating N issue/turnout tabs..." — batch of audience tabs
+    var batch = chunk.match(/Creating (\d+) (issue|turnout) tabs/);
+    if (batch) { var n = parseInt(batch[1]); _exAudTotal += n; _exSteps += n; _exCur = batch[2] + ' audiences'; pw.classList.remove('d-none'); }
+
+    // "[2/15] filename.csv" — audience tab start
+    var aud = chunk.match(/\[(\d+)\/(\d+)\]\s+(.+\.csv)/);
+    if (aud) { _exCur = aud[3].replace('.csv',''); }
+
+    // "OK X" — step completed
+    var okLines = chunk.match(/^\s*OK /gm);
+    if (okLines) { _exDone += okLines.length; }
+
+    // CRM enrich (inline, no "Creating")
+    if (/CRM enrich:/.test(chunk) && !/Creating/.test(chunk)) { _exSteps++; _exDone++; }
+
+    // "Saving workbook..."
+    if (/Saving workbook/.test(chunk)) { _exCur = 'Saving workbook'; }
+
+    if (_exSteps === 0) return;
+    pw.classList.remove('d-none');
+
+    var pct = Math.min(100, Math.round(_exDone / _exSteps * 100));
+    var bar = document.getElementById('export-prog-bar');
+    var stepEl = document.getElementById('export-prog-step');
+    var pctEl = document.getElementById('export-prog-pct');
+    var detailEl = document.getElementById('export-prog-detail');
+
+    if (bar) bar.style.width = pct + '%';
+    if (pctEl) pctEl.textContent = pct + '% \u00b7 ' + _exDone + '/' + _exSteps + ' tabs';
+    if (stepEl) stepEl.textContent = _exDone < _exSteps ? _exCur + '\u2026' : 'Finishing\u2026';
+
+    // Sub-progress: "...X voters/phones/emails written"
+    var sub = chunk.match(/\.\.\.([\d,]+)\s+(voters|phones|emails|donors|unmatched voters)\s+written/);
+    if (sub && detailEl) detailEl.textContent = sub[1] + ' ' + sub[2] + ' written';
+    // Clear detail on step complete
+    if (okLines && detailEl) detailEl.textContent = '';
+
+    // SUCCESS
+    if (/SUCCESS!/.test(chunk)) {
+      if (bar) { bar.style.width = '100%'; bar.className = 'progress-bar bg-success'; }
+      if (pctEl) pctEl.textContent = '100%';
+      if (stepEl) stepEl.textContent = 'Export complete';
+      if (detailEl) detailEl.textContent = '';
+    }
+
+    // Error
+    if (/Traceback|ERROR:/.test(chunk)) {
+      if (bar) bar.className = 'progress-bar bg-danger';
+      if (stepEl) stepEl.textContent = 'Error';
+      if (detailEl) detailEl.textContent = '';
+    }
+  }
+
+  function _updateBars(chunk) { _updateDlBar(chunk); _updateBridgeBar(chunk); _updateExportBar(chunk); }
 
   try {
     const resp = await fetch('/voter-pipeline/run', { method: 'POST', body: fd });
