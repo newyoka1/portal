@@ -122,15 +122,14 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
     """
     from email.utils import formataddr
     from portal_config import get_setting
-    # Use per-client from_email if set, otherwise fall back to global setting
+    # Always send from the primary Gmail address (only authorized Send-As).
+    # Per-client from_email is used as Reply-To if different.
+    gmail_address = get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
     client_sender = email.client.from_email if email.client and email.client.from_email else ""
-    sender_email = client_sender or get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
-    # Build proper RFC 2822 "Display Name <email>" format
     sender_name = email.client.from_name if email.client and email.client.from_name else ""
-    sender = formataddr((sender_name, sender_email)) if sender_name else sender_email
-
-    # Update Gmail Send-As alias display name if needed
-    _ensure_send_as_name(sender_email, sender_name)
+    # MIME From must use the authorized Send-As address so Gmail preserves the display name
+    sender = formataddr((sender_name, gmail_address)) if sender_name else gmail_address
+    reply_to = client_sender if client_sender and client_sender != gmail_address else ""
     try:
         service = _gmail_service()
     except Exception as exc:
@@ -167,6 +166,8 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
         msg["From"]    = sender
         msg["To"]      = approver_email
         msg["Subject"] = f"[Approval Needed] {email.subject}"
+        if reply_to:
+            msg["Reply-To"] = reply_to
 
         msg.attach(MIMEText(html_body, "html"))
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
