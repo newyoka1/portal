@@ -8,7 +8,7 @@ from email.mime.text import MIMEText
 
 from googleapiclient.errors import HttpError
 
-from gmail_poller import _gmail_service   # reuse cached service
+from gmail_poller import _gmail_service, SCOPES   # reuse cached service
 
 logger = logging.getLogger(__name__)
 
@@ -77,42 +77,6 @@ def _safe_substitute(template: str, variables: dict) -> str:
         return result
 
 
-def _ensure_send_as_name(send_as_email: str, display_name: str) -> None:
-    """Update the Gmail Send-As alias display name so recipients see the right name.
-
-    Uses a separate credentials object with the gmail.settings.basic scope
-    so that a missing DWD scope doesn't break the main mail-sending service.
-    """
-    if not display_name or not send_as_email:
-        return
-    try:
-        from gcp_credentials import build_credentials
-        from googleapiclient.discovery import build
-        from portal_config import get_setting
-
-        impersonate = get_setting("GMAIL_ADDRESS")
-        if not impersonate:
-            return
-        creds = build_credentials(
-            ["https://www.googleapis.com/auth/gmail.settings.basic"], impersonate
-        )
-        svc = build("gmail", "v1", credentials=creds, cache_discovery=False)
-
-        send_as = svc.users().settings().sendAs().get(
-            userId="me", sendAsEmail=send_as_email
-        ).execute()
-        if send_as.get("displayName") != display_name:
-            svc.users().settings().sendAs().update(
-                userId="me",
-                sendAsEmail=send_as_email,
-                body={"displayName": display_name, "sendAsEmail": send_as_email},
-            ).execute()
-            logger.info("Updated Send-As display name for %s to '%s'", send_as_email, display_name)
-    except HttpError as exc:
-        logger.warning("Could not update Send-As name for %s: %s", send_as_email, exc)
-    except Exception as exc:
-        logger.warning("Send-As name update skipped: %s", exc)
-
 
 def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
     """
@@ -122,18 +86,25 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
     """
     from email.utils import formataddr
     from portal_config import get_setting
-    # Always send from the primary Gmail address (only authorized Send-As).
-    # Per-client from_email is used as Reply-To if different.
     gmail_address = get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
     client_sender = email.client.from_email if email.client and email.client.from_email else ""
     sender_name = email.client.from_name if email.client and email.client.from_name else ""
-    # MIME From must use the authorized Send-As address so Gmail preserves the display name
-    sender = formataddr((sender_name, gmail_address)) if sender_name else gmail_address
-    reply_to = client_sender if client_sender and client_sender != gmail_address else ""
+    # Use client's from_email if set (impersonate that user), otherwise default
+    sender_email = client_sender or gmail_address
+    sender = formataddr((sender_name, sender_email)) if sender_name else sender_email
+
+    # Build Gmail service impersonating the actual sender address (DWD)
     try:
-        service = _gmail_service()
+        if sender_email != gmail_address:
+            from gcp_credentials import build_credentials
+            from googleapiclient.discovery import build as build_svc
+            creds = build_credentials(SCOPES, sender_email)
+            service = build_svc("gmail", "v1", credentials=creds, cache_discovery=False)
+            logger.info("Sending as %s (impersonating via DWD)", sender_email)
+        else:
+            service = _gmail_service()
     except Exception as exc:
-        logger.error("Notifier: could not build Gmail service: %s", exc)
+        logger.error("Notifier: could not build Gmail service for %s: %s", sender_email, exc)
         return {"emails": 0, "sms": 0}
 
     sent_email = 0
@@ -166,8 +137,6 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
         msg["From"]    = sender
         msg["To"]      = approver_email
         msg["Subject"] = f"[Approval Needed] {email.subject}"
-        if reply_to:
-            msg["Reply-To"] = reply_to
 
         msg.attach(MIMEText(html_body, "html"))
         raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
