@@ -349,7 +349,7 @@
               <div class="sender-email">{{ email.from_address }}</div>
             </div>
             <div class="email-meta">
-              <div class="email-date">{{ email.received_at.strftime('%b %d, %Y at %-I:%M %p') }}</div>
+              <div class="email-date">{{ email.received_at.strftime('%b %d, %Y at %I:%M %p').lstrip('0') }}</div>
               {% if email.client %}
                 <span class="email-client-badge">{{ email.client.name }}</span>
               {% endif %}
@@ -456,8 +456,22 @@
 <script>
 function autoHeight(frame) {
   try {
-    const h = frame.contentDocument.body.scrollHeight;
-    frame.style.height = Math.max(h + 32, 400) + 'px';
+    const doc = frame.contentDocument;
+    // Immediate resize based on current content
+    const resize = () => {
+      const h = doc.body.scrollHeight;
+      frame.style.height = Math.max(h + 32, 300) + 'px';
+    };
+    resize();
+    // Resize again after all images finish loading
+    const imgs = doc.querySelectorAll('img');
+    let pending = imgs.length;
+    if (!pending) return;
+    imgs.forEach(img => {
+      if (img.complete) { pending--; return; }
+      img.addEventListener('load', () => { pending--; if (!pending) resize(); });
+      img.addEventListener('error', () => { pending--; if (!pending) resize(); });
+    });
   } catch(e) {}
 }
 </script>
