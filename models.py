@@ -135,6 +135,7 @@ class Email(Base):
     from_address  = Column(String(200), nullable=False)
     from_name     = Column(String(200), default="")
     html_body     = Column(Text, default="")
+    clean_html    = Column(Text, default="")  # sanitized version for fast rendering
     text_body     = Column(Text, default="")
     origin_system = Column(String(50), default=OriginSystem.unknown)
     received_at          = Column(DateTime, nullable=False)

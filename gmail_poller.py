@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from database import SessionLocal
 from email_parser import detect_origin, extract_html_body, extract_text_body, get_raw_headers
+from email_sanitizer import sanitize_email_html
 from gcp_credentials import build_credentials
 from models import Email
 
@@ -154,6 +155,7 @@ def _process_message(service, msg_id: str, db: Session) -> int:
         from_address     = from_address[:200],
         from_name        = from_name[:200],
         html_body        = html_body,
+        clean_html       = sanitize_email_html(html_body),
         text_body        = text_body,
         origin_system    = origin,
         received_at      = received_at,

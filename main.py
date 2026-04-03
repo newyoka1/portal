@@ -112,6 +112,7 @@ def _startup() -> BackgroundScheduler:
 
     with engine.connect() as conn:
         _add_column_if_missing(conn, "emails",    "sent_for_approval_at", "DATETIME NULL")
+        _add_column_if_missing(conn, "emails",    "clean_html", "TEXT NULL")
         _add_column_if_missing(conn, "approvals", "token", "VARCHAR(100) NULL")
         _add_column_if_missing(conn, "clients",   "from_name", "VARCHAR(200) NULL")
         _add_column_if_missing(conn, "clients",   "from_email", "VARCHAR(200) NULL")
@@ -144,6 +145,23 @@ def _startup() -> BackgroundScheduler:
         _make_nullable(conn, "approvals",        "user_id", "INT NULL")
         _make_nullable(conn, "comments",         "user_id", "INT NULL")
         _add_column_if_missing(conn, "comments", "commenter_name", "VARCHAR(200) NULL")
+
+    # Backfill clean_html for existing emails that don't have it yet
+    try:
+        from email_sanitizer import sanitize_email_html as _sanitize
+        _bdb = SessionLocal()
+        _dirty = _bdb.query(Email).filter(
+            Email.html_body != None,
+            (Email.clean_html == None) | (Email.clean_html == ""),
+        ).all()
+        for _e in _dirty:
+            _e.clean_html = _sanitize(_e.html_body)
+        if _dirty:
+            _bdb.commit()
+            logging.info("Backfilled clean_html for %d email(s)", len(_dirty))
+        _bdb.close()
+    except Exception as exc:
+        logging.warning("clean_html backfill failed: %s", exc)
 
     # Single unified poller — checks Gmail for both email approvals and Meta receipts
     _sched = "hourly"
@@ -374,11 +392,14 @@ def approval_log(
 # ---------------------------------------------------------------------------
 @app.get("/approve/{token}/body", response_class=HTMLResponse)
 def approve_email_body(token: str, db: Session = Depends(get_db)):
-    """Serve raw email HTML body for iframe — no auth, token-gated."""
+    """Serve clean email HTML body for iframe — no auth, token-gated."""
     approval = db.query(Approval).filter(Approval.token == token).first()
     if not approval:
         return HTMLResponse("Not found", status_code=404)
-    return HTMLResponse(approval.email.html_body or "")
+    email = approval.email
+    # Prefer clean_html; fall back to raw if not yet sanitized
+    body = email.clean_html or email.html_body or ""
+    return HTMLResponse(body)
 
 
 @app.get("/approve/{token}", response_class=HTMLResponse)
