@@ -32,6 +32,7 @@ def email_detail(
     email_id: int,
     request: Request,
     notified: str = "",
+    sms: str = "",
     db: Session = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
@@ -46,11 +47,16 @@ def email_detail(
     flash = None
     if notified:
         n = int(notified)
-        flash = {
-            "type": "success" if n else "warning",
-            "message": f"Approval request sent to {n} approver(s)." if n
-                       else "No pending approvers to notify.",
-        }
+        s = int(sms) if sms else 0
+        parts = []
+        if n:
+            parts.append(f"{n} email(s)")
+        if s:
+            parts.append(f"{s} SMS")
+        if parts:
+            flash = {"type": "success", "message": f"Approval request sent: {', '.join(parts)}."}
+        else:
+            flash = {"type": "warning", "message": "No pending approvers to notify."}
 
     return templates.TemplateResponse(request, "email_detail.html", {
         "email":        email,
@@ -104,6 +110,7 @@ def assign_email(
                 user_id=ca.user_id,
                 approver_name=ca.approver_name,
                 approver_email=ca.approver_email,
+                approver_phone=ca.approver_phone,
                 required=ca.required,
                 decision="pending",
             ))
@@ -176,14 +183,19 @@ def send_for_approval(
 
     from portal_config import get_setting
     app_url        = get_setting("APP_URL", "http://localhost:8000").rstrip("/")
-    approval_pairs = [(a.display_name, a.display_email, a.token) for a in pending_approvals]
-    sent           = send_approval_requests(email, approval_pairs, app_url)
+    approval_pairs = [
+        (a.display_name, a.display_email, a.approver_phone or "", a.token)
+        for a in pending_approvals
+    ]
+    result = send_approval_requests(email, approval_pairs, app_url)
 
     email.sent_for_approval_at = datetime.now(timezone.utc)
     db.commit()
 
+    sent_emails = result.get("emails", 0) if isinstance(result, dict) else result
+    sent_sms    = result.get("sms", 0) if isinstance(result, dict) else 0
     return RedirectResponse(
-        f"/emails/{email_id}?notified={sent}", status_code=302
+        f"/emails/{email_id}?notified={sent_emails}&sms={sent_sms}", status_code=302
     )
 
 

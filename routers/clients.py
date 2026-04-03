@@ -99,6 +99,7 @@ def add_approver(
     client_id: int,
     approver_name: str = Form(...),
     approver_email: str = Form(...),
+    approver_phone: str = Form(""),
     required: str = Form("1"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
@@ -116,6 +117,7 @@ def add_approver(
             user_id=portal_user.id if portal_user else None,
             approver_name=approver_name.strip(),
             approver_email=email_addr,
+            approver_phone=approver_phone.strip() or None,
             required=required == "1",
         ))
         db.commit()

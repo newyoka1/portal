@@ -119,8 +119,10 @@ def _startup() -> BackgroundScheduler:
         # External approver support — name/email on client_approvers and approvals
         _add_column_if_missing(conn, "client_approvers", "approver_name",  "VARCHAR(200) NULL")
         _add_column_if_missing(conn, "client_approvers", "approver_email", "VARCHAR(200) NULL")
+        _add_column_if_missing(conn, "client_approvers", "approver_phone", "VARCHAR(30) NULL")
         _add_column_if_missing(conn, "approvals",        "approver_name",  "VARCHAR(200) NULL")
         _add_column_if_missing(conn, "approvals",        "approver_email", "VARCHAR(200) NULL")
+        _add_column_if_missing(conn, "approvals",        "approver_phone", "VARCHAR(30) NULL")
 
         # Make user_id nullable on client_approvers and approvals (for external approvers)
         def _make_nullable(conn, table, column, definition):

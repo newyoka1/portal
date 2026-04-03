@@ -72,6 +72,11 @@ DEFAULTS = [
     # Email Approval
     ("EMAIL_SUBJECT_FILTER", "test", "Subject Filter Word (only ingest emails containing this)", "email_approval", False),
 
+    # Twilio SMS (optional — for texting approval links)
+    ("TWILIO_ACCOUNT_SID",  "", "Twilio Account SID",              "twilio", True),
+    ("TWILIO_AUTH_TOKEN",   "", "Twilio Auth Token",               "twilio", True),
+    ("TWILIO_PHONE_NUMBER", "", "Twilio Phone Number (e.g. +1...)", "twilio", False),
+
     # FB Ad Approval
     ("BASE_URL", "https://connect.politikanyc.com/fb", "FB Ad Approval Base URL", "fb_approval", False),
 

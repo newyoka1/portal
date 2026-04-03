@@ -61,7 +61,7 @@
         <div class="d-flex justify-content-between align-items-center mb-1">
           <div>
             <span class="small fw-semibold">{{ ca.display_name }}</span>
-            <br><span class="text-muted" style="font-size:.75rem">{{ ca.email }}</span>
+            <br><span class="text-muted" style="font-size:.75rem">{{ ca.email }}{% if ca.approver_phone %} · <i class="bi bi-phone"></i> {{ ca.approver_phone }}{% endif %}</span>
           </div>
           <div class="d-flex align-items-center gap-2">
             <span class="badge {{ 'bg-danger' if ca.required else 'bg-secondary' }}">
@@ -158,6 +158,11 @@
             <label class="form-label fw-semibold">Email</label>
             <input type="email" name="approver_email" class="form-control" required
                    placeholder="e.g. jane@example.com">
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Phone <span class="text-muted fw-normal small">(optional — for SMS approval link)</span></label>
+            <input type="tel" name="approver_phone" class="form-control"
+                   placeholder="e.g. +12125551234">
           </div>
           <div>
             <label class="form-label fw-semibold">Role</label>

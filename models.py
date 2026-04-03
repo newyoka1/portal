@@ -100,6 +100,7 @@ class ClientApprover(Base):
     user_id   = Column(Integer, ForeignKey("users.id"),   nullable=True)   # nullable for external approvers
     approver_name  = Column(String(200), nullable=True)   # external approver name
     approver_email = Column(String(200), nullable=True)   # external approver email
+    approver_phone = Column(String(30),  nullable=True)   # phone for SMS approval links
     required  = Column(Boolean, default=True)   # True = must approve, False = optional
 
     client    = relationship("Client", back_populates="approvers")
@@ -155,6 +156,7 @@ class Approval(Base):
     user_id         = Column(Integer, ForeignKey("users.id"),  nullable=True)   # nullable for external
     approver_name   = Column(String(200), nullable=True)
     approver_email  = Column(String(200), nullable=True)
+    approver_phone  = Column(String(30),  nullable=True)
     required        = Column(Boolean, default=True)
     decision        = Column(String(20), default=ApprovalDecision.pending)
     note            = Column(Text, default="")

@@ -37,3 +37,6 @@ openpyxl>=3.1.0
 
 # ── AI / Claude (Voter Chat) ──────────────────────────────────────────────
 anthropic>=0.39.0
+
+# ── Twilio SMS (optional — for texting approval links) ────────────────────
+twilio>=9.0.0

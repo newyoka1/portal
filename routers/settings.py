@@ -16,6 +16,7 @@ CATEGORIES = [
     ("meta",           "Facebook"),
     ("email",          "Email"),
     ("email_approval", "Email Approval"),
+    ("twilio",         "Twilio SMS"),
     ("fb_approval",    "Facebook Ad Approval"),
     ("voter",          "Voter"),
     ("ai",             "AI / Claude"),

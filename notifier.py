@@ -1,4 +1,4 @@
-"""Send approval-request notification emails via Gmail API."""
+"""Send approval-request notifications via Gmail API and Twilio SMS."""
 import base64
 import logging
 import os
@@ -12,11 +12,11 @@ from gmail_poller import _gmail_service   # reuse cached service
 logger = logging.getLogger(__name__)
 
 
-def send_approval_requests(email, approval_pairs: list, app_url: str) -> int:
+def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
     """
-    Send approval-request emails.
-    *approval_pairs* is a list of (name, email_addr, token_str) tuples.
-    Returns the count of messages successfully sent.
+    Send approval-request emails and SMS.
+    *approval_pairs* is a list of (name, email_addr, phone, token_str) tuples.
+    Returns {"emails": N, "sms": M} counts.
     """
     from portal_config import get_setting
     # Use per-client from_email if set, otherwise fall back to global setting
@@ -26,14 +26,16 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> int:
         service = _gmail_service()
     except Exception as exc:
         logger.error("Notifier: could not build Gmail service: %s", exc)
-        return 0
+        return {"emails": 0, "sms": 0}
 
-    sent        = 0
+    sent_email = 0
+    sent_sms   = 0
     client_name = email.client.name if email.client else "Unassigned"
 
-    for approver_name, approver_email, token in approval_pairs:
+    for approver_name, approver_email, approver_phone, token in approval_pairs:
         approve_url = f"{app_url}/approve/{token}"
 
+        # ── Send email ────────────────────────────────────────────────
         msg = MIMEMultipart("alternative")
         msg["From"]    = sender
         msg["To"]      = approver_email
@@ -86,9 +88,48 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> int:
             service.users().messages().send(
                 userId="me", body={"raw": raw}
             ).execute()
-            sent += 1
-            logger.info("Approval request sent to %s for email %d", approver_email, email.id)
+            sent_email += 1
+            logger.info("Approval email sent to %s for email %d", approver_email, email.id)
         except HttpError as exc:
-            logger.error("Failed to notify %s: %s", approver_email, exc)
+            logger.error("Failed to email %s: %s", approver_email, exc)
 
-    return sent
+        # ── Send SMS (if phone number and Twilio configured) ──────────
+        if approver_phone:
+            sms_ok = _send_sms(
+                to=approver_phone,
+                body=f"Approval needed: {email.subject}\nReview: {approve_url}",
+            )
+            if sms_ok:
+                sent_sms += 1
+
+    return {"emails": sent_email, "sms": sent_sms}
+
+
+def _send_sms(to: str, body: str) -> bool:
+    """Send an SMS via Twilio. Returns True on success, False on failure or if unconfigured."""
+    from portal_config import get_setting
+
+    sid   = get_setting("TWILIO_ACCOUNT_SID", "")
+    token = get_setting("TWILIO_AUTH_TOKEN", "")
+    from_number = get_setting("TWILIO_PHONE_NUMBER", "")
+
+    if not (sid and token and from_number):
+        logger.debug("Twilio not configured — skipping SMS to %s", to)
+        return False
+
+    try:
+        from twilio.rest import Client
+        client = Client(sid, token)
+        message = client.messages.create(
+            body=body,
+            from_=from_number,
+            to=to,
+        )
+        logger.info("SMS sent to %s (SID: %s)", to, message.sid)
+        return True
+    except ImportError:
+        logger.warning("twilio package not installed — pip install twilio")
+        return False
+    except Exception as exc:
+        logger.error("Failed to send SMS to %s: %s", to, exc)
+        return False
