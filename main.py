@@ -113,6 +113,7 @@ def _startup() -> BackgroundScheduler:
     with engine.connect() as conn:
         _add_column_if_missing(conn, "emails",    "sent_for_approval_at", "DATETIME NULL")
         _add_column_if_missing(conn, "approvals", "token", "VARCHAR(100) NULL")
+        _add_column_if_missing(conn, "clients",   "from_name", "VARCHAR(200) NULL")
         _add_column_if_missing(conn, "clients",   "from_email", "VARCHAR(200) NULL")
         _add_column_if_missing(conn, "clients",   "subject_filter", "VARCHAR(200) NULL")
         _add_column_if_missing(conn, "clients",   "email_template", "TEXT NULL")

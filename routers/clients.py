@@ -46,7 +46,7 @@ def create_client(
     return RedirectResponse("/clients", status_code=302)
 
 
-ALLOWED_CLIENT_FIELDS = {"from_email", "subject_filter", "email_template", "sms_template"}
+ALLOWED_CLIENT_FIELDS = {"from_name", "from_email", "subject_filter", "email_template", "sms_template"}
 
 
 @router.post("/{client_id}/update-field")

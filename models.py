@@ -58,6 +58,7 @@ class Client(Base):
     id             = Column(Integer, primary_key=True, index=True)
     name           = Column(String(200), nullable=False)
     slug           = Column(String(100), unique=True, index=True)
+    from_name      = Column(String(200), nullable=True, default=None)  # per-client sender display name
     from_email     = Column(String(200), nullable=True, default=None)  # per-client sender address
     subject_filter = Column(String(200), nullable=True, default=None)  # per-client subject filter word
     email_template = Column(Text, nullable=True, default=None)         # custom approval email HTML body
