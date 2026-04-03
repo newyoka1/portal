@@ -95,10 +95,9 @@ def _ensure_send_as_name(send_as_email: str, display_name: str) -> None:
             ).execute()
             logger.info("Updated Send-As display name for %s to '%s'", send_as_email, display_name)
     except HttpError as exc:
-        # 404 = not a registered alias; 403 = no permission — both are non-fatal
-        logger.debug("Could not update Send-As name for %s: %s", send_as_email, exc)
+        logger.warning("Could not update Send-As name for %s: %s", send_as_email, exc)
     except Exception as exc:
-        logger.debug("Send-As name update skipped: %s", exc)
+        logger.warning("Send-As name update skipped: %s", exc)
 
 
 def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:

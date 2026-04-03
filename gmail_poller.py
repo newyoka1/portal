@@ -23,20 +23,25 @@ from models import Email
 
 logger = logging.getLogger(__name__)
 
-SCOPES = ["https://mail.google.com/"]
+SCOPES = [
+    "https://mail.google.com/",
+    "https://www.googleapis.com/auth/gmail.settings.basic",
+]
 
 # Cached Gmail API service — avoids re-downloading the discovery document on
 # every poll cycle.  Refreshed every 30 minutes to pick up credential changes.
 _gmail_svc = None
 _gmail_svc_ts: float = 0
+_gmail_svc_scopes: list = []
 _GMAIL_SVC_TTL = 1800  # 30 minutes
 
 
 def _gmail_service():
     """Return a (cached) authenticated Gmail API service."""
-    global _gmail_svc, _gmail_svc_ts
+    global _gmail_svc, _gmail_svc_ts, _gmail_svc_scopes
     now = _time.time()
-    if _gmail_svc and now - _gmail_svc_ts < _GMAIL_SVC_TTL:
+    scopes_changed = _gmail_svc_scopes != SCOPES
+    if _gmail_svc and not scopes_changed and now - _gmail_svc_ts < _GMAIL_SVC_TTL:
         return _gmail_svc
     from portal_config import get_setting
     impersonate = get_setting("GMAIL_ADDRESS")
@@ -45,6 +50,7 @@ def _gmail_service():
     creds = build_credentials(SCOPES, impersonate)
     _gmail_svc = build("gmail", "v1", credentials=creds, cache_discovery=False)
     _gmail_svc_ts = now
+    _gmail_svc_scopes = list(SCOPES)
     return _gmail_svc
 
 
