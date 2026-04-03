@@ -17,6 +17,7 @@ CATEGORIES = [
     ("email",       "Email"),
     ("fb_approval", "Facebook Ad Approval"),
     ("voter",       "Voter"),
+    ("ai",          "AI / Claude"),
 ]
 
 # Dynamic per-platform token rows (created/deleted on demand)
