@@ -1349,10 +1349,12 @@ async def voter_run_task(
     logfile = _TASK_DIR / f"{task_id}.log"
 
     fh = open(logfile, "w", buffering=1)
+    task_env = _build_env()
+    task_env["PYTHONUNBUFFERED"] = "1"
     proc = subprocess.Popen(
         args,
         cwd=str(VOTER_DIR),
-        env=_build_env(),
+        env=task_env,
         stdout=fh,
         stderr=subprocess.STDOUT,
     )
