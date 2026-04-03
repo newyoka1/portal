@@ -394,7 +394,6 @@
             class="email-body-frame"
             sandbox="allow-same-origin allow-popups"
             src="/approve/{{ approval.token }}/body"
-            onload="frameLoaded(this)"
           ></iframe>
         </div>
       </div>
@@ -489,28 +488,53 @@
 </div>
 
 <script>
-function frameLoaded(frame) {
-  // Hide spinner immediately once HTML is parsed
+// Poll the iframe until content appears, then hide spinner immediately
+// (don't wait for onload which blocks on slow external images)
+(function() {
+  const frame = document.getElementById('email-frame');
+  if (!frame) return;
   const overlay = document.getElementById('email-loading');
-  if (overlay) overlay.classList.add('hidden');
+  let revealed = false;
 
-  try {
-    const doc = frame.contentDocument;
-    const resize = () => {
-      frame.style.height = Math.max(doc.body.scrollHeight + 32, 300) + 'px';
-    };
+  function reveal() {
+    if (revealed) return;
+    revealed = true;
+    if (overlay) overlay.classList.add('hidden');
     resize();
-    // Resize again after images finish loading
-    const imgs = doc.querySelectorAll('img');
-    let pending = imgs.length;
-    if (!pending) return;
-    imgs.forEach(img => {
-      if (img.complete) { pending--; return; }
-      img.addEventListener('load', () => { pending--; resize(); });
-      img.addEventListener('error', () => { pending--; resize(); });
-    });
-  } catch(e) {}
-}
+  }
+
+  function resize() {
+    try {
+      const h = frame.contentDocument.body.scrollHeight;
+      frame.style.height = Math.max(h + 32, 300) + 'px';
+    } catch(e) {}
+  }
+
+  // Check every 100ms if iframe has content
+  const poll = setInterval(function() {
+    try {
+      const doc = frame.contentDocument;
+      if (doc && doc.body && doc.body.innerHTML.length > 50) {
+        clearInterval(poll);
+        reveal();
+        // Keep resizing as images load
+        const imgs = doc.querySelectorAll('img');
+        imgs.forEach(function(img) {
+          if (!img.complete) {
+            img.addEventListener('load', resize);
+            img.addEventListener('error', resize);
+          }
+        });
+      }
+    } catch(e) {}
+  }, 100);
+
+  // Fallback: hide spinner after 3s no matter what
+  setTimeout(function() {
+    clearInterval(poll);
+    reveal();
+  }, 3000);
+})();
 </script>
 </body>
 </html>

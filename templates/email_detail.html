@@ -51,7 +51,6 @@
           id="email-frame"
           sandbox="allow-same-origin allow-popups"
           src="/emails/{{ email.id }}/body"
-          onload="frameLoaded(this)"
         ></iframe>
       </div>
     </div>
@@ -303,27 +302,44 @@
 
 {% block scripts %}
 <script>
-function frameLoaded(frame) {
+// Poll iframe until content appears — don't wait for onload (blocks on slow images)
+(function() {
+  const frame = document.getElementById('email-frame');
+  if (!frame) return;
   const overlay = document.getElementById('email-loading');
-  if (overlay) overlay.style.opacity = '0';
-  setTimeout(() => { if (overlay) overlay.style.display = 'none'; }, 300);
+  let revealed = false;
 
-  try {
-    const doc = frame.contentDocument;
-    const resize = () => {
-      frame.style.height = Math.max(doc.body.scrollHeight + 32, 300) + 'px';
-    };
+  function reveal() {
+    if (revealed) return;
+    revealed = true;
+    if (overlay) { overlay.style.opacity = '0'; setTimeout(() => overlay.style.display = 'none', 300); }
     resize();
-    const imgs = doc.querySelectorAll('img');
-    let pending = imgs.length;
-    if (!pending) return;
-    imgs.forEach(img => {
-      if (img.complete) { pending--; return; }
-      img.addEventListener('load', () => { pending--; resize(); });
-      img.addEventListener('error', () => { pending--; resize(); });
-    });
-  } catch(e) {}
-}
+  }
+
+  function resize() {
+    try {
+      frame.style.height = Math.max(frame.contentDocument.body.scrollHeight + 32, 300) + 'px';
+    } catch(e) {}
+  }
+
+  const poll = setInterval(function() {
+    try {
+      const doc = frame.contentDocument;
+      if (doc && doc.body && doc.body.innerHTML.length > 50) {
+        clearInterval(poll);
+        reveal();
+        doc.querySelectorAll('img').forEach(function(img) {
+          if (!img.complete) {
+            img.addEventListener('load', resize);
+            img.addEventListener('error', resize);
+          }
+        });
+      }
+    } catch(e) {}
+  }, 100);
+
+  setTimeout(function() { clearInterval(poll); reveal(); }, 3000);
+})();
 
 function toggleCommentOnly(e) {
   e.preventDefault();
