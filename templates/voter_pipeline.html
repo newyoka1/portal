@@ -1534,9 +1534,9 @@ async function runCrmStream(cmd, extra, triggerBtn) {
 }
 
 /* ── Export progress bar (global so resume path can use it too) ─────────── */
-var _exSteps = 0, _exDone = 0, _exCur = '', _exAudTotal = 0;
+var _exSteps = 0, _exDone = 0, _exCur = '', _exAudTotal = 0, _exFinished = false;
 function _resetExportBar() {
-  _exSteps = 0; _exDone = 0; _exCur = ''; _exAudTotal = 0;
+  _exSteps = 0; _exDone = 0; _exCur = ''; _exAudTotal = 0; _exFinished = false;
   var pw = document.getElementById('export-progress');
   if (pw) pw.classList.add('d-none');
   var bar = document.getElementById('export-prog-bar');
@@ -1581,13 +1581,18 @@ function _updateExportBar(chunk) {
   // CRM enrich (inline, no "Creating")
   if (/CRM enrich:/.test(chunk)) { _exSteps++; _exDone++; }
 
-  // "Saving workbook..."
-  if (/Saving workbook/.test(chunk)) { _exCur = 'Saving workbook'; }
+  // "Saving workbook..." — near completion, bump to 95%
+  if (/Saving workbook/.test(chunk)) {
+    _exCur = 'Saving workbook';
+    _exDone = _exSteps;  // fill to cap (95%)
+  }
 
   if (_exSteps === 0) return;
   pw.classList.remove('d-none');
 
-  var pct = Math.min(100, Math.round(_exDone / _exSteps * 100));
+  // Cap at 95% until SUCCESS — we can't know total steps upfront
+  var rawPct = Math.round(_exDone / _exSteps * 100);
+  var pct = _exFinished ? 100 : Math.min(95, rawPct);
   var bar = document.getElementById('export-prog-bar');
   var stepEl = document.getElementById('export-prog-step');
   var pctEl = document.getElementById('export-prog-pct');
@@ -1595,7 +1600,7 @@ function _updateExportBar(chunk) {
 
   if (bar) bar.style.width = pct + '%';
   if (pctEl) pctEl.textContent = pct + '% \u00b7 ' + _exDone + '/' + _exSteps + ' tabs';
-  if (stepEl) stepEl.textContent = _exDone < _exSteps ? _exCur + '\u2026' : 'Finishing\u2026';
+  if (stepEl) stepEl.textContent = _exCur + '\u2026';
 
   // Sub-progress: last "...X voters/phones/emails written" in chunk
   var subAll = chunk.match(/\.\.\.([\d,]+)\s+(?:voters|phones|emails|donors|unmatched voters)\s+written/g);
@@ -1607,8 +1612,9 @@ function _updateExportBar(chunk) {
 
   // SUCCESS
   if (/SUCCESS!/.test(chunk)) {
+    _exFinished = true;
     if (bar) { bar.style.width = '100%'; bar.className = 'progress-bar bg-success'; }
-    if (pctEl) pctEl.textContent = '100%';
+    if (pctEl) pctEl.textContent = '100% \u00b7 ' + _exDone + ' tabs';
     if (stepEl) stepEl.textContent = 'Export complete';
     if (detailEl) detailEl.textContent = '';
   }
