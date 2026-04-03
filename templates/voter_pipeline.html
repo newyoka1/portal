@@ -1059,10 +1059,10 @@ const CMD_TAB = {
 
 const CRM_CMDS = new Set(['crm-sync','hubspot-sync','cm-sync','crm-enrich','crm-phone','crm-extended-match']);
 
-function vpRun(cmd, extra, btn) {
+function vpRun(cmd, extra, btn, expectedTabs) {
   const tab = CMD_TAB[cmd] || 'status';
   if (CRM_CMDS.has(cmd)) runCrmStream(cmd, extra, btn || null);
-  else                    runStream(cmd, extra, tab, btn || null);
+  else                    runStream(cmd, extra, tab, btn || null, expectedTabs);
 }
 
 function vpRunFull(cmd) {
@@ -1079,7 +1079,7 @@ function runExport() {
     const valEl = document.getElementById('distValue') || document.getElementById('distValueText') || {value:''};
     extra = '--' + type + ' ' + valEl.value + ' --sheets ' + sheets;
   }
-  vpRun('export', extra);
+  vpRun('export', extra, null, _calcExpectedTabs());
 }
 
 const _distCache = {};
@@ -1535,28 +1535,45 @@ async function runCrmStream(cmd, extra, triggerBtn) {
 
 /* ── Export progress bar (global so resume path can use it too) ─────────── */
 var _exSteps = 0, _exDone = 0, _exCur = '', _exAudTotal = 0, _exFinished = false;
-function _resetExportBar() {
-  _exSteps = 0; _exDone = 0; _exCur = ''; _exAudTotal = 0; _exFinished = false;
+function _calcExpectedTabs() {
+  // Base tabs always created: Summary, Ethnicity, CRM enrich, Guide, Unmatched = 5
+  var n = 5;
+  var cbs = document.querySelectorAll('.sheet-cb:checked');
+  cbs.forEach(function(cb) {
+    if (cb.value === 'donors')    n += 3;  // BOE, National, CFB
+    if (cb.value === 'party')     n += 2;  // Democrats, Republicans
+    if (cb.value === 'phones')    n += 1;
+    if (cb.value === 'emails')    n += 1;
+    // audiences: unknown count — will be added when "Creating N issue/turnout tabs" appears
+  });
+  return n;
+}
+function _resetExportBar(preCalc) {
+  _exSteps = preCalc || 0; _exDone = 0; _exCur = ''; _exAudTotal = 0; _exFinished = false;
   var pw = document.getElementById('export-progress');
-  if (pw) pw.classList.add('d-none');
+  if (pw) { if (_exSteps > 0) pw.classList.remove('d-none'); else pw.classList.add('d-none'); }
   var bar = document.getElementById('export-prog-bar');
   if (bar) { bar.style.width = '0%'; bar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-info'; }
+  var pctEl = document.getElementById('export-prog-pct');
+  if (pctEl) pctEl.textContent = _exSteps > 0 ? '0% · 0/' + _exSteps + ' tabs' : '';
+  var stepEl = document.getElementById('export-prog-step');
+  if (stepEl) stepEl.textContent = _exSteps > 0 ? 'Starting…' : '';
 }
 function _updateExportBar(chunk) {
   var pw = document.getElementById('export-progress');
   if (!pw) return;
 
   // Count ALL "Creating X tab..." in this chunk (use g flag)
+  // These don't increment _exSteps — known tabs are pre-counted via _calcExpectedTabs()
   var creatingAll = chunk.match(/Creating [^\n]+? tab\.\.\./g);
   if (creatingAll) {
-    _exSteps += creatingAll.length;
-    // Last one is the current step
+    // Last one is the current step name
     var last = creatingAll[creatingAll.length - 1].match(/Creating (.+?) tab\.\.\./);
     if (last) _exCur = last[1];
     pw.classList.remove('d-none');
   }
 
-  // "Creating N issue/turnout tabs..." — batch of audience tabs
+  // "Creating N issue/turnout tabs..." — audience tabs (NOT pre-counted, add to total)
   var batchAll = chunk.match(/Creating \d+ (?:issue|turnout) tabs/g);
   if (batchAll) {
     batchAll.forEach(function(b) {
@@ -1578,8 +1595,8 @@ function _updateExportBar(chunk) {
   var okLines = chunk.match(/^\s*OK /gm);
   if (okLines) { _exDone += okLines.length; }
 
-  // CRM enrich (inline, no "Creating")
-  if (/CRM enrich:/.test(chunk)) { _exSteps++; _exDone++; }
+  // CRM enrich (inline, no "Creating" — already pre-counted)
+  if (/CRM enrich:/.test(chunk)) { _exDone++; }
 
   // "Saving workbook..." — near completion, bump to 95%
   if (/Saving workbook/.test(chunk)) {
@@ -1628,7 +1645,7 @@ function _updateExportBar(chunk) {
 }
 
 /* ── Generic stream (non-CRM tabs) ──────────────────────────────────────── */
-async function runStream(cmd, extra, tab, triggerBtn) {
+async function runStream(cmd, extra, tab, triggerBtn, expectedTabs) {
   const container = document.getElementById('log-' + tab);
   if (!container) return;
 
@@ -1644,8 +1661,8 @@ async function runStream(cmd, extra, tab, triggerBtn) {
   container.textContent = `▶ Running: ${cmd}${extra ? ' ' + extra : ''}
 `;
 
-  // Reset export progress bar
-  _resetExportBar();
+  // Reset export progress bar (pre-populate expected tab count for exports)
+  _resetExportBar(cmd === 'export' ? (expectedTabs || 0) : 0);
   if (!wrap) container.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   if (triggerBtn) {
