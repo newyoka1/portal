@@ -283,6 +283,19 @@ def dashboard(
 
 
 # ---------------------------------------------------------------------------
+# Email Approval Guide
+# ---------------------------------------------------------------------------
+@app.get("/email-guide", response_class=HTMLResponse)
+def email_guide(
+    request: Request,
+    current_user: User = Depends(require_user),
+):
+    return templates.TemplateResponse(request, "email_guide.html", {
+        "current_user": current_user,
+    })
+
+
+# ---------------------------------------------------------------------------
 # Email Approval Settings
 # ---------------------------------------------------------------------------
 @app.get("/email-settings", response_class=HTMLResponse)

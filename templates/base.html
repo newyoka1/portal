@@ -54,6 +54,9 @@
     <a href="/log" class="nav-link {% if request.url.path == '/log' %}active{% endif %}">
       <i class="bi bi-journal-check me-2"></i>Approval Log
     </a>
+    <a href="/email-guide" class="nav-link {% if request.url.path == '/email-guide' %}active{% endif %}">
+      <i class="bi bi-book me-2"></i>Guide
+    </a>
     {% if current_user.is_admin %}
     <a href="/email-settings" class="nav-link {% if request.url.path == '/email-settings' %}active{% endif %}">
       <i class="bi bi-envelope-check me-2"></i>Settings

@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+{% block title %}Email Approval Guide{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h5 class="fw-bold mb-1"><i class="bi bi-book me-2"></i>Email Approval Guide</h5>
+  <p class="text-muted small mb-0">How the approval system works, setup instructions, and daily workflow.</p>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="accordion" id="guideAccordion">
+
+      <!-- Overview -->
+      <div class="accordion-item border-0 border-bottom">
+        <h2 class="accordion-header">
+          <button class="accordion-button px-0" type="button" data-bs-toggle="collapse" data-bs-target="#guideOverview">
+            <i class="bi bi-diagram-3 me-2 text-primary"></i><strong>Overview</strong>
+          </button>
+        </h2>
+        <div id="guideOverview" class="accordion-collapse collapse show" data-bs-parent="#guideAccordion">
+          <div class="accordion-body px-0 text-muted small">
+            <p>The Email Approval system automatically ingests marketing emails from Gmail, lets you assign them to clients, and sends approval requests to designated approvers. The full flow:</p>
+            <ol>
+              <li><strong>Ingest</strong> &mdash; The Gmail poller checks for unread emails every 60 seconds (or manually via <em>Poll Now</em>). Emails matching subject filters are pulled in and sanitized for fast viewing.</li>
+              <li><strong>Assign</strong> &mdash; An admin assigns the email to a client from the Email Queue. This creates approval records for each of the client's configured approvers.</li>
+              <li><strong>Notify</strong> &mdash; Click <em>Send for Approval</em> to email (and optionally SMS) each approver a unique, one-time approval link.</li>
+              <li><strong>Review</strong> &mdash; Approvers click the link to view the email, see other approvers' status, leave comments, and approve or reject. No login required.</li>
+              <li><strong>Resolve</strong> &mdash; Once all required approvers respond, the email status updates to Approved or Rejected automatically.</li>
+            </ol>
+            <div class="d-flex gap-2 flex-wrap mt-3">
+              <span class="badge bg-light text-dark border"><i class="bi bi-inbox me-1"></i>Email Queue</span>
+              <span class="text-muted">&rarr;</span>
+              <span class="badge bg-light text-dark border"><i class="bi bi-person-check me-1"></i>Assign Client</span>
+              <span class="text-muted">&rarr;</span>
+              <span class="badge bg-light text-dark border"><i class="bi bi-send me-1"></i>Send for Approval</span>
+              <span class="text-muted">&rarr;</span>
+              <span class="badge bg-light text-dark border"><i class="bi bi-chat-dots me-1"></i>Review &amp; Comment</span>
+              <span class="text-muted">&rarr;</span>
+              <span class="badge bg-success text-white"><i class="bi bi-check-circle me-1"></i>Approved</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Setup: Google Workspace -->
+      <div class="accordion-item border-0 border-bottom">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed px-0" type="button" data-bs-toggle="collapse" data-bs-target="#guideGoogle">
+            <i class="bi bi-google me-2 text-primary"></i><strong>Setup: Google Workspace &amp; Gmail</strong>
+          </button>
+        </h2>
+        <div id="guideGoogle" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+          <div class="accordion-body px-0 text-muted small">
+            <p>The portal uses a <strong>Google Service Account</strong> with <strong>Domain-Wide Delegation (DWD)</strong> to read and send email on behalf of any user in your Google Workspace domain.</p>
+            <h6 class="fw-semibold text-dark mt-3">One-time setup:</h6>
+            <ol>
+              <li>In <a href="https://console.cloud.google.com" target="_blank">Google Cloud Console</a>, create a Service Account and download the JSON key.</li>
+              <li>Enable the <strong>Gmail API</strong> for your project.</li>
+              <li>In <a href="https://admin.google.com" target="_blank">Google Workspace Admin</a> &rarr; Security &rarr; API Controls &rarr; Domain-wide Delegation, add the service account's Client ID with scope: <code>https://mail.google.com/</code></li>
+              <li>Set the service account JSON via one of:
+                <ul>
+                  <li><code>GOOGLE_SERVICE_ACCOUNT_JSON</code> &mdash; raw JSON string (for production)</li>
+                  <li><code>GOOGLE_SERVICE_ACCOUNT_FILE</code> &mdash; path to JSON file (for local dev)</li>
+                </ul>
+              </li>
+              <li>In <a href="/settings"><strong>Portal Settings</strong></a>, set <code>GMAIL_ADDRESS</code> to the inbox to monitor (e.g. <code>support@yourdomain.com</code>).</li>
+            </ol>
+            <h6 class="fw-semibold text-dark mt-3">Per-client sender:</h6>
+            <p>Each client can have a different <strong>From Name</strong> and <strong>From Email</strong>. The portal impersonates that email address via DWD when sending approval notifications &mdash; no Send-As aliases needed. The From Email must be a real mailbox in your Google Workspace domain.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Setup: Clients & Approvers -->
+      <div class="accordion-item border-0 border-bottom">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed px-0" type="button" data-bs-toggle="collapse" data-bs-target="#guideClients">
+            <i class="bi bi-people me-2 text-primary"></i><strong>Setup: Clients &amp; Approvers</strong>
+          </button>
+        </h2>
+        <div id="guideClients" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+          <div class="accordion-body px-0 text-muted small">
+            <ol>
+              <li>Go to <a href="/clients"><strong>Admin &rarr; Clients</strong></a> and create a client.</li>
+              <li>Set the <strong>Subject Filter</strong> &mdash; the word to match in email subjects (e.g. <code>malliotakis</code>). The poller will only ingest emails matching at least one client's filter.</li>
+              <li>Set <strong>From Name</strong> and <strong>From Email</strong> &mdash; the sender identity for approval notification emails to this client's approvers.</li>
+              <li>Add <strong>Approvers</strong> to the client:
+                <ul>
+                  <li><em>Portal user</em> &mdash; link to an existing portal account (can also vote from the admin panel).</li>
+                  <li><em>External</em> &mdash; provide name, email, and optionally a phone number for SMS. They approve via the unique link only.</li>
+                  <li>Mark approvers as <strong>Required</strong> or <strong>Optional</strong>. All required approvers must approve for the email to be marked Approved. Any single rejection marks it Rejected.</li>
+                </ul>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- Setup: Twilio SMS (optional) -->
+      <div class="accordion-item border-0 border-bottom">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed px-0" type="button" data-bs-toggle="collapse" data-bs-target="#guideTwilio">
+            <i class="bi bi-phone me-2 text-primary"></i><strong>Setup: Twilio SMS (Optional)</strong>
+          </button>
+        </h2>
+        <div id="guideTwilio" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+          <div class="accordion-body px-0 text-muted small">
+            <p>SMS notifications are optional. If configured, approvers with a phone number will receive an SMS alongside the email.</p>
+            <ol>
+              <li>Create a <a href="https://www.twilio.com" target="_blank">Twilio</a> account.</li>
+              <li>Get a phone number from the Twilio console.</li>
+              <li>Complete <strong>A2P 10DLC registration</strong> (required for US SMS delivery): register your Brand and create a Campaign in Twilio's Messaging &rarr; Trust Hub.</li>
+              <li>In <a href="/settings"><strong>Portal Settings</strong></a>, set:
+                <ul>
+                  <li><code>TWILIO_ACCOUNT_SID</code></li>
+                  <li><code>TWILIO_AUTH_TOKEN</code></li>
+                  <li><code>TWILIO_PHONE_NUMBER</code> (E.164 format, e.g. <code>+12125551234</code>)</li>
+                </ul>
+              </li>
+              <li>Use the <strong>Test SMS</strong> button on the Settings page to verify delivery.</li>
+            </ol>
+            <p>If Twilio is not configured, SMS is silently skipped &mdash; email notifications always go out.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Usage: Daily Workflow -->
+      <div class="accordion-item border-0 border-bottom">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed px-0" type="button" data-bs-toggle="collapse" data-bs-target="#guideUsage">
+            <i class="bi bi-arrow-repeat me-2 text-primary"></i><strong>Daily Workflow</strong>
+          </button>
+        </h2>
+        <div id="guideUsage" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+          <div class="accordion-body px-0 text-muted small">
+            <ol>
+              <li><strong>Check the Email Queue</strong> &mdash; new emails appear with "Pending" status. Click one to open the detail view.</li>
+              <li><strong>Assign to a client</strong> &mdash; use the dropdown to assign. This auto-creates approval records for the client's approvers.</li>
+              <li><strong>Send for Approval</strong> &mdash; click the button. Each pending approver gets an email (and SMS if configured) with a unique link.</li>
+              <li><strong>Monitor</strong> &mdash; the detail page shows real-time approval status. Comments from approvers appear in the thread.</li>
+              <li><strong>Done</strong> &mdash; once all required approvers respond, the email moves to Approved or Rejected. Check the <a href="/log">Approval Log</a> for a history of all decisions.</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+
+      <!-- Approver Experience -->
+      <div class="accordion-item border-0 border-bottom">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed px-0" type="button" data-bs-toggle="collapse" data-bs-target="#guideApprover">
+            <i class="bi bi-check-circle me-2 text-primary"></i><strong>What Approvers See</strong>
+          </button>
+        </h2>
+        <div id="guideApprover" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+          <div class="accordion-body px-0 text-muted small">
+            <p>Approvers receive an email with a <strong>Review &amp; Approve</strong> button. Clicking it opens a page with:</p>
+            <ul>
+              <li><strong>Full email preview</strong> (left column) &mdash; the original marketing email rendered cleanly.</li>
+              <li><strong>Approver status</strong> (right sidebar) &mdash; who has approved, rejected, or is still pending.</li>
+              <li><strong>Comments thread</strong> &mdash; shared across all approvers. Anyone can post comments visible to the group.</li>
+              <li><strong>Approve / Reject buttons</strong> with optional note.</li>
+            </ul>
+            <p>No login or account is needed. Each link is unique and single-use &mdash; once a decision is submitted, the link expires.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Custom Templates -->
+      <div class="accordion-item border-0">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed px-0" type="button" data-bs-toggle="collapse" data-bs-target="#guideTemplates">
+            <i class="bi bi-brush me-2 text-primary"></i><strong>Custom Email &amp; SMS Templates</strong>
+          </button>
+        </h2>
+        <div id="guideTemplates" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+          <div class="accordion-body px-0 text-muted small">
+            <p>Each client can have custom notification templates. Set them in <a href="/clients">Clients</a> &rarr; edit a client.</p>
+            <h6 class="fw-semibold text-dark mt-3">Available variables:</h6>
+            <table class="table table-sm small mb-2">
+              <thead><tr><th>Variable</th><th>Description</th></tr></thead>
+              <tbody>
+                <tr><td><code>{approver_name}</code></td><td>Recipient's name</td></tr>
+                <tr><td><code>{subject}</code></td><td>Email subject line</td></tr>
+                <tr><td><code>{from}</code></td><td>Original sender name or address</td></tr>
+                <tr><td><code>{client}</code></td><td>Client name</td></tr>
+                <tr><td><code>{approve_url}</code></td><td>Unique approval link</td></tr>
+              </tbody>
+            </table>
+            <p>If no custom template is set, a clean default template is used. CSS curly braces in HTML templates are safe &mdash; only recognized variable names are replaced.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
