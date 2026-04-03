@@ -78,17 +78,31 @@ def _safe_substitute(template: str, variables: dict) -> str:
 
 
 def _ensure_send_as_name(send_as_email: str, display_name: str) -> None:
-    """Update the Gmail Send-As alias display name so recipients see the right name."""
+    """Update the Gmail Send-As alias display name so recipients see the right name.
+
+    Uses a separate credentials object with the gmail.settings.basic scope
+    so that a missing DWD scope doesn't break the main mail-sending service.
+    """
     if not display_name or not send_as_email:
         return
     try:
-        service = _gmail_service()
-        # Get current Send-As settings for this address
-        send_as = service.users().settings().sendAs().get(
+        from gcp_credentials import build_credentials
+        from googleapiclient.discovery import build
+        from portal_config import get_setting
+
+        impersonate = get_setting("GMAIL_ADDRESS")
+        if not impersonate:
+            return
+        creds = build_credentials(
+            ["https://www.googleapis.com/auth/gmail.settings.basic"], impersonate
+        )
+        svc = build("gmail", "v1", credentials=creds, cache_discovery=False)
+
+        send_as = svc.users().settings().sendAs().get(
             userId="me", sendAsEmail=send_as_email
         ).execute()
         if send_as.get("displayName") != display_name:
-            service.users().settings().sendAs().update(
+            svc.users().settings().sendAs().update(
                 userId="me",
                 sendAsEmail=send_as_email,
                 body={"displayName": display_name, "sendAsEmail": send_as_email},
