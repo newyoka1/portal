@@ -1546,24 +1546,40 @@ function _updateExportBar(chunk) {
   var pw = document.getElementById('export-progress');
   if (!pw) return;
 
-  // "Creating X tab..." — a new core step
-  var creating = chunk.match(/Creating (.+?) tab\.\.\./);
-  if (creating) { _exSteps++; _exCur = creating[1]; pw.classList.remove('d-none'); }
+  // Count ALL "Creating X tab..." in this chunk (use g flag)
+  var creatingAll = chunk.match(/Creating [^\n]+? tab\.\.\./g);
+  if (creatingAll) {
+    _exSteps += creatingAll.length;
+    // Last one is the current step
+    var last = creatingAll[creatingAll.length - 1].match(/Creating (.+?) tab\.\.\./);
+    if (last) _exCur = last[1];
+    pw.classList.remove('d-none');
+  }
 
   // "Creating N issue/turnout tabs..." — batch of audience tabs
-  var batch = chunk.match(/Creating (\d+) (issue|turnout) tabs/);
-  if (batch) { var n = parseInt(batch[1]); _exAudTotal += n; _exSteps += n; _exCur = batch[2] + ' audiences'; pw.classList.remove('d-none'); }
+  var batchAll = chunk.match(/Creating \d+ (?:issue|turnout) tabs/g);
+  if (batchAll) {
+    batchAll.forEach(function(b) {
+      var n = parseInt(b.match(/\d+/)[0]);
+      _exAudTotal += n; _exSteps += n;
+    });
+    _exCur = 'audience tabs';
+    pw.classList.remove('d-none');
+  }
 
-  // "[2/15] filename.csv" — audience tab start
-  var aud = chunk.match(/\[(\d+)\/(\d+)\]\s+(.+\.csv)/);
-  if (aud) { _exCur = aud[3].replace('.csv',''); }
+  // "[2/15] filename.csv" — audience tab start (last one in chunk)
+  var audAll = chunk.match(/\[\d+\/\d+\]\s+.+\.csv/g);
+  if (audAll) {
+    var lastAud = audAll[audAll.length - 1].match(/\[(\d+)\/(\d+)\]\s+(.+\.csv)/);
+    if (lastAud) _exCur = lastAud[3].replace('.csv','');
+  }
 
-  // "OK X" — step completed
+  // Count ALL "OK " completions in this chunk
   var okLines = chunk.match(/^\s*OK /gm);
   if (okLines) { _exDone += okLines.length; }
 
   // CRM enrich (inline, no "Creating")
-  if (/CRM enrich:/.test(chunk) && !/Creating/.test(chunk)) { _exSteps++; _exDone++; }
+  if (/CRM enrich:/.test(chunk)) { _exSteps++; _exDone++; }
 
   // "Saving workbook..."
   if (/Saving workbook/.test(chunk)) { _exCur = 'Saving workbook'; }
@@ -1581,9 +1597,12 @@ function _updateExportBar(chunk) {
   if (pctEl) pctEl.textContent = pct + '% \u00b7 ' + _exDone + '/' + _exSteps + ' tabs';
   if (stepEl) stepEl.textContent = _exDone < _exSteps ? _exCur + '\u2026' : 'Finishing\u2026';
 
-  // Sub-progress: "...X voters/phones/emails written"
-  var sub = chunk.match(/\.\.\.([\d,]+)\s+(voters|phones|emails|donors|unmatched voters)\s+written/);
-  if (sub && detailEl) detailEl.textContent = sub[1] + ' ' + sub[2] + ' written';
+  // Sub-progress: last "...X voters/phones/emails written" in chunk
+  var subAll = chunk.match(/\.\.\.([\d,]+)\s+(?:voters|phones|emails|donors|unmatched voters)\s+written/g);
+  if (subAll && detailEl) {
+    var lastSub = subAll[subAll.length - 1].match(/\.\.\.([\d,]+)\s+([\w ]+)\s+written/);
+    if (lastSub) detailEl.textContent = lastSub[1] + ' ' + lastSub[2] + ' written';
+  }
   if (okLines && detailEl) detailEl.textContent = '';
 
   // SUCCESS
