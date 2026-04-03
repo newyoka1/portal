@@ -124,6 +124,33 @@ def add_approver(
     return RedirectResponse("/clients", status_code=302)
 
 
+@router.post("/{client_id}/approvers/{ca_id}/edit")
+def edit_approver(
+    client_id: int,
+    ca_id: int,
+    approver_name: str = Form(...),
+    approver_email: str = Form(...),
+    approver_phone: str = Form(""),
+    required: str = Form("1"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    ca = db.query(ClientApprover).filter(
+        ClientApprover.id == ca_id,
+        ClientApprover.client_id == client_id,
+    ).first()
+    if ca:
+        email_addr = approver_email.strip().lower()
+        portal_user = db.query(User).filter(User.email == email_addr).first()
+        ca.approver_name  = approver_name.strip()
+        ca.approver_email = email_addr
+        ca.approver_phone = approver_phone.strip() or None
+        ca.required       = required == "1"
+        ca.user_id        = portal_user.id if portal_user else None
+        db.commit()
+    return RedirectResponse("/clients", status_code=302)
+
+
 @router.post("/{client_id}/approvers/{ca_id}/delete")
 def remove_approver(
     client_id: int,
