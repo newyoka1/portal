@@ -27,6 +27,10 @@ def _has_voter_access(user: User) -> bool:
     """True if user can access any part of the voter pipeline."""
     return bool(user.is_admin or user.voter_role in ("full", "export_viewer"))
 
+# -- Enrichment stats cache (avoids 80s+ query on every click) --
+_enrich_cache = {"data": None, "ts": 0}
+_ENRICH_CACHE_TTL = 600  # 10 minutes
+
 
 def _is_export_viewer(user: User) -> bool:
     """True if user is restricted to export/status/issues tabs only."""
@@ -466,6 +470,9 @@ def fb_donor_audiences(dist_type: str = "", dist_val: str = "", current_user: Us
 @router.get("/enrichment-stats")
 def enrichment_stats(current_user: User = Depends(require_voter_full)):
     """Return voter file enrichment coverage statistics."""
+    # Serve from cache if fresh
+    if _enrich_cache["data"] and (_time.time() - _enrich_cache["ts"]) < _ENRICH_CACHE_TTL:
+        return JSONResponse(_enrich_cache["data"])
     env = _build_env()
     try:
         conn = _crm_connect(env, database="nys_voter_tagging",
@@ -605,7 +612,7 @@ def enrichment_stats(current_user: User = Depends(require_voter_full)):
         aud_tags   = 0
         aud_tagged = 0
         try:
-            cur.execute("SELECT COUNT(DISTINCT origin), COUNT(DISTINCT StateVoterId) FROM voter_audience_bridge")
+            cur.execute("SELECT COUNT(DISTINCT audience), COUNT(DISTINCT StateVoterId) FROM voter_audience_bridge")
             row2 = cur.fetchone()
             aud_tags   = int(row2[0] or 0)
             aud_tagged = int(row2[1] or 0)
@@ -617,7 +624,7 @@ def enrichment_stats(current_user: User = Depends(require_voter_full)):
         def pct(n):
             return round((n or 0) / total * 100, 1)
 
-        return JSONResponse({
+        payload = {
             "total":       total,
             "gender":      {"male": int(d['male'] or 0), "female": int(d['female'] or 0),
                             "unknown": total - int(d['male'] or 0) - int(d['female'] or 0)},
@@ -667,7 +674,10 @@ def enrichment_stats(current_user: User = Depends(require_voter_full)):
             },
             "audiences":  {"tags": aud_tags, "tagged_voters": aud_tagged, "tagged_pct": pct(aud_tagged)},
             "age_ranges": age_ranges,
-        })
+        }
+        _enrich_cache["data"] = payload
+        _enrich_cache["ts"] = _time.time()
+        return JSONResponse(payload)
     except Exception as exc:
         try: conn.close()
         except Exception: pass
