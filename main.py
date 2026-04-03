@@ -150,9 +150,11 @@ def _startup() -> BackgroundScheduler:
     try:
         from email_sanitizer import sanitize_email_html as _sanitize
         _bdb = SessionLocal()
+        from sqlalchemy import func
         _dirty = _bdb.query(Email).filter(
             Email.html_body != None,
-            (Email.clean_html == None) | (Email.clean_html == ""),
+            Email.html_body != "",
+            (Email.clean_html == None) | (Email.clean_html == "") | (func.length(Email.clean_html) < 10),
         ).all()
         for _e in _dirty:
             _e.clean_html = _sanitize(_e.html_body)
@@ -407,10 +409,14 @@ def approve_page(token: str, request: Request, db: Session = Depends(get_db)):
     approval = db.query(Approval).filter(Approval.token == token).first()
     if not approval:
         return HTMLResponse("<h2>Link not found or already used.</h2>", status_code=404)
+    email = approval.email
+    all_approvals = db.query(Approval).filter(Approval.email_id == email.id).all()
     return templates.TemplateResponse(request, "approve_token.html", {
-        "approval":     approval,
-        "email":        approval.email,
-        "current_user": None,
+        "approval":      approval,
+        "email":         email,
+        "all_approvals": all_approvals,
+        "comments":      email.comments,
+        "current_user":  None,
     })
 
 
@@ -450,8 +456,31 @@ def approve_submit(
         db.commit()
 
     return templates.TemplateResponse(request, "approve_token.html", {
-        "approval":     approval,
-        "email":        approval.email,
-        "done":         True,
-        "current_user": None,
+        "approval":      approval,
+        "email":         approval.email,
+        "all_approvals": db.query(Approval).filter(Approval.email_id == approval.email_id).all(),
+        "comments":      approval.email.comments,
+        "done":          True,
+        "current_user":  None,
     })
+
+
+@app.post("/approve/{token}/comment")
+def approve_add_comment(
+    token: str,
+    body: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    """Add a comment from the public approval page (token-gated)."""
+    approval = db.query(Approval).filter(Approval.token == token).first()
+    if not approval:
+        return RedirectResponse(f"/approve/{token}", status_code=302)
+    if body.strip():
+        db.add(Comment(
+            email_id=approval.email_id,
+            user_id=approval.user_id,
+            commenter_name=approval.display_name if not approval.user_id else None,
+            body=body.strip(),
+        ))
+        db.commit()
+    return RedirectResponse(f"/approve/{token}", status_code=302)

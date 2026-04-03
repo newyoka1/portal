@@ -457,6 +457,29 @@
         </div>
       </div>
 
+      <!-- Approval status -->
+      {% if all_approvals and all_approvals|length > 1 %}
+      <div class="sidebar-card">
+        <div class="sidebar-header">
+          <span style="color:#86868b;">&#128101;</span>
+          Approvers
+        </div>
+        <div class="sidebar-body" style="padding-top:10px;padding-bottom:10px;">
+          {% for a in all_approvals %}
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;{% if not loop.last %}border-bottom:1px solid #f5f5f7;{% endif %}">
+            <span style="font-size:16px;">
+              {% if a.decision == 'approved' %}&#9989;{% elif a.decision == 'rejected' %}&#10060;{% else %}&#9898;{% endif %}
+            </span>
+            <span style="font-size:13px;font-weight:500;flex:1;">{{ a.display_name }}</span>
+            <span style="font-size:11px;color:#86868b;">
+              {% if a.decision == 'pending' %}Pending{% elif a.decision == 'approved' %}Approved{% else %}Rejected{% endif %}
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Decision form -->
       <div class="sidebar-card">
         <div class="sidebar-header">
@@ -475,6 +498,44 @@
                 &#10007; Reject
               </button>
             </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Comments thread -->
+      <div class="sidebar-card">
+        <div class="sidebar-header">
+          <span style="color:#86868b;">&#128172;</span>
+          Comments
+          {% if comments %}<span style="color:#aeaeb2;font-weight:400;font-size:12px;margin-left:4px;">({{ comments|length }})</span>{% endif %}
+        </div>
+        <div class="sidebar-body" style="padding-top:10px;padding-bottom:10px;">
+          {% if comments %}
+            {% for c in comments %}
+            <div style="padding:8px 0;{% if not loop.last %}border-bottom:1px solid #f5f5f7;{% endif %}">
+              <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+                <span style="font-size:12px;font-weight:600;color:#1d1d1f;">
+                  {{ c.commenter_name or (c.user.name if c.user else 'Unknown') }}
+                </span>
+                <span style="font-size:11px;color:#aeaeb2;">
+                  {{ c.created_at.strftime('%b %d, %I:%M %p').lstrip('0') }}
+                </span>
+              </div>
+              <div style="font-size:13px;color:#333;line-height:1.4;">{{ c.body }}</div>
+            </div>
+            {% endfor %}
+          {% else %}
+            <p style="font-size:13px;color:#aeaeb2;margin:4px 0;">No comments yet.</p>
+          {% endif %}
+
+          <!-- Add comment form -->
+          <form method="post" action="/approve/{{ approval.token }}/comment" style="margin-top:12px;border-top:1px solid #f0f0f2;padding-top:12px;">
+            <textarea name="body" class="comment-box" style="min-height:60px;" placeholder="Add a comment…"></textarea>
+            <button type="submit" style="
+              margin-top:8px;width:100%;padding:8px;border:none;border-radius:8px;
+              background:#007aff;color:#fff;font-size:13px;font-weight:600;
+              font-family:inherit;cursor:pointer;
+            ">Post Comment</button>
           </form>
         </div>
       </div>
