@@ -39,10 +39,11 @@
         </div>
       </div>
 
-      <!-- Sandboxed HTML email renderer (injected via JS for fast page load) -->
+      <!-- Sandboxed HTML email renderer (loaded async from separate endpoint) -->
       <iframe
         id="email-frame"
         sandbox="allow-same-origin allow-popups"
+        src="/emails/{{ email.id }}/body"
         onload="autoHeight(this)"
       ></iframe>
     </div>
@@ -312,12 +313,6 @@ function autoHeight(frame) {
     });
   } catch(e) {}
 }
-
-// Inject email body after page paint so the page shell renders instantly
-requestAnimationFrame(() => {
-  const frame = document.getElementById('email-frame');
-  if (frame) frame.srcdoc = {{ email.html_body | tojson }};
-});
 
 function toggleCommentOnly(e) {
   e.preventDefault();

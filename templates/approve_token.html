@@ -363,6 +363,7 @@
           id="email-frame"
           class="email-body-frame"
           sandbox="allow-same-origin allow-popups"
+          src="/approve/{{ approval.token }}/body"
           onload="autoHeight(this)"
           loading="lazy"
         ></iframe>
@@ -462,8 +463,7 @@ function autoHeight(frame) {
   try {
     const doc = frame.contentDocument;
     const resize = () => {
-      const h = doc.body.scrollHeight;
-      frame.style.height = Math.max(h + 32, 300) + 'px';
+      frame.style.height = Math.max(doc.body.scrollHeight + 32, 300) + 'px';
     };
     resize();
     const imgs = doc.querySelectorAll('img');
@@ -476,14 +476,6 @@ function autoHeight(frame) {
     });
   } catch(e) {}
 }
-
-// Inject email body after page paint so layout renders instantly
-{% if email and not done %}
-requestAnimationFrame(() => {
-  const frame = document.getElementById('email-frame');
-  if (frame) frame.srcdoc = {{ email.html_body | tojson }};
-});
-{% endif %}
 </script>
 </body>
 </html>

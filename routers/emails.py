@@ -35,6 +35,19 @@ def poll_now(
     return RedirectResponse(f"/emails?polled={count}", status_code=302)
 
 
+@router.get("/{email_id}/body", response_class=HTMLResponse)
+def email_body(
+    email_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    """Serve raw email HTML body for iframe — requires login."""
+    email = db.query(Email).filter(Email.id == email_id).first()
+    if not email:
+        return HTMLResponse("Not found", status_code=404)
+    return HTMLResponse(email.html_body or "")
+
+
 @router.get("/{email_id}", response_class=HTMLResponse)
 def email_detail(
     email_id: int,

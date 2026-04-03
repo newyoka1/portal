@@ -372,6 +372,15 @@ def approval_log(
 # ---------------------------------------------------------------------------
 # Public token-based approval (no login required)
 # ---------------------------------------------------------------------------
+@app.get("/approve/{token}/body", response_class=HTMLResponse)
+def approve_email_body(token: str, db: Session = Depends(get_db)):
+    """Serve raw email HTML body for iframe — no auth, token-gated."""
+    approval = db.query(Approval).filter(Approval.token == token).first()
+    if not approval:
+        return HTMLResponse("Not found", status_code=404)
+    return HTMLResponse(approval.email.html_body or "")
+
+
 @app.get("/approve/{token}", response_class=HTMLResponse)
 def approve_page(token: str, request: Request, db: Session = Depends(get_db)):
     approval = db.query(Approval).filter(Approval.token == token).first()
