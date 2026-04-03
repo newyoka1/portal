@@ -99,10 +99,37 @@
       font-weight: 500;
       color: #636366;
     }
+    .email-body-wrap {
+      position: relative;
+      min-height: 300px;
+      background: #fff;
+    }
+    .email-body-wrap .loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      z-index: 2;
+      transition: opacity .3s;
+    }
+    .email-body-wrap .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #e5e5e7;
+      border-top-color: #86868b;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .email-body-frame {
       width: 100%;
       border: none;
-      min-height: 500px;
+      min-height: 300px;
       display: block;
       background: #fff;
     }
@@ -359,14 +386,21 @@
             </div>
           </div>
         </div>
-        <iframe
-          id="email-frame"
-          class="email-body-frame"
-          sandbox="allow-same-origin allow-popups"
-          src="/approve/{{ approval.token }}/body"
-          onload="autoHeight(this)"
-          loading="lazy"
-        ></iframe>
+        <div class="email-body-wrap">
+          <div class="loading-overlay" id="email-loading">
+            <div style="text-align:center">
+              <div class="spinner" style="margin:0 auto 12px;"></div>
+              <div style="font-size:13px;color:#86868b;">Loading email…</div>
+            </div>
+          </div>
+          <iframe
+            id="email-frame"
+            class="email-body-frame"
+            sandbox="allow-same-origin allow-popups"
+            src="/approve/{{ approval.token }}/body"
+            onload="frameLoaded(this)"
+          ></iframe>
+        </div>
       </div>
     </div>
 
@@ -459,20 +493,25 @@
 </div>
 
 <script>
-function autoHeight(frame) {
+function frameLoaded(frame) {
+  // Hide spinner immediately once HTML is parsed
+  const overlay = document.getElementById('email-loading');
+  if (overlay) overlay.classList.add('hidden');
+
   try {
     const doc = frame.contentDocument;
     const resize = () => {
       frame.style.height = Math.max(doc.body.scrollHeight + 32, 300) + 'px';
     };
     resize();
+    // Resize again after images finish loading
     const imgs = doc.querySelectorAll('img');
     let pending = imgs.length;
     if (!pending) return;
     imgs.forEach(img => {
       if (img.complete) { pending--; return; }
-      img.addEventListener('load', () => { pending--; if (!pending) resize(); });
-      img.addEventListener('error', () => { pending--; if (!pending) resize(); });
+      img.addEventListener('load', () => { pending--; resize(); });
+      img.addEventListener('error', () => { pending--; resize(); });
     });
   } catch(e) {}
 }

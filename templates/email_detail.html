@@ -40,12 +40,20 @@
       </div>
 
       <!-- Sandboxed HTML email renderer (loaded async from separate endpoint) -->
-      <iframe
-        id="email-frame"
-        sandbox="allow-same-origin allow-popups"
-        src="/emails/{{ email.id }}/body"
-        onload="autoHeight(this)"
-      ></iframe>
+      <div style="position:relative;min-height:300px;background:#fff;">
+        <div id="email-loading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:#fff;z-index:2;transition:opacity .3s;">
+          <div class="text-center text-muted">
+            <div class="spinner-border spinner-border-sm mb-2"></div>
+            <div class="small">Loading email…</div>
+          </div>
+        </div>
+        <iframe
+          id="email-frame"
+          sandbox="allow-same-origin allow-popups"
+          src="/emails/{{ email.id }}/body"
+          onload="frameLoaded(this)"
+        ></iframe>
+      </div>
     </div>
 
     <!-- ── Comments ─────────────────────────────────────────────── -->
@@ -295,8 +303,11 @@
 
 {% block scripts %}
 <script>
-// Auto-size iframe to its content height (progressive: immediate + after images)
-function autoHeight(frame) {
+function frameLoaded(frame) {
+  const overlay = document.getElementById('email-loading');
+  if (overlay) overlay.style.opacity = '0';
+  setTimeout(() => { if (overlay) overlay.style.display = 'none'; }, 300);
+
   try {
     const doc = frame.contentDocument;
     const resize = () => {
@@ -308,8 +319,8 @@ function autoHeight(frame) {
     if (!pending) return;
     imgs.forEach(img => {
       if (img.complete) { pending--; return; }
-      img.addEventListener('load', () => { pending--; if (!pending) resize(); });
-      img.addEventListener('error', () => { pending--; if (!pending) resize(); });
+      img.addEventListener('load', () => { pending--; resize(); });
+      img.addEventListener('error', () => { pending--; resize(); });
     });
   } catch(e) {}
 }
