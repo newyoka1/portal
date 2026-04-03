@@ -266,13 +266,10 @@ def email_settings(
     current_user: User = Depends(require_admin),
 ):
     from portal_config import get_setting
-    from models import Client
     subject_filter = get_setting("EMAIL_SUBJECT_FILTER", "")
-    clients = db.query(Client).order_by(Client.name).all()
     return templates.TemplateResponse(request, "email_settings.html", {
         "current_user":   current_user,
         "subject_filter": subject_filter,
-        "clients":        clients,
     })
 
 
