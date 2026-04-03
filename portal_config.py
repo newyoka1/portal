@@ -79,6 +79,9 @@ DEFAULTS = [
     ("FB_ACCESS_TOKEN",  "", "FB Token for Voter Audiences (ads_management scope)", "meta",  True),
     ("FB_AD_ACCOUNT_ID", "", "FB Ad Account ID for Audiences (numeric, no act_ prefix)", "meta", False),
 
+    # AI / Claude
+    ("ANTHROPIC_API_KEY", "", "Anthropic API Key (for Voter Chat)", "ai", True),
+
     # Nightly CRM automation
     ("VOTER_NIGHTLY_SYNC", "false", "Enable Nightly CRM Sync (true/false)", "voter", False),
     ("VOTER_SYNC_HOUR",    "2",     "Nightly Sync Hour (0–23, server time)",  "voter", False),

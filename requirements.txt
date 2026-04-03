@@ -34,3 +34,6 @@ schedule>=1.2.0
 
 # ── Voter Pipeline / Integrations ──────────────────────────────────────────
 openpyxl>=3.1.0
+
+# ── AI / Claude (Voter Chat) ──────────────────────────────────────────────
+anthropic>=0.39.0

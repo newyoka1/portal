@@ -22,7 +22,7 @@ from auth import get_current_user, purge_expired_sessions, require_user
 from database import Base, engine, get_db
 from gmail_poller import fetch_and_store_emails
 from models import Approval, Comment, Email, PortalSetting, User   # noqa: F401 — ensure models are imported before create_all
-from routers import auth, clients, comments, emails, fb_ad_approval, fb_receipts, integrations, settings, users, voter_pipeline
+from routers import auth, clients, comments, emails, fb_ad_approval, fb_receipts, integrations, settings, users, voter_chat, voter_pipeline
 from routers.emails import recalculate_status
 
 logging.basicConfig(level=logging.INFO)
@@ -79,6 +79,7 @@ app.include_router(comments.router)
 app.include_router(integrations.router)
 app.include_router(fb_receipts.router)
 app.include_router(voter_pipeline.router)
+app.include_router(voter_chat.router)
 app.include_router(settings.router)
 app.include_router(fb_ad_approval.router)
 
