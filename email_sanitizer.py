@@ -47,9 +47,10 @@ def sanitize_email_html(raw_html: str) -> str:
         if "loading=" in tag.lower():
             return tag  # already has it
         # Insert before the closing > or />
-        return re.sub(r"(/?)>$", r' loading="lazy" decoding="async" \1>', tag)
+        tag = re.sub(r"\s*/?\s*>$", ' loading="lazy" decoding="async">', tag.rstrip())
+        return tag
 
-    html = re.sub(r"<img\b[^>]*>", _lazy_img, html, flags=re.I)
+    html = re.sub(r"<img\b[^>]*?>", _lazy_img, html, flags=re.I | re.S)
 
     # 6. Remove HTML comments (often contain MSO conditionals that bloat size)
     html = re.sub(r"<!--.*?-->", "", html, flags=re.S)
