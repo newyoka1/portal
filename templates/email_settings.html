@@ -5,23 +5,23 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h5 class="fw-bold mb-0"><i class="bi bi-envelope-check me-2"></i>Email Approval Settings</h5>
   <div>
-    <button class="btn btn-primary" onclick="saveEmailSettings()">
-      <i class="bi bi-floppy me-1"></i>Save
+    <button class="btn btn-primary" onclick="saveGlobalFilter()">
+      <i class="bi bi-floppy me-1"></i>Save Default
     </button>
     <span id="saveStatus" class="ms-2 d-none"></span>
   </div>
 </div>
 
-<!-- Subject Filter -->
+<!-- Default / Fallback Subject Filter -->
 <div class="card shadow-sm mb-4">
   <div class="card-header bg-white py-2">
-    <h6 class="fw-bold mb-0"><i class="bi bi-funnel me-1"></i>Subject Filter</h6>
+    <h6 class="fw-bold mb-0"><i class="bi bi-funnel me-1"></i>Default Subject Filter</h6>
   </div>
   <div class="card-body">
     <div class="row align-items-center">
       <div class="col-md-4">
-        <label class="form-label fw-semibold mb-0" for="subject_filter">Filter Word</label>
-        <div class="text-muted" style="font-size:.75rem">Only ingest emails containing this word in the subject</div>
+        <label class="form-label fw-semibold mb-0" for="subject_filter">Fallback Filter Word</label>
+        <div class="text-muted" style="font-size:.75rem">Used when no client-specific filters are set</div>
       </div>
       <div class="col-md-8">
         <input type="text" class="form-control" id="subject_filter"
@@ -29,22 +29,82 @@
                value="{{ subject_filter }}"
                placeholder="e.g. test">
         <div class="form-text">
-          Leave empty to ingest all emails. The Gmail poller uses this as a <code>subject:</code> search filter.
+          Leave empty to ingest all emails. Overridden by per-client filters below.
         </div>
       </div>
     </div>
   </div>
 </div>
 
+<!-- Per-Client Settings Overview -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white py-2 d-flex justify-content-between align-items-center">
+    <h6 class="fw-bold mb-0"><i class="bi bi-people me-1"></i>Per-Client Email Settings</h6>
+    <a href="/clients" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-pencil me-1"></i>Edit in Clients
+    </a>
+  </div>
+  <div class="card-body p-0">
+    {% if clients %}
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Client</th>
+          <th>Subject Filter</th>
+          <th>From Email</th>
+          <th>Approvers</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for client in clients %}
+        <tr>
+          <td class="fw-semibold">{{ client.name }}</td>
+          <td>
+            {% if client.subject_filter %}
+              <code>subject:{{ client.subject_filter }}</code>
+            {% else %}
+              <span class="text-muted fst-italic">default</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if client.from_email %}
+              {{ client.from_email }}
+            {% else %}
+              <span class="text-muted fst-italic">global</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if client.approvers %}
+              {% for ca in client.approvers %}
+                <span class="badge {{ 'bg-danger' if ca.required else 'bg-secondary' }} me-1">
+                  {{ ca.display_name }}
+                </span>
+              {% endfor %}
+            {% else %}
+              <span class="text-muted fst-italic">none</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="p-4 text-muted fst-italic">No clients configured yet. <a href="/clients">Add a client</a> first.</div>
+    {% endif %}
+  </div>
+</div>
+
 <div class="text-muted small">
   <i class="bi bi-info-circle me-1"></i>
-  Subject filter changes take effect on the next Gmail poll (within 60 seconds).
+  The Gmail poller combines all client subject filters with <code>OR</code>.
+  If no clients have filters, the default above is used.
+  Changes take effect on the next poll (within 60 seconds).
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-async function saveEmailSettings() {
+async function saveGlobalFilter() {
   const status = document.getElementById('saveStatus');
   status.className = 'ms-2 text-muted';
   status.textContent = 'Saving...';

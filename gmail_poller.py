@@ -61,16 +61,35 @@ def fetch_and_store_emails() -> int:
     ingested = 0
     try:
         # List unread messages in INBOX, with optional subject filter
+        # Build filter from per-client subject_filter values, fall back to global setting
+        from database import SessionLocal as _SL
+        from models import Client as _Client
         from portal_config import get_setting
-        subject_filter = get_setting("EMAIL_SUBJECT_FILTER", "").strip()
+
+        _db = _SL()
+        try:
+            client_filters = [
+                c.subject_filter.strip()
+                for c in _db.query(_Client).all()
+                if c.subject_filter and c.subject_filter.strip()
+            ]
+        finally:
+            _db.close()
+
+        if client_filters:
+            query_str = " OR ".join(f"subject:{f}" for f in client_filters)
+        else:
+            global_filter = get_setting("EMAIL_SUBJECT_FILTER", "").strip()
+            query_str = f"subject:{global_filter}" if global_filter else ""
+
         list_kwargs = {
             "userId":    "me",
             "labelIds":  ["INBOX", "UNREAD"],
             "maxResults": 50,
         }
-        if subject_filter:
-            list_kwargs["q"] = f"subject:{subject_filter}"
-            logger.info("Gmail poller: filtering with query '%s'", list_kwargs["q"])
+        if query_str:
+            list_kwargs["q"] = query_str
+            logger.info("Gmail poller: filtering with query '%s'", query_str)
 
         result = service.users().messages().list(**list_kwargs).execute()
 

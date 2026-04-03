@@ -114,6 +114,7 @@ def _startup() -> BackgroundScheduler:
         _add_column_if_missing(conn, "emails",    "sent_for_approval_at", "DATETIME NULL")
         _add_column_if_missing(conn, "approvals", "token", "VARCHAR(100) NULL")
         _add_column_if_missing(conn, "clients",   "from_email", "VARCHAR(200) NULL")
+        _add_column_if_missing(conn, "clients",   "subject_filter", "VARCHAR(200) NULL")
 
         # External approver support — name/email on client_approvers and approvals
         _add_column_if_missing(conn, "client_approvers", "approver_name",  "VARCHAR(200) NULL")
@@ -266,10 +267,13 @@ def email_settings(
     current_user: User = Depends(require_admin),
 ):
     from portal_config import get_setting
+    from models import Client
     subject_filter = get_setting("EMAIL_SUBJECT_FILTER", "")
+    clients = db.query(Client).order_by(Client.name).all()
     return templates.TemplateResponse(request, "email_settings.html", {
         "current_user":   current_user,
         "subject_filter": subject_filter,
+        "clients":        clients,
     })
 
 

@@ -55,11 +55,12 @@ class User(Base):
 class Client(Base):
     __tablename__ = "clients"
 
-    id         = Column(Integer, primary_key=True, index=True)
-    name       = Column(String(200), nullable=False)
-    slug       = Column(String(100), unique=True, index=True)
-    from_email = Column(String(200), nullable=True, default=None)  # per-client sender address
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    id             = Column(Integer, primary_key=True, index=True)
+    name           = Column(String(200), nullable=False)
+    slug           = Column(String(100), unique=True, index=True)
+    from_email     = Column(String(200), nullable=True, default=None)  # per-client sender address
+    subject_filter = Column(String(200), nullable=True, default=None)  # per-client subject filter word
+    created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     emails       = relationship("Email", back_populates="client")
     approvers    = relationship("ClientApprover", back_populates="client", cascade="all, delete-orphan")

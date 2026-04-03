@@ -46,6 +46,27 @@ def create_client(
     return RedirectResponse("/clients", status_code=302)
 
 
+ALLOWED_CLIENT_FIELDS = {"from_email", "subject_filter"}
+
+
+@router.post("/{client_id}/update-field")
+def update_client_field(
+    client_id: int,
+    field: str = Form(...),
+    value: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    if field not in ALLOWED_CLIENT_FIELDS:
+        return {"ok": False, "error": "Invalid field"}
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if client:
+        setattr(client, field, value.strip() or None)
+        db.commit()
+    return {"ok": True}
+
+
+# Keep old endpoint for backward compat (email_settings page)
 @router.post("/{client_id}/from-email")
 def update_from_email(
     client_id: int,

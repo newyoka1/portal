@@ -17,15 +17,33 @@
         <h6 class="fw-bold mb-1">{{ client.name }}</h6>
         <div class="text-muted small mb-2">{{ client.emails|length }} email(s)</div>
 
+        <div class="mb-2">
+          <label class="form-label small text-muted mb-1">
+            <i class="bi bi-funnel me-1"></i>Subject Filter
+          </label>
+          <div class="input-group input-group-sm">
+            <input type="text" class="form-control form-control-sm"
+                   value="{{ client.subject_filter or '' }}"
+                   placeholder="e.g. test"
+                   id="subject_filter_{{ client.id }}">
+            <button class="btn btn-outline-primary btn-sm" type="button"
+                    onclick="saveClientField({{ client.id }}, 'subject_filter')">
+              <i class="bi bi-check-lg"></i>
+            </button>
+          </div>
+        </div>
+
         <div class="mb-3">
-          <label class="form-label small text-muted mb-1">From Email</label>
+          <label class="form-label small text-muted mb-1">
+            <i class="bi bi-at me-1"></i>From Email
+          </label>
           <div class="input-group input-group-sm">
             <input type="email" class="form-control form-control-sm"
                    value="{{ client.from_email or '' }}"
                    placeholder="e.g. name@politikanyc.com"
                    id="from_email_{{ client.id }}">
             <button class="btn btn-outline-primary btn-sm" type="button"
-                    onclick="saveFromEmail({{ client.id }})">
+                    onclick="saveClientField({{ client.id }}, 'from_email')">
               <i class="bi bi-check-lg"></i>
             </button>
           </div>
@@ -165,17 +183,17 @@
 
 {% block scripts %}
 <script>
-async function saveFromEmail(clientId) {
-  const input = document.getElementById('from_email_' + clientId);
+async function saveClientField(clientId, field) {
+  const input = document.getElementById(field + '_' + clientId);
   const btn = input.nextElementSibling;
   const origHtml = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
   try {
-    const resp = await fetch(`/clients/${clientId}/from-email`, {
+    const resp = await fetch(`/clients/${clientId}/update-field`, {
       method: 'POST',
       headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-      body: 'from_email=' + encodeURIComponent(input.value),
+      body: `field=${field}&value=` + encodeURIComponent(input.value),
     });
     if (resp.ok) {
       btn.innerHTML = '<i class="bi bi-check-lg text-success"></i>';
