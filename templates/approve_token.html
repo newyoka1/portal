@@ -35,33 +35,28 @@
       display: flex; align-items: center; justify-content: center;
       color: #fff; font-size: 14px; font-weight: 600;
     }
-    .topbar-title {
-      font-size: 14px;
-      font-weight: 600;
-      color: #1d1d1f;
-    }
-    .topbar-subtitle {
-      font-size: 12px;
-      color: #86868b;
-      margin-left: auto;
-    }
+    .topbar-title { font-size: 14px; font-weight: 600; color: #1d1d1f; }
+    .topbar-subtitle { font-size: 12px; color: #86868b; margin-left: auto; }
 
-    /* ── Container ────────────────────────────────────────────── */
-    .mail-container {
-      max-width: 820px;
+    /* ── Two-column layout ────────────────────────────────────── */
+    .page-layout {
+      display: flex;
+      gap: 20px;
+      max-width: 1280px;
       margin: 24px auto;
-      padding: 0 16px;
+      padding: 0 20px;
+      align-items: flex-start;
     }
+    .col-email { flex: 1; min-width: 0; }
+    .col-sidebar { width: 320px; flex-shrink: 0; position: sticky; top: 68px; }
 
-    /* ── Email card (Apple Mail style) ────────────────────────── */
+    /* ── Email card ───────────────────────────────────────────── */
     .email-card {
       background: #fff;
       border-radius: 12px;
       box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
       overflow: hidden;
     }
-
-    /* ── Header area ──────────────────────────────────────────── */
     .email-header {
       padding: 20px 24px 16px;
       border-bottom: 1px solid #f0f0f2;
@@ -87,23 +82,10 @@
       flex-shrink: 0;
     }
     .sender-info { flex: 1; min-width: 0; }
-    .sender-name {
-      font-size: 14px;
-      font-weight: 600;
-      color: #1d1d1f;
-    }
-    .sender-email {
-      font-size: 12px;
-      color: #86868b;
-    }
-    .email-meta {
-      text-align: right;
-      flex-shrink: 0;
-    }
-    .email-date {
-      font-size: 12px;
-      color: #86868b;
-    }
+    .sender-name { font-size: 14px; font-weight: 600; color: #1d1d1f; }
+    .sender-email { font-size: 12px; color: #86868b; }
+    .email-meta { text-align: right; flex-shrink: 0; }
+    .email-date { font-size: 12px; color: #86868b; }
     .email-client-badge {
       display: inline-block;
       margin-top: 4px;
@@ -114,21 +96,51 @@
       font-weight: 500;
       color: #636366;
     }
+    .email-body-frame {
+      width: 100%;
+      border: none;
+      min-height: 500px;
+      display: block;
+      background: #fff;
+    }
 
-    /* ── Reviewer banner ──────────────────────────────────────── */
-    .reviewer-banner {
-      padding: 10px 24px;
-      background: #fafafa;
+    /* ── Sidebar card ─────────────────────────────────────────── */
+    .sidebar-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+    .sidebar-card + .sidebar-card { margin-top: 16px; }
+    .sidebar-header {
+      padding: 14px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1d1d1f;
       border-bottom: 1px solid #f0f0f2;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      font-size: 13px;
+      gap: 8px;
     }
-    .reviewer-banner .reviewer-name {
-      font-weight: 600;
-      color: #1d1d1f;
+    .sidebar-body { padding: 18px; }
+
+    /* ── Reviewer info ────────────────────────────────────────── */
+    .reviewer-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 4px;
     }
+    .reviewer-avatar {
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 600; font-size: 14px;
+      flex-shrink: 0;
+    }
+    .reviewer-name { font-size: 14px; font-weight: 600; color: #1d1d1f; }
+    .reviewer-role { font-size: 12px; color: #86868b; }
     .badge-required {
       display: inline-block;
       padding: 2px 8px;
@@ -138,54 +150,26 @@
       text-transform: uppercase;
       letter-spacing: .03em;
     }
-    .badge-required.required {
-      background: #fef2f2;
-      color: #dc2626;
-    }
-    .badge-required.optional {
-      background: #f0f0f2;
+    .badge-required.required { background: #fef2f2; color: #dc2626; }
+    .badge-required.optional { background: #f0f0f2; color: #636366; }
+
+    /* ── Decision form ────────────────────────────────────────── */
+    .comment-label {
+      font-size: 12px;
+      font-weight: 500;
       color: #636366;
-    }
-
-    /* ── Email body iframe ────────────────────────────────────── */
-    .email-body-frame {
-      width: 100%;
-      border: none;
-      min-height: 400px;
+      margin-bottom: 6px;
       display: block;
-      background: #fff;
-    }
-
-    /* ── Decision panel ───────────────────────────────────────── */
-    .decision-panel {
-      background: #fff;
-      border-radius: 12px;
-      box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
-      margin-top: 16px;
-      overflow: hidden;
-    }
-    .decision-header {
-      padding: 14px 24px;
-      font-size: 14px;
-      font-weight: 600;
-      color: #1d1d1f;
-      border-bottom: 1px solid #f0f0f2;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .decision-body {
-      padding: 20px 24px;
     }
     .comment-box {
       width: 100%;
       border: 1.5px solid #e5e5e7;
       border-radius: 8px;
-      padding: 12px 14px;
+      padding: 10px 12px;
       font-family: inherit;
-      font-size: 14px;
+      font-size: 13px;
       resize: vertical;
-      min-height: 80px;
+      min-height: 90px;
       transition: border-color .15s, box-shadow .15s;
       background: #fafafa;
     }
@@ -196,33 +180,26 @@
       background: #fff;
     }
     .comment-box::placeholder { color: #aeaeb2; }
-    .comment-label {
-      font-size: 13px;
-      font-weight: 500;
-      color: #636366;
-      margin-bottom: 6px;
-      display: block;
-    }
-
     .btn-row {
       display: flex;
-      gap: 12px;
-      margin-top: 16px;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 14px;
     }
     .btn-action {
-      flex: 1;
-      padding: 14px;
+      width: 100%;
+      padding: 12px;
       border: none;
       border-radius: 10px;
       font-family: inherit;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
       cursor: pointer;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      transition: transform .1s, box-shadow .15s, opacity .15s;
+      transition: transform .1s, box-shadow .15s;
     }
     .btn-action:active { transform: scale(.98); }
     .btn-approve {
@@ -238,7 +215,24 @@
     }
     .btn-reject:hover { background: #e6352b; }
 
+    /* ── Email details in sidebar ─────────────────────────────── */
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 12px;
+      border-bottom: 1px solid #f5f5f7;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { color: #86868b; font-weight: 500; }
+    .detail-value { color: #1d1d1f; font-weight: 500; text-align: right; max-width: 60%; word-break: break-word; }
+
     /* ── Done / Thank-you ─────────────────────────────────────── */
+    .centered-container {
+      max-width: 520px;
+      margin: 60px auto;
+      padding: 0 16px;
+    }
     .done-card {
       background: #fff;
       border-radius: 12px;
@@ -246,34 +240,14 @@
       text-align: center;
       padding: 48px 24px;
     }
-    .done-icon {
-      font-size: 56px;
-      margin-bottom: 12px;
-    }
+    .done-icon { font-size: 56px; margin-bottom: 12px; }
     .done-icon.approved { color: #34c759; }
     .done-icon.rejected { color: #ff3b30; }
     .done-icon.neutral  { color: #86868b; }
-    .done-title {
-      font-size: 22px;
-      font-weight: 600;
-      margin: 0 0 8px;
-    }
-    .done-subtitle {
-      font-size: 14px;
-      color: #86868b;
-      margin: 0;
-    }
-    .done-note {
-      margin-top: 16px;
-      font-size: 14px;
-      color: #636366;
-      font-style: italic;
-    }
-    .done-close {
-      margin-top: 24px;
-      font-size: 12px;
-      color: #aeaeb2;
-    }
+    .done-title { font-size: 22px; font-weight: 600; margin: 0 0 8px; }
+    .done-subtitle { font-size: 14px; color: #86868b; margin: 0; }
+    .done-note { margin-top: 16px; font-size: 14px; color: #636366; font-style: italic; }
+    .done-close { margin-top: 24px; font-size: 12px; color: #aeaeb2; }
 
     /* ── Error state ──────────────────────────────────────────── */
     .error-card {
@@ -293,16 +267,22 @@
       color: #aeaeb2;
     }
 
-    /* ── Responsive ───────────────────────────────────────────── */
-    @media (max-width: 600px) {
-      .mail-container { margin: 12px auto; }
+    /* ── Responsive: stack on mobile ─────────────────────────── */
+    @media (max-width: 860px) {
+      .page-layout {
+        flex-direction: column;
+        margin: 12px auto;
+      }
+      .col-sidebar {
+        width: 100%;
+        position: static;
+      }
       .email-header { padding: 16px; }
       .email-subject { font-size: 17px; }
       .sender-row { flex-wrap: wrap; }
       .email-meta { text-align: left; margin-top: 8px; }
-      .reviewer-banner { padding: 10px 16px; flex-wrap: wrap; gap: 6px; }
-      .decision-body { padding: 16px; }
-      .btn-row { flex-direction: column; }
+      .btn-row { flex-direction: row; }
+      .btn-action { flex: 1; }
     }
   </style>
 </head>
@@ -312,13 +292,12 @@
 <div class="topbar">
   <div class="topbar-logo">P</div>
   <span class="topbar-title">Politika</span>
-  <span class="topbar-subtitle"><i class="bi bi-shield-check me-1"></i>Secure Approval</span>
+  <span class="topbar-subtitle"><i class="bi bi-shield-check" style="margin-right:4px;"></i>Secure Approval</span>
 </div>
 
-<div class="mail-container">
-
-  {% if not email %}
-    <!-- ── Invalid / expired link ──────────────────────────────── -->
+{% if not email %}
+  <!-- ── Invalid / expired link ──────────────────────────────── -->
+  <div class="centered-container">
     <div class="error-card">
       <i class="bi bi-exclamation-triangle-fill"></i>
       <h3 style="font-size:18px;font-weight:600;margin:8px 0;">Link Expired</h3>
@@ -326,9 +305,11 @@
         This approval link is invalid or has already been used.
       </p>
     </div>
+  </div>
 
-  {% elif done %}
-    <!-- ── Thank-you screen ────────────────────────────────────── -->
+{% elif done %}
+  <!-- ── Thank-you screen ────────────────────────────────────── -->
+  <div class="centered-container">
     <div class="done-card">
       {% if approval.decision == 'approved' %}
         <div class="done-icon approved"><i class="bi bi-check-circle-fill"></i></div>
@@ -348,82 +329,135 @@
       {% endif %}
       <p class="done-close">You can close this window.</p>
     </div>
+  </div>
 
-  {% else %}
-    <!-- ── Email preview ───────────────────────────────────────── -->
-    <div class="email-card">
-      <div class="email-header">
-        <h1 class="email-subject">{{ email.subject }}</h1>
-        <div class="sender-row">
-          <div class="sender-avatar">
-            {{ (email.from_name or email.from_address)[0] | upper }}
+{% else %}
+  <!-- ── Two-column: email left, decision right ────────────── -->
+  <div class="page-layout">
+
+    <!-- LEFT: full email view -->
+    <div class="col-email">
+      <div class="email-card">
+        <div class="email-header">
+          <h1 class="email-subject">{{ email.subject }}</h1>
+          <div class="sender-row">
+            <div class="sender-avatar">
+              {{ (email.from_name or email.from_address)[0] | upper }}
+            </div>
+            <div class="sender-info">
+              <div class="sender-name">{{ email.from_name or email.from_address }}</div>
+              <div class="sender-email">{{ email.from_address }}</div>
+            </div>
+            <div class="email-meta">
+              <div class="email-date">{{ email.received_at.strftime('%b %d, %Y at %-I:%M %p') }}</div>
+              {% if email.client %}
+                <span class="email-client-badge">{{ email.client.name }}</span>
+              {% endif %}
+            </div>
           </div>
-          <div class="sender-info">
-            <div class="sender-name">{{ email.from_name or email.from_address }}</div>
-            <div class="sender-email">{{ email.from_address }}</div>
-          </div>
-          <div class="email-meta">
-            <div class="email-date">{{ email.received_at.strftime('%b %d, %Y at %-I:%M %p') }}</div>
-            {% if email.client %}
-              <span class="email-client-badge">{{ email.client.name }}</span>
-            {% endif %}
+        </div>
+        <iframe
+          class="email-body-frame"
+          sandbox="allow-same-origin allow-popups"
+          srcdoc="{{ email.html_body | e }}"
+          onload="autoHeight(this)"
+        ></iframe>
+      </div>
+    </div>
+
+    <!-- RIGHT: sticky sidebar -->
+    <div class="col-sidebar">
+
+      <!-- Reviewer info -->
+      <div class="sidebar-card">
+        <div class="sidebar-header">
+          <i class="bi bi-person-check" style="color:#86868b;"></i>
+          Reviewer
+        </div>
+        <div class="sidebar-body">
+          <div class="reviewer-row">
+            <div class="reviewer-avatar">
+              {{ approval.display_name[0] | upper }}
+            </div>
+            <div>
+              <div class="reviewer-name">{{ approval.display_name }}</div>
+              <div class="reviewer-role">
+                {% if approval.required %}
+                  <span class="badge-required required">Required</span>
+                {% else %}
+                  <span class="badge-required optional">Optional</span>
+                {% endif %}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="reviewer-banner">
-        <span>
-          <i class="bi bi-person-check" style="color:#86868b;"></i>
-          Reviewing as <span class="reviewer-name">{{ approval.display_name }}</span>
-        </span>
-        {% if approval.required %}
-          <span class="badge-required required">Required</span>
-        {% else %}
-          <span class="badge-required optional">Optional</span>
-        {% endif %}
-      </div>
-
-      <iframe
-        class="email-body-frame"
-        sandbox="allow-same-origin allow-popups"
-        srcdoc="{{ email.html_body | e }}"
-        onload="autoHeight(this)"
-      ></iframe>
-    </div>
-
-    <!-- ── Decision ────────────────────────────────────────────── -->
-    <div class="decision-panel">
-      <div class="decision-header">
-        <i class="bi bi-chat-square-text" style="color:#86868b;"></i>
-        Your Decision
-      </div>
-      <div class="decision-body">
-        <form method="post">
-          <label class="comment-label">Add a comment <span style="color:#aeaeb2;">(optional)</span></label>
-          <textarea name="note" class="comment-box" placeholder="Leave feedback or a note for the team…"></textarea>
-          <div class="btn-row">
-            <button name="decision" value="approved" class="btn-action btn-approve">
-              <i class="bi bi-check-lg"></i>Approve
-            </button>
-            <button name="decision" value="rejected" class="btn-action btn-reject">
-              <i class="bi bi-x-lg"></i>Reject
-            </button>
+      <!-- Email details -->
+      <div class="sidebar-card">
+        <div class="sidebar-header">
+          <i class="bi bi-info-circle" style="color:#86868b;"></i>
+          Details
+        </div>
+        <div class="sidebar-body" style="padding-top:12px;padding-bottom:12px;">
+          <div class="detail-row">
+            <span class="detail-label">From</span>
+            <span class="detail-value">{{ email.from_name or email.from_address }}</span>
           </div>
-        </form>
+          <div class="detail-row">
+            <span class="detail-label">Date</span>
+            <span class="detail-value">{{ email.received_at.strftime('%b %d, %Y') }}</span>
+          </div>
+          {% if email.client %}
+          <div class="detail-row">
+            <span class="detail-label">Client</span>
+            <span class="detail-value">{{ email.client.name }}</span>
+          </div>
+          {% endif %}
+          {% if email.origin_system and email.origin_system != 'Unknown' %}
+          <div class="detail-row">
+            <span class="detail-label">Origin</span>
+            <span class="detail-value">{{ email.origin_system }}</span>
+          </div>
+          {% endif %}
+        </div>
       </div>
-    </div>
-  {% endif %}
 
-  <div class="page-footer">
-    Powered by Politika Portal
+      <!-- Decision form -->
+      <div class="sidebar-card">
+        <div class="sidebar-header">
+          <i class="bi bi-chat-square-text" style="color:#86868b;"></i>
+          Your Decision
+        </div>
+        <div class="sidebar-body">
+          <form method="post">
+            <label class="comment-label">Comment <span style="color:#aeaeb2;">(optional)</span></label>
+            <textarea name="note" class="comment-box" placeholder="Leave feedback or a note…"></textarea>
+            <div class="btn-row">
+              <button name="decision" value="approved" class="btn-action btn-approve">
+                <i class="bi bi-check-lg"></i>Approve
+              </button>
+              <button name="decision" value="rejected" class="btn-action btn-reject">
+                <i class="bi bi-x-lg"></i>Reject
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+    </div>
   </div>
+{% endif %}
+
+<div class="page-footer">
+  Powered by Politika Portal
 </div>
 
 <script>
 function autoHeight(frame) {
   try {
     const h = frame.contentDocument.body.scrollHeight;
-    frame.style.height = Math.max(h + 32, 300) + 'px';
+    frame.style.height = Math.max(h + 32, 400) + 'px';
   } catch(e) {}
 }
 </script>
