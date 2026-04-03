@@ -29,9 +29,9 @@ def sanitize_email_html(raw_html: str) -> str:
     # 2. Remove external <link> stylesheets (keep <style> blocks — they're inline)
     html = re.sub(r"<link[^>]*stylesheet[^>]*/?>", "", html, flags=re.I)
 
-    # 3. Remove tracking pixels: <img> with width="1" or height="1"
+    # 3. Remove tracking pixels: <img> with width="1" or height="1" (exact match)
     html = re.sub(
-        r'<img[^>]*(?:width\s*=\s*["\']?[01]["\']?|height\s*=\s*["\']?[01]["\']?)[^>]*/?>',
+        r'<img[^>]*(?:width\s*=\s*["\']?[01]["\'\s>]|height\s*=\s*["\']?[01]["\'\s>])[^>]*/?>',
         "", html, flags=re.I
     )
 
