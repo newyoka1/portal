@@ -4,16 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Email Approval — Politika</title>
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" media="print" onload="this.media='all'">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <!-- Zero external dependencies — everything is inline for instant render -->
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
       margin: 0;
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
       background: #f5f5f7;
       color: #1d1d1f;
       -webkit-font-smoothing: antialiased;
@@ -322,14 +318,14 @@
 <div class="topbar">
   <div class="topbar-logo">P</div>
   <span class="topbar-title">Politika</span>
-  <span class="topbar-subtitle"><i class="bi bi-shield-check" style="margin-right:4px;"></i>Secure Approval</span>
+  <span class="topbar-subtitle"><svg width="14" height="14" viewBox="0 0 16 16" fill="#86868b" style="vertical-align:-2px;margin-right:4px;"><path d="M5.338 1.59a61 61 0 0 0-2.837.856.48.48 0 0 0-.328.39c-.554 4.157.726 7.19 2.253 9.188a10.7 10.7 0 0 0 2.287 2.233c.346.244.652.42.893.533q.18.085.293.118a1 1 0 0 0 .101.025 1 1 0 0 0 .1-.025q.114-.034.294-.118c.24-.113.547-.29.893-.533a10.7 10.7 0 0 0 2.287-2.233c1.527-1.997 2.807-5.031 2.253-9.188a.48.48 0 0 0-.328-.39c-.651-.213-1.75-.56-2.837-.856C9.552 1.29 8.531 1.067 8 1.067c-.53 0-1.552.223-2.662.524zM5.072.56C6.157.265 7.31 0 8 0s1.843.265 2.928.56c1.11.3 2.229.655 2.887.87a1.54 1.54 0 0 1 1.044 1.262c.596 4.477-.787 7.795-2.465 9.99a11.8 11.8 0 0 1-2.517 2.453 7 7 0 0 1-1.048.625c-.28.132-.581.24-.829.24s-.548-.108-.829-.24a7 7 0 0 1-1.048-.625 11.8 11.8 0 0 1-2.517-2.453C1.928 10.487.545 7.169 1.141 2.692A1.54 1.54 0 0 1 2.185 1.43 63 63 0 0 1 5.072.56"/><path d="M10.854 5.146a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7.5 7.793l2.646-2.647a.5.5 0 0 1 .708 0"/></svg>Secure Approval</span>
 </div>
 
 {% if not email %}
   <!-- ── Invalid / expired link ──────────────────────────────── -->
   <div class="centered-container">
     <div class="error-card">
-      <i class="bi bi-exclamation-triangle-fill"></i>
+      <span style="font-size:48px;">&#9888;</span>
       <h3 style="font-size:18px;font-weight:600;margin:8px 0;">Link Expired</h3>
       <p style="font-size:14px;color:#86868b;margin:0;">
         This approval link is invalid or has already been used.
@@ -342,15 +338,15 @@
   <div class="centered-container">
     <div class="done-card">
       {% if approval.decision == 'approved' %}
-        <div class="done-icon approved"><i class="bi bi-check-circle-fill"></i></div>
+        <div class="done-icon approved">&#10004;</div>
         <h3 class="done-title" style="color:#34c759;">Approved</h3>
         <p class="done-subtitle">You approved <strong>{{ email.subject }}</strong></p>
       {% elif approval.decision == 'rejected' %}
-        <div class="done-icon rejected"><i class="bi bi-x-circle-fill"></i></div>
+        <div class="done-icon rejected">&#10008;</div>
         <h3 class="done-title" style="color:#ff3b30;">Rejected</h3>
         <p class="done-subtitle">You rejected <strong>{{ email.subject }}</strong></p>
       {% else %}
-        <div class="done-icon neutral"><i class="bi bi-info-circle-fill"></i></div>
+        <div class="done-icon neutral">&#8505;</div>
         <h3 class="done-title">Already Responded</h3>
         <p class="done-subtitle">Your decision for <strong>{{ email.subject }}</strong> has been recorded.</p>
       {% endif %}
@@ -410,7 +406,7 @@
       <!-- Reviewer info -->
       <div class="sidebar-card">
         <div class="sidebar-header">
-          <i class="bi bi-person-check" style="color:#86868b;"></i>
+          <span style="color:#86868b;">&#128100;</span>
           Reviewer
         </div>
         <div class="sidebar-body">
@@ -435,7 +431,7 @@
       <!-- Email details -->
       <div class="sidebar-card">
         <div class="sidebar-header">
-          <i class="bi bi-info-circle" style="color:#86868b;"></i>
+          <span style="color:#86868b;">&#9432;</span>
           Details
         </div>
         <div class="sidebar-body" style="padding-top:12px;padding-bottom:12px;">
@@ -465,7 +461,7 @@
       <!-- Decision form -->
       <div class="sidebar-card">
         <div class="sidebar-header">
-          <i class="bi bi-chat-square-text" style="color:#86868b;"></i>
+          <span style="color:#86868b;">&#9998;</span>
           Your Decision
         </div>
         <div class="sidebar-body">
@@ -474,10 +470,10 @@
             <textarea name="note" class="comment-box" placeholder="Leave feedback or a note…"></textarea>
             <div class="btn-row">
               <button name="decision" value="approved" class="btn-action btn-approve">
-                <i class="bi bi-check-lg"></i>Approve
+                &#10003; Approve
               </button>
               <button name="decision" value="rejected" class="btn-action btn-reject">
-                <i class="bi bi-x-lg"></i>Reject
+                &#10007; Reject
               </button>
             </div>
           </form>
