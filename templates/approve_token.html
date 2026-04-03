@@ -4,104 +4,409 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Email Approval — Politika</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-  <link href="/static/style.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Top bar ──────────────────────────────────────────────── */
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #e5e5e7;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topbar-logo {
+      width: 28px; height: 28px;
+      background: #070007;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 14px; font-weight: 600;
+    }
+    .topbar-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+    .topbar-subtitle {
+      font-size: 12px;
+      color: #86868b;
+      margin-left: auto;
+    }
+
+    /* ── Container ────────────────────────────────────────────── */
+    .mail-container {
+      max-width: 820px;
+      margin: 24px auto;
+      padding: 0 16px;
+    }
+
+    /* ── Email card (Apple Mail style) ────────────────────────── */
+    .email-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+
+    /* ── Header area ──────────────────────────────────────────── */
+    .email-header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid #f0f0f2;
+    }
+    .email-subject {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1d1d1f;
+      margin: 0 0 12px;
+      line-height: 1.3;
+    }
+    .sender-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sender-avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 600; font-size: 16px;
+      flex-shrink: 0;
+    }
+    .sender-info { flex: 1; min-width: 0; }
+    .sender-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+    .sender-email {
+      font-size: 12px;
+      color: #86868b;
+    }
+    .email-meta {
+      text-align: right;
+      flex-shrink: 0;
+    }
+    .email-date {
+      font-size: 12px;
+      color: #86868b;
+    }
+    .email-client-badge {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #f0f0f2;
+      font-size: 11px;
+      font-weight: 500;
+      color: #636366;
+    }
+
+    /* ── Reviewer banner ──────────────────────────────────────── */
+    .reviewer-banner {
+      padding: 10px 24px;
+      background: #fafafa;
+      border-bottom: 1px solid #f0f0f2;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+    }
+    .reviewer-banner .reviewer-name {
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+    .badge-required {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .badge-required.required {
+      background: #fef2f2;
+      color: #dc2626;
+    }
+    .badge-required.optional {
+      background: #f0f0f2;
+      color: #636366;
+    }
+
+    /* ── Email body iframe ────────────────────────────────────── */
+    .email-body-frame {
+      width: 100%;
+      border: none;
+      min-height: 400px;
+      display: block;
+      background: #fff;
+    }
+
+    /* ── Decision panel ───────────────────────────────────────── */
+    .decision-panel {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      margin-top: 16px;
+      overflow: hidden;
+    }
+    .decision-header {
+      padding: 14px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #1d1d1f;
+      border-bottom: 1px solid #f0f0f2;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .decision-body {
+      padding: 20px 24px;
+    }
+    .comment-box {
+      width: 100%;
+      border: 1.5px solid #e5e5e7;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 14px;
+      resize: vertical;
+      min-height: 80px;
+      transition: border-color .15s, box-shadow .15s;
+      background: #fafafa;
+    }
+    .comment-box:focus {
+      outline: none;
+      border-color: #007aff;
+      box-shadow: 0 0 0 3px rgba(0,122,255,.15);
+      background: #fff;
+    }
+    .comment-box::placeholder { color: #aeaeb2; }
+    .comment-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: #636366;
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .btn-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .btn-action {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform .1s, box-shadow .15s, opacity .15s;
+    }
+    .btn-action:active { transform: scale(.98); }
+    .btn-approve {
+      background: #34c759;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(52,199,89,.3);
+    }
+    .btn-approve:hover { background: #2db84e; }
+    .btn-reject {
+      background: #ff3b30;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(255,59,48,.3);
+    }
+    .btn-reject:hover { background: #e6352b; }
+
+    /* ── Done / Thank-you ─────────────────────────────────────── */
+    .done-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      text-align: center;
+      padding: 48px 24px;
+    }
+    .done-icon {
+      font-size: 56px;
+      margin-bottom: 12px;
+    }
+    .done-icon.approved { color: #34c759; }
+    .done-icon.rejected { color: #ff3b30; }
+    .done-icon.neutral  { color: #86868b; }
+    .done-title {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0 0 8px;
+    }
+    .done-subtitle {
+      font-size: 14px;
+      color: #86868b;
+      margin: 0;
+    }
+    .done-note {
+      margin-top: 16px;
+      font-size: 14px;
+      color: #636366;
+      font-style: italic;
+    }
+    .done-close {
+      margin-top: 24px;
+      font-size: 12px;
+      color: #aeaeb2;
+    }
+
+    /* ── Error state ──────────────────────────────────────────── */
+    .error-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      text-align: center;
+      padding: 48px 24px;
+    }
+    .error-card i { font-size: 48px; color: #ff3b30; margin-bottom: 12px; }
+
+    /* ── Footer ───────────────────────────────────────────────── */
+    .page-footer {
+      text-align: center;
+      padding: 24px 16px 32px;
+      font-size: 12px;
+      color: #aeaeb2;
+    }
+
+    /* ── Responsive ───────────────────────────────────────────── */
+    @media (max-width: 600px) {
+      .mail-container { margin: 12px auto; }
+      .email-header { padding: 16px; }
+      .email-subject { font-size: 17px; }
+      .sender-row { flex-wrap: wrap; }
+      .email-meta { text-align: left; margin-top: 8px; }
+      .reviewer-banner { padding: 10px 16px; flex-wrap: wrap; gap: 6px; }
+      .decision-body { padding: 16px; }
+      .btn-row { flex-direction: column; }
+    }
+  </style>
 </head>
-<body class="bg-light">
+<body>
 
-<nav class="navbar navbar-dark bg-dark px-3 mb-4">
-  <span class="navbar-brand fw-bold">
-    <i class="bi bi-envelope-check-fill me-2"></i>Email Approval — Politika
-  </span>
-</nav>
+<!-- Top bar -->
+<div class="topbar">
+  <div class="topbar-logo">P</div>
+  <span class="topbar-title">Politika</span>
+  <span class="topbar-subtitle"><i class="bi bi-shield-check me-1"></i>Secure Approval</span>
+</div>
 
-<div class="container" style="max-width:860px;">
+<div class="mail-container">
 
   {% if not email %}
-    <div class="alert alert-danger">
-      <i class="bi bi-exclamation-triangle me-2"></i>
-      This approval link is invalid or has already been used.
+    <!-- ── Invalid / expired link ──────────────────────────────── -->
+    <div class="error-card">
+      <i class="bi bi-exclamation-triangle-fill"></i>
+      <h3 style="font-size:18px;font-weight:600;margin:8px 0;">Link Expired</h3>
+      <p style="font-size:14px;color:#86868b;margin:0;">
+        This approval link is invalid or has already been used.
+      </p>
     </div>
 
   {% elif done %}
-    <!-- ── Thank-you screen ─────────────────────────────────────── -->
-    <div class="card shadow-sm text-center py-5">
+    <!-- ── Thank-you screen ────────────────────────────────────── -->
+    <div class="done-card">
       {% if approval.decision == 'approved' %}
-        <i class="bi bi-check-circle-fill text-success" style="font-size:4rem;"></i>
-        <h3 class="mt-3 fw-bold text-success">Approved!</h3>
-        <p class="text-muted">You approved <strong>{{ email.subject }}</strong>.</p>
+        <div class="done-icon approved"><i class="bi bi-check-circle-fill"></i></div>
+        <h3 class="done-title" style="color:#34c759;">Approved</h3>
+        <p class="done-subtitle">You approved <strong>{{ email.subject }}</strong></p>
       {% elif approval.decision == 'rejected' %}
-        <i class="bi bi-x-circle-fill text-danger" style="font-size:4rem;"></i>
-        <h3 class="mt-3 fw-bold text-danger">Rejected</h3>
-        <p class="text-muted">You rejected <strong>{{ email.subject }}</strong>.</p>
+        <div class="done-icon rejected"><i class="bi bi-x-circle-fill"></i></div>
+        <h3 class="done-title" style="color:#ff3b30;">Rejected</h3>
+        <p class="done-subtitle">You rejected <strong>{{ email.subject }}</strong></p>
       {% else %}
-        <i class="bi bi-info-circle-fill text-secondary" style="font-size:4rem;"></i>
-        <h3 class="mt-3 fw-bold">Already responded</h3>
-        <p class="text-muted">Your decision for <strong>{{ email.subject }}</strong> has already been recorded.</p>
+        <div class="done-icon neutral"><i class="bi bi-info-circle-fill"></i></div>
+        <h3 class="done-title">Already Responded</h3>
+        <p class="done-subtitle">Your decision for <strong>{{ email.subject }}</strong> has been recorded.</p>
       {% endif %}
       {% if approval.note %}
-        <p class="text-muted fst-italic">"{{ approval.note }}"</p>
+        <p class="done-note">"{{ approval.note }}"</p>
       {% endif %}
-      <p class="mt-3 text-muted small">You can close this window.</p>
+      <p class="done-close">You can close this window.</p>
     </div>
 
   {% else %}
-    <!-- ── Review & decide screen ───────────────────────────────── -->
-    <div class="card shadow-sm mb-4">
-      <div class="card-header bg-white py-3">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-          <div>
-            <h5 class="mb-1 fw-bold">{{ email.subject }}</h5>
-            <div class="text-muted small">
-              <i class="bi bi-person me-1"></i>{{ email.from_name or '' }} &lt;{{ email.from_address }}&gt;
-              <span class="ms-3"><i class="bi bi-clock me-1"></i>{{ email.received_at.strftime('%B %d, %Y') }}</span>
-              {% if email.client %}
-                <span class="ms-3"><i class="bi bi-briefcase me-1"></i>{{ email.client.name }}</span>
-              {% endif %}
-            </div>
+    <!-- ── Email preview ───────────────────────────────────────── -->
+    <div class="email-card">
+      <div class="email-header">
+        <h1 class="email-subject">{{ email.subject }}</h1>
+        <div class="sender-row">
+          <div class="sender-avatar">
+            {{ (email.from_name or email.from_address)[0] | upper }}
           </div>
-          <div class="text-end">
-            <div class="text-muted small mb-1">Reviewing as</div>
-            <strong>{{ approval.display_name }}</strong>
-            {% if approval.required %}
-              <span class="badge bg-danger ms-1">Required</span>
-            {% else %}
-              <span class="badge bg-secondary ms-1">Optional</span>
+          <div class="sender-info">
+            <div class="sender-name">{{ email.from_name or email.from_address }}</div>
+            <div class="sender-email">{{ email.from_address }}</div>
+          </div>
+          <div class="email-meta">
+            <div class="email-date">{{ email.received_at.strftime('%b %d, %Y at %-I:%M %p') }}</div>
+            {% if email.client %}
+              <span class="email-client-badge">{{ email.client.name }}</span>
             {% endif %}
           </div>
         </div>
       </div>
 
-      <!-- Email preview -->
+      <div class="reviewer-banner">
+        <span>
+          <i class="bi bi-person-check" style="color:#86868b;"></i>
+          Reviewing as <span class="reviewer-name">{{ approval.display_name }}</span>
+        </span>
+        {% if approval.required %}
+          <span class="badge-required required">Required</span>
+        {% else %}
+          <span class="badge-required optional">Optional</span>
+        {% endif %}
+      </div>
+
       <iframe
+        class="email-body-frame"
         sandbox="allow-same-origin allow-popups"
         srcdoc="{{ email.html_body | e }}"
         onload="autoHeight(this)"
-        style="width:100%;border:none;min-height:300px;"
       ></iframe>
     </div>
 
-    <!-- Decision form -->
-    <div class="card shadow-sm mb-5">
-      <div class="card-header bg-white fw-semibold">
-        <i class="bi bi-check2-circle me-2"></i>Your Decision
+    <!-- ── Decision ────────────────────────────────────────────── -->
+    <div class="decision-panel">
+      <div class="decision-header">
+        <i class="bi bi-chat-square-text" style="color:#86868b;"></i>
+        Your Decision
       </div>
-      <div class="card-body">
+      <div class="decision-body">
         <form method="post">
-          <div class="mb-3">
-            <label class="form-label fw-semibold">Comment <span class="text-muted fw-normal">(optional)</span></label>
-            <textarea name="note" rows="3" class="form-control"
-                      placeholder="Add a note or feedback…"></textarea>
-          </div>
-          <div class="d-flex gap-3">
-            <button name="decision" value="approved"
-                    class="btn btn-success btn-lg flex-fill">
-              <i class="bi bi-check-lg me-2"></i>Approve
+          <label class="comment-label">Add a comment <span style="color:#aeaeb2;">(optional)</span></label>
+          <textarea name="note" class="comment-box" placeholder="Leave feedback or a note for the team…"></textarea>
+          <div class="btn-row">
+            <button name="decision" value="approved" class="btn-action btn-approve">
+              <i class="bi bi-check-lg"></i>Approve
             </button>
-            <button name="decision" value="rejected"
-                    class="btn btn-danger btn-lg flex-fill">
-              <i class="bi bi-x-lg me-2"></i>Reject
+            <button name="decision" value="rejected" class="btn-action btn-reject">
+              <i class="bi bi-x-lg"></i>Reject
             </button>
           </div>
         </form>
@@ -109,13 +414,16 @@
     </div>
   {% endif %}
 
+  <div class="page-footer">
+    Powered by Politika Portal
+  </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 function autoHeight(frame) {
   try {
-    frame.style.height = frame.contentDocument.body.scrollHeight + 32 + 'px';
+    const h = frame.contentDocument.body.scrollHeight;
+    frame.style.height = Math.max(h + 32, 300) + 'px';
   } catch(e) {}
 }
 </script>
