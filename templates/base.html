@@ -52,6 +52,11 @@
     <a href="/log" class="nav-link {% if request.url.path == '/log' %}active{% endif %}">
       <i class="bi bi-journal-check me-2"></i>Approval Log
     </a>
+    {% if current_user.is_admin %}
+    <a href="/email-settings" class="nav-link {% if request.url.path == '/email-settings' %}active{% endif %}">
+      <i class="bi bi-envelope-check me-2"></i>Settings
+    </a>
+    {% endif %}
 
     <div class="nav-section mt-2">Facebook</div>
     <a href="/fb-receipts" class="nav-link {% if request.url.path.startswith('/fb-receipts') %}active{% endif %}">

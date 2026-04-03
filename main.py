@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from auth import get_current_user, purge_expired_sessions, require_user
+from auth import get_current_user, purge_expired_sessions, require_admin, require_user
 from database import Base, engine, get_db
 from gmail_poller import fetch_and_store_emails
 from models import Approval, Comment, Email, PortalSetting, User   # noqa: F401 — ensure models are imported before create_all
@@ -229,6 +229,26 @@ def dashboard(
 ):
     return templates.TemplateResponse(request, "dashboard.html", {
         "current_user": current_user,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Email Approval Settings
+# ---------------------------------------------------------------------------
+@app.get("/email-settings", response_class=HTMLResponse)
+def email_settings(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    from portal_config import get_setting
+    from models import Client
+    subject_filter = get_setting("EMAIL_SUBJECT_FILTER", "")
+    clients = db.query(Client).order_by(Client.name).all()
+    return templates.TemplateResponse(request, "email_settings.html", {
+        "current_user":   current_user,
+        "subject_filter": subject_filter,
+        "clients":        clients,
     })
 
 
