@@ -61,15 +61,16 @@ def fetch_and_store_emails() -> int:
     ingested = 0
     try:
         # List unread messages in INBOX, with optional subject filter
-        subject_filter = os.getenv("GMAIL_SUBJECT_FILTER", "")
+        from portal_config import get_setting
+        subject_filter = get_setting("EMAIL_SUBJECT_FILTER", "").strip()
         list_kwargs = {
             "userId":    "me",
             "labelIds":  ["INBOX", "UNREAD"],
             "maxResults": 50,
         }
         if subject_filter:
-            list_kwargs["q"] = subject_filter
-            logger.info("Gmail poller: filtering with query '%s'", subject_filter)
+            list_kwargs["q"] = f"subject:{subject_filter}"
+            logger.info("Gmail poller: filtering with query '%s'", list_kwargs["q"])
 
         result = service.users().messages().list(**list_kwargs).execute()
 

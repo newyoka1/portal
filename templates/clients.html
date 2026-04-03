@@ -15,7 +15,21 @@
     <div class="card shadow-sm h-100">
       <div class="card-body">
         <h6 class="fw-bold mb-1">{{ client.name }}</h6>
-        <div class="text-muted small mb-3">{{ client.emails|length }} email(s)</div>
+        <div class="text-muted small mb-2">{{ client.emails|length }} email(s)</div>
+
+        <div class="mb-3">
+          <label class="form-label small text-muted mb-1">From Email</label>
+          <div class="input-group input-group-sm">
+            <input type="email" class="form-control form-control-sm"
+                   value="{{ client.from_email or '' }}"
+                   placeholder="e.g. name@politikanyc.com"
+                   id="from_email_{{ client.id }}">
+            <button class="btn btn-outline-primary btn-sm" type="button"
+                    onclick="saveFromEmail({{ client.id }})">
+              <i class="bi bi-check-lg"></i>
+            </button>
+          </div>
+        </div>
 
         <div class="d-flex justify-content-between align-items-center mb-2">
           <h6 class="small text-uppercase text-muted mb-0">Approvers</h6>
@@ -80,9 +94,17 @@
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
         <div class="modal-body">
-          <label class="form-label">Client Name</label>
-          <input type="text" name="name" class="form-control" required autofocus
-                 placeholder="e.g. Campaign for Jane Smith">
+          <div class="mb-3">
+            <label class="form-label">Client Name</label>
+            <input type="text" name="name" class="form-control" required autofocus
+                   placeholder="e.g. Campaign for Jane Smith">
+          </div>
+          <div>
+            <label class="form-label">From Email <span class="text-muted small">(optional)</span></label>
+            <input type="email" name="from_email" class="form-control"
+                   placeholder="e.g. name@politikanyc.com">
+            <div class="form-text">The sender address used for approval emails for this client.</div>
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -166,6 +188,33 @@ function toggleRow(row) {
   const cb = row.querySelector('.row-check');
   cb.checked = !cb.checked;
   row.classList.toggle('table-primary', cb.checked);
+}
+
+async function saveFromEmail(clientId) {
+  const input = document.getElementById('from_email_' + clientId);
+  const btn = input.nextElementSibling;
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+  try {
+    const resp = await fetch(`/clients/${clientId}/from-email`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'from_email=' + encodeURIComponent(input.value),
+    });
+    if (resp.ok) {
+      btn.innerHTML = '<i class="bi bi-check-lg text-success"></i>';
+      setTimeout(() => { btn.innerHTML = origHtml; }, 1500);
+    } else {
+      btn.innerHTML = '<i class="bi bi-x-lg text-danger"></i>';
+      setTimeout(() => { btn.innerHTML = origHtml; }, 2000);
+    }
+  } catch (e) {
+    btn.innerHTML = '<i class="bi bi-x-lg text-danger"></i>';
+    setTimeout(() => { btn.innerHTML = origHtml; }, 2000);
+  } finally {
+    btn.disabled = false;
+  }
 }
 </script>
 {% endblock %}

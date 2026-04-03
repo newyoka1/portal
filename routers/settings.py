@@ -13,11 +13,12 @@ templates = Jinja2Templates(directory="templates")
 
 # All categories in display order
 CATEGORIES = [
-    ("meta",        "Facebook"),
-    ("email",       "Email"),
-    ("fb_approval", "Facebook Ad Approval"),
-    ("voter",       "Voter"),
-    ("ai",          "AI / Claude"),
+    ("meta",           "Facebook"),
+    ("email",          "Email"),
+    ("email_approval", "Email Approval"),
+    ("fb_approval",    "Facebook Ad Approval"),
+    ("voter",          "Voter"),
+    ("ai",             "AI / Claude"),
 ]
 
 # Dynamic per-platform token rows (created/deleted on demand)

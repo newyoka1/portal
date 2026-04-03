@@ -69,6 +69,9 @@ DEFAULTS = [
     ("GMAIL_APP_PASSWORD",  "", "Gmail App Password",        "email",  True),
     ("APP_URL",             "https://connect.politikanyc.com", "Portal URL (for approval links)", "email", False),
 
+    # Email Approval
+    ("EMAIL_SUBJECT_FILTER", "test", "Subject Filter Word (only ingest emails containing this)", "email_approval", False),
+
     # FB Ad Approval
     ("BASE_URL", "https://connect.politikanyc.com/fb", "FB Ad Approval Base URL", "fb_approval", False),
 

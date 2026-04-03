@@ -19,7 +19,9 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> int:
     Returns the count of messages successfully sent.
     """
     from portal_config import get_setting
-    sender = get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
+    # Use per-client from_email if set, otherwise fall back to global setting
+    client_sender = email.client.from_email if email.client and email.client.from_email else ""
+    sender = client_sender or get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
     try:
         service = _gmail_service()
     except Exception as exc:

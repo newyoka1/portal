@@ -35,6 +35,7 @@ def list_clients(
 @router.post("")
 def create_client(
     name: str = Form(...),
+    from_email: str = Form(""),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -43,9 +44,23 @@ def create_client(
     existing = db.query(Client).filter(Client.slug == slug).first()
     if existing:
         slug = f"{slug}-2"
-    db.add(Client(name=name, slug=slug))
+    db.add(Client(name=name, slug=slug, from_email=from_email.strip() or None))
     db.commit()
     return RedirectResponse("/clients", status_code=302)
+
+
+@router.post("/{client_id}/from-email")
+def update_from_email(
+    client_id: int,
+    from_email: str = Form(""),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if client:
+        client.from_email = from_email.strip() or None
+        db.commit()
+    return {"ok": True}
 
 
 @router.post("/{client_id}/delete")

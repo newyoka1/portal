@@ -58,6 +58,7 @@ class Client(Base):
     id         = Column(Integer, primary_key=True, index=True)
     name       = Column(String(200), nullable=False)
     slug       = Column(String(100), unique=True, index=True)
+    from_email = Column(String(200), nullable=True, default=None)  # per-client sender address
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     emails       = relationship("Email", back_populates="client")
