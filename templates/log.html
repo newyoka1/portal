@@ -57,7 +57,7 @@
           </td>
           <td>
             <span class="badge status-{{ email.status }}">
-              {{ email.status|replace('_',' ')|title }}
+              {{ email.status|status_label }}
             </span>
           </td>
           <td class="text-muted small">{{ email.received_at.strftime('%b %d, %Y') }}</td>

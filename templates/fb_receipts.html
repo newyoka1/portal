@@ -29,9 +29,11 @@
             <button class="btn btn-sm btn-outline-primary" onclick="importMeta()">
               <i class="bi bi-cloud-download me-1"></i>Import from Meta
             </button>
+            {% if not clients %}
             <button class="btn btn-sm btn-outline-warning" onclick="setupDb()">
               <i class="bi bi-database-gear me-1"></i>Setup DB
             </button>
+            {% endif %}
             <a href="/fb-receipts" class="btn btn-sm btn-outline-secondary">
               <i class="bi bi-arrow-clockwise me-1"></i>Reload
             </a>
@@ -69,8 +71,15 @@
                 </td>
                 <td>
                   <select class="form-select form-select-sm" name="schedule">
-                    {% for s in ['weekly_monday','weekly_tuesday','weekly_wednesday','weekly_thursday','weekly_friday','weekly_saturday','weekly_sunday','monthly_1','monthly_7','monthly_14','monthly_15','monthly_28'] %}
-                    <option value="{{ s }}" {{ 'selected' if (c.schedule or 'weekly_friday') == s }}>{{ s }}</option>
+                    {% for val, label in [
+                      ('weekly_monday','Weekly — Monday'),('weekly_tuesday','Weekly — Tuesday'),
+                      ('weekly_wednesday','Weekly — Wednesday'),('weekly_thursday','Weekly — Thursday'),
+                      ('weekly_friday','Weekly — Friday'),('weekly_saturday','Weekly — Saturday'),
+                      ('weekly_sunday','Weekly — Sunday'),
+                      ('monthly_1','Monthly — 1st'),('monthly_7','Monthly — 7th'),
+                      ('monthly_14','Monthly — 14th'),('monthly_15','Monthly — 15th'),('monthly_28','Monthly — 28th')
+                    ] %}
+                    <option value="{{ val }}" {{ 'selected' if (c.schedule or 'weekly_friday') == val }}>{{ label }}</option>
                     {% endfor %}
                   </select>
                 </td>
@@ -111,13 +120,13 @@
             <button class="btn btn-success btn-sm" onclick="sendReceipts()" id="sendBtn">
               <i class="bi bi-send me-1"></i>Send Receipts
             </button>
-            <button class="btn btn-outline-danger btn-sm" onclick="deleteAllReceipts()" id="deleteAllBtn">
-              <i class="bi bi-trash me-1"></i>Delete All
-            </button>
-            <span id="pullStatus" class="small d-none"></span>
             <a href="/fb-receipts" class="btn btn-sm btn-outline-secondary">
               <i class="bi bi-arrow-clockwise me-1"></i>Refresh
             </a>
+            <span id="pullStatus" class="small d-none"></span>
+            <button class="btn btn-outline-secondary btn-sm ms-auto" onclick="deleteAllReceipts()" id="deleteAllBtn" title="Delete all receipts from the database">
+              <i class="bi bi-trash me-1 text-danger"></i>Clear All
+            </button>
           </div>
         </div>
         <div id="pullLog" class="mb-3 d-none">
@@ -411,8 +420,16 @@ async function resendReceipt(receiptId, emailInputId) {
 // ── Add client row ──
 function addClientRow() {
   const tbody = document.getElementById('clientsBody');
-  const schedOpts = ['weekly_monday','weekly_tuesday','weekly_wednesday','weekly_thursday','weekly_friday','weekly_saturday','weekly_sunday','monthly_1','monthly_7','monthly_14','monthly_15','monthly_28']
-    .map(s => `<option value="${s}" ${s==='weekly_friday'?'selected':''}>${s}</option>`).join('');
+  const schedItems = [
+    ['weekly_monday','Weekly — Monday'],['weekly_tuesday','Weekly — Tuesday'],
+    ['weekly_wednesday','Weekly — Wednesday'],['weekly_thursday','Weekly — Thursday'],
+    ['weekly_friday','Weekly — Friday'],['weekly_saturday','Weekly — Saturday'],
+    ['weekly_sunday','Weekly — Sunday'],
+    ['monthly_1','Monthly — 1st'],['monthly_7','Monthly — 7th'],
+    ['monthly_14','Monthly — 14th'],['monthly_15','Monthly — 15th'],['monthly_28','Monthly — 28th']
+  ];
+  const schedOpts = schedItems
+    .map(([v,l]) => `<option value="${v}" ${v==='weekly_friday'?'selected':''}>${l}</option>`).join('');
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td><input type="text" class="form-control form-control-sm" name="client_name" value=""></td>

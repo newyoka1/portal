@@ -26,7 +26,7 @@
   </li>
   <li class="nav-item">
     <a class="nav-link {% if status_filter=='in_review' %}active{% endif %}" href="/emails?status=in_review">
-      In Review
+      Awaiting Approval
       <span class="badge bg-info text-dark ms-1">{{ counts.in_review }}</span>
     </a>
   </li>
@@ -76,7 +76,7 @@
             {% endif %}
           </td>
           <td>
-            <span class="badge status-{{ email.status }}">{{ email.status|replace('_',' ')|title }}</span>
+            <span class="badge status-{{ email.status }}">{{ email.status|status_label }}</span>
           </td>
           <td class="text-muted small">{{ email.received_at.strftime('%b %d, %Y %I:%M %p') }}</td>
           <td class="text-end" onclick="event.stopPropagation()">

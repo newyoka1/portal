@@ -59,6 +59,18 @@ def _tojson_parse(value):
 templates.env.filters["tojson_parse"] = _tojson_parse
 templates.env.filters["from_json"] = _tojson_parse
 
+_STATUS_LABELS = {
+    "pending": "Pending",
+    "in_review": "Awaiting Approval",
+    "approved": "Approved",
+    "rejected": "Rejected",
+}
+
+def _status_label(value):
+    return _STATUS_LABELS.get(value, value.replace("_", " ").title())
+
+templates.env.filters["status_label"] = _status_label
+
 app.include_router(auth.router)
 app.include_router(emails.router)
 app.include_router(clients.router)
@@ -202,21 +214,9 @@ def _startup() -> BackgroundScheduler:
 @app.get("/", response_class=HTMLResponse)
 def dashboard(
     request: Request,
-    db: Session = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    from sqlalchemy import func
-    count_rows = db.query(Email.status, func.count(Email.id)).group_by(Email.status).all()
-    count_map  = {row[0]: row[1] for row in count_rows}
-    counts = {
-        "all":       sum(count_map.values()),
-        "pending":   count_map.get("pending",   0),
-        "in_review": count_map.get("in_review", 0),
-        "approved":  count_map.get("approved",  0),
-        "rejected":  count_map.get("rejected",  0),
-    }
     return templates.TemplateResponse(request, "dashboard.html", {
-        "counts":       counts,
         "current_user": current_user,
     })
 

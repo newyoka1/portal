@@ -13,24 +13,11 @@ templates = Jinja2Templates(directory="templates")
 
 # All categories in display order
 CATEGORIES = [
-    ("meta",        "Meta / Facebook"),
+    ("meta",        "Facebook"),
     ("email",       "Email"),
-    ("fb_approval", "FB Ad Approval"),
-    ("voter",       "Voter & Research"),
+    ("fb_approval", "Facebook Ad Approval"),
+    ("voter",       "Voter"),
 ]
-
-# Which DB categories each section filter shows
-_SECTION_CATS = {
-    "email":    ["email"],
-    "facebook": ["meta", "fb_approval"],
-    "voter":    ["voter"],
-}
-
-_SECTION_TITLES = {
-    "email":    "Email Approval Settings",
-    "facebook": "Facebook Settings",
-    "voter":    "Voter & Research Settings",
-}
 
 # Dynamic per-platform token rows (created/deleted on demand)
 VOTER_PLATFORMS = [
@@ -44,7 +31,6 @@ _DYNAMIC_PREFIXES = tuple(p["prefix"] for p in VOTER_PLATFORMS)
 @router.get("", response_class=HTMLResponse)
 def settings_page(
     request: Request,
-    cat: str = "",
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -65,18 +51,12 @@ def settings_page(
             ),
         })
 
-    # Filter categories to the requested section; show all when no filter
-    active_cats = _SECTION_CATS.get(cat, [c for c, _ in CATEGORIES])
-    visible_categories = [(k, label) for k, label in CATEGORIES if k in active_cats]
-    page_title = _SECTION_TITLES.get(cat, "Portal Settings")
-
     return templates.TemplateResponse(request, "settings.html", {
         "current_user":    current_user,
-        "categories":      visible_categories,
+        "categories":      CATEGORIES,
         "grouped":         grouped,
         "voter_platforms": voter_platforms,
-        "page_title":      page_title,
-        "active_cat":      cat,
+        "page_title":      "Settings",
     })
 
 
