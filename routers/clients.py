@@ -24,10 +24,8 @@ def list_clients(
     current_user: User = Depends(require_admin),
 ):
     clients = db.query(Client).order_by(Client.name).all()
-    users   = db.query(User).order_by(User.name).all()
     return templates.TemplateResponse(request, "clients.html", {
         "clients": clients,
-        "users": users,
         "current_user": current_user,
     })
 
@@ -40,7 +38,6 @@ def create_client(
     current_user: User = Depends(require_admin),
 ):
     slug = _slugify(name)
-    # Ensure slug uniqueness
     existing = db.query(Client).filter(Client.slug == slug).first()
     if existing:
         slug = f"{slug}-2"
@@ -79,43 +76,28 @@ def delete_client(
 @router.post("/{client_id}/approvers")
 def add_approver(
     client_id: int,
-    user_id: int = Form(...),
+    approver_name: str = Form(...),
+    approver_email: str = Form(...),
     required: str = Form("1"),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    # Avoid duplicates
+    email_addr = approver_email.strip().lower()
+    # Avoid duplicates by email
     exists = db.query(ClientApprover).filter_by(
-        client_id=client_id, user_id=user_id
+        client_id=client_id, approver_email=email_addr
     ).first()
     if not exists:
+        # Check if this email belongs to a portal user — link if so
+        portal_user = db.query(User).filter(User.email == email_addr).first()
         db.add(ClientApprover(
             client_id=client_id,
-            user_id=user_id,
+            user_id=portal_user.id if portal_user else None,
+            approver_name=approver_name.strip(),
+            approver_email=email_addr,
             required=required == "1",
         ))
         db.commit()
-    return RedirectResponse("/clients", status_code=302)
-
-
-@router.post("/{client_id}/approvers/batch")
-async def add_approvers_batch(
-    client_id: int,
-    request: Request,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    form     = await request.form()
-    user_ids = form.getlist("user_ids")
-    for uid in user_ids:
-        uid = int(uid)
-        exists = db.query(ClientApprover).filter_by(
-            client_id=client_id, user_id=uid
-        ).first()
-        if not exists:
-            required = form.get(f"required_{uid}", "1") == "1"
-            db.add(ClientApprover(client_id=client_id, user_id=uid, required=required))
-    db.commit()
     return RedirectResponse("/clients", status_code=302)
 
 

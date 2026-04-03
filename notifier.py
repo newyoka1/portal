@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 def send_approval_requests(email, approval_pairs: list, app_url: str) -> int:
     """
     Send approval-request emails.
-    *approval_pairs* is a list of (User, token_str) tuples.
+    *approval_pairs* is a list of (name, email_addr, token_str) tuples.
     Returns the count of messages successfully sent.
     """
     from portal_config import get_setting
@@ -31,12 +31,12 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> int:
     sent        = 0
     client_name = email.client.name if email.client else "Unassigned"
 
-    for user, token in approval_pairs:
+    for approver_name, approver_email, token in approval_pairs:
         approve_url = f"{app_url}/approve/{token}"
 
         msg = MIMEMultipart("alternative")
         msg["From"]    = sender
-        msg["To"]      = user.email
+        msg["To"]      = approver_email
         msg["Subject"] = f"[Approval Needed] {email.subject}"
 
         html_body = f"""
@@ -47,7 +47,7 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> int:
     <span style="color:#fff;font-size:18px;font-weight:bold;">&#9993; Approval Requested</span>
   </div>
   <div style="border:1px solid #ddd;border-top:none;padding:24px;border-radius:0 0 6px 6px;">
-    <p>Hi <strong>{user.name}</strong>,</p>
+    <p>Hi <strong>{approver_name}</strong>,</p>
     <p>An email has been submitted and requires your approval.</p>
     <table style="width:100%;border-collapse:collapse;margin:16px 0;">
       <tr>
@@ -87,8 +87,8 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> int:
                 userId="me", body={"raw": raw}
             ).execute()
             sent += 1
-            logger.info("Approval request sent to %s for email %d", user.email, email.id)
+            logger.info("Approval request sent to %s for email %d", approver_email, email.id)
         except HttpError as exc:
-            logger.error("Failed to notify %s: %s", user.email, exc)
+            logger.error("Failed to notify %s: %s", approver_email, exc)
 
     return sent

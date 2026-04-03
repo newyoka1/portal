@@ -102,6 +102,8 @@ def assign_email(
             db.add(Approval(
                 email_id=email_id,
                 user_id=ca.user_id,
+                approver_name=ca.approver_name,
+                approver_email=ca.approver_email,
                 required=ca.required,
                 decision="pending",
             ))
@@ -174,7 +176,7 @@ def send_for_approval(
 
     from portal_config import get_setting
     app_url        = get_setting("APP_URL", "http://localhost:8000").rstrip("/")
-    approval_pairs = [(a.user, a.token) for a in pending_approvals]
+    approval_pairs = [(a.display_name, a.display_email, a.token) for a in pending_approvals]
     sent           = send_approval_requests(email, approval_pairs, app_url)
 
     email.sent_for_approval_at = datetime.now(timezone.utc)

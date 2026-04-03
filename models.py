@@ -96,11 +96,25 @@ class ClientApprover(Base):
 
     id        = Column(Integer, primary_key=True, index=True)
     client_id = Column(Integer, ForeignKey("clients.id"), nullable=False)
-    user_id   = Column(Integer, ForeignKey("users.id"),   nullable=False)
+    user_id   = Column(Integer, ForeignKey("users.id"),   nullable=True)   # nullable for external approvers
+    approver_name  = Column(String(200), nullable=True)   # external approver name
+    approver_email = Column(String(200), nullable=True)   # external approver email
     required  = Column(Boolean, default=True)   # True = must approve, False = optional
 
     client    = relationship("Client", back_populates="approvers")
     user      = relationship("User",   back_populates="client_roles")
+
+    @property
+    def display_name(self):
+        if self.user:
+            return self.user.name
+        return self.approver_name or self.approver_email or "Unknown"
+
+    @property
+    def email(self):
+        if self.user:
+            return self.user.email
+        return self.approver_email or ""
 
 
 # ---------------------------------------------------------------------------
@@ -135,17 +149,31 @@ class Email(Base):
 class Approval(Base):
     __tablename__ = "approvals"
 
-    id         = Column(Integer, primary_key=True, index=True)
-    email_id   = Column(Integer, ForeignKey("emails.id"), nullable=False)
-    user_id    = Column(Integer, ForeignKey("users.id"),  nullable=False)
-    required   = Column(Boolean, default=True)
-    decision   = Column(String(20), default=ApprovalDecision.pending)
-    note       = Column(Text, default="")
-    decided_at = Column(DateTime, nullable=True)
-    token      = Column(String(100), unique=True, nullable=True, index=True)
+    id              = Column(Integer, primary_key=True, index=True)
+    email_id        = Column(Integer, ForeignKey("emails.id"), nullable=False)
+    user_id         = Column(Integer, ForeignKey("users.id"),  nullable=True)   # nullable for external
+    approver_name   = Column(String(200), nullable=True)
+    approver_email  = Column(String(200), nullable=True)
+    required        = Column(Boolean, default=True)
+    decision        = Column(String(20), default=ApprovalDecision.pending)
+    note            = Column(Text, default="")
+    decided_at      = Column(DateTime, nullable=True)
+    token           = Column(String(100), unique=True, nullable=True, index=True)
 
     email      = relationship("Email", back_populates="approvals")
     user       = relationship("User",  back_populates="approvals")
+
+    @property
+    def display_name(self):
+        if self.user:
+            return self.user.name
+        return self.approver_name or self.approver_email or "Unknown"
+
+    @property
+    def display_email(self):
+        if self.user:
+            return self.user.email
+        return self.approver_email or ""
 
 
 # ---------------------------------------------------------------------------
@@ -170,12 +198,13 @@ class PortalSetting(Base):
 class Comment(Base):
     __tablename__ = "comments"
 
-    id         = Column(Integer, primary_key=True, index=True)
-    email_id   = Column(Integer, ForeignKey("emails.id"), nullable=False)
-    user_id    = Column(Integer, ForeignKey("users.id"),  nullable=False)
-    body       = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    parent_id  = Column(Integer, ForeignKey("comments.id"), nullable=True)
+    id             = Column(Integer, primary_key=True, index=True)
+    email_id       = Column(Integer, ForeignKey("emails.id"), nullable=False)
+    user_id        = Column(Integer, ForeignKey("users.id"),  nullable=True)   # nullable for external approvers
+    commenter_name = Column(String(200), nullable=True)   # display name for external approvers
+    body           = Column(Text, nullable=False)
+    created_at     = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    parent_id      = Column(Integer, ForeignKey("comments.id"), nullable=True)
 
     email      = relationship("Email",   back_populates="comments")
     user       = relationship("User",    back_populates="comments")

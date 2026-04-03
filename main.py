@@ -115,6 +115,30 @@ def _startup() -> BackgroundScheduler:
         _add_column_if_missing(conn, "approvals", "token", "VARCHAR(100) NULL")
         _add_column_if_missing(conn, "clients",   "from_email", "VARCHAR(200) NULL")
 
+        # External approver support — name/email on client_approvers and approvals
+        _add_column_if_missing(conn, "client_approvers", "approver_name",  "VARCHAR(200) NULL")
+        _add_column_if_missing(conn, "client_approvers", "approver_email", "VARCHAR(200) NULL")
+        _add_column_if_missing(conn, "approvals",        "approver_name",  "VARCHAR(200) NULL")
+        _add_column_if_missing(conn, "approvals",        "approver_email", "VARCHAR(200) NULL")
+
+        # Make user_id nullable on client_approvers and approvals (for external approvers)
+        def _make_nullable(conn, table, column, definition):
+            """ALTER a column to be nullable if it isn't already."""
+            is_nullable = conn.execute(sa.text(
+                "SELECT IS_NULLABLE FROM INFORMATION_SCHEMA.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME = :t AND COLUMN_NAME = :c"
+            ), {"t": table, "c": column}).scalar()
+            if is_nullable == "NO":
+                conn.execute(sa.text(f"ALTER TABLE {table} MODIFY COLUMN {column} {definition}"))
+                conn.commit()
+                logging.info("Migration: made %s.%s nullable", table, column)
+
+        _make_nullable(conn, "client_approvers", "user_id", "INT NULL")
+        _make_nullable(conn, "approvals",        "user_id", "INT NULL")
+        _make_nullable(conn, "comments",         "user_id", "INT NULL")
+        _add_column_if_missing(conn, "comments", "commenter_name", "VARCHAR(200) NULL")
+
     # Single unified poller — checks Gmail for both email approvals and Meta receipts
     _sched = "hourly"
     try:
@@ -382,6 +406,7 @@ def approve_submit(
             db.add(Comment(
                 email_id=approval.email_id,
                 user_id=approval.user_id,
+                commenter_name=approval.display_name if not approval.user_id else None,
                 body=f"[{label}] {note.strip()}",
             ))
 
