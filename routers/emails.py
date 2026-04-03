@@ -16,6 +16,14 @@ from notifier import send_approval_requests
 router = APIRouter(prefix="/emails")
 templates = Jinja2Templates(directory="templates")
 
+_STATUS_LABELS = {
+    "pending": "Pending",
+    "in_review": "Awaiting Approval",
+    "approved": "Approved",
+    "rejected": "Rejected",
+}
+templates.env.filters["status_label"] = lambda v: _STATUS_LABELS.get(v, v.replace("_", " ").title())
+
 
 @router.get("/poll")
 def poll_now(
