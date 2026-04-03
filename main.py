@@ -115,6 +115,8 @@ def _startup() -> BackgroundScheduler:
         _add_column_if_missing(conn, "approvals", "token", "VARCHAR(100) NULL")
         _add_column_if_missing(conn, "clients",   "from_email", "VARCHAR(200) NULL")
         _add_column_if_missing(conn, "clients",   "subject_filter", "VARCHAR(200) NULL")
+        _add_column_if_missing(conn, "clients",   "email_template", "TEXT NULL")
+        _add_column_if_missing(conn, "clients",   "sms_template",   "TEXT NULL")
 
         # External approver support — name/email on client_approvers and approvals
         _add_column_if_missing(conn, "client_approvers", "approver_name",  "VARCHAR(200) NULL")

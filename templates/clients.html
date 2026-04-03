@@ -84,15 +84,16 @@
           <p class="text-muted small fst-italic">No approvers yet.</p>
         {% endfor %}
       </div>
-      <div class="card-footer bg-white d-flex justify-content-between">
+      <div class="card-footer bg-white d-flex flex-wrap justify-content-between gap-1">
         <a href="/?client={{ client.id }}" class="btn btn-sm btn-outline-secondary">
-          <i class="bi bi-inbox me-1"></i>View emails
+          <i class="bi bi-inbox me-1"></i>Emails
         </a>
+        <button class="btn btn-sm btn-outline-info"
+                data-bs-toggle="modal" data-bs-target="#templatesModal-{{ client.id }}">
+          <i class="bi bi-chat-square-text me-1"></i>Templates
+        </button>
         <a href="/clients/{{ client.id }}/integrations" class="btn btn-sm btn-outline-primary">
           <i class="bi bi-plug me-1"></i>Integrations
-          {% if client.integrations %}
-            <span class="badge bg-primary ms-1">{{ client.integrations|length }}</span>
-          {% endif %}
         </a>
         <form method="post" action="/clients/{{ client.id }}/delete"
               onsubmit="return confirm('Delete {{ client.name }}?')">
@@ -240,6 +241,64 @@
 {% endfor %}
 {% endfor %}
 
+<!-- Per-client Template modals -->
+{% for client in clients %}
+<div class="modal fade" id="templatesModal-{{ client.id }}" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">
+          <i class="bi bi-chat-square-text me-2"></i>Message Templates — {{ client.name }}
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info py-2 small mb-3">
+          <i class="bi bi-info-circle me-1"></i>
+          <strong>Available variables:</strong>
+          <code>{approver_name}</code>,
+          <code>{subject}</code>,
+          <code>{from}</code>,
+          <code>{client}</code>,
+          <code>{approve_url}</code>
+          — these get replaced when sending.
+          Leave blank to use the default template.
+        </div>
+
+        <!-- Email Template -->
+        <div class="mb-4">
+          <label class="form-label fw-semibold"><i class="bi bi-envelope me-1"></i>Email Body (HTML)</label>
+          <textarea class="form-control font-monospace" rows="10"
+                    id="email_template_{{ client.id }}"
+                    placeholder="Leave blank for default template">{{ client.email_template or '' }}</textarea>
+          <div class="form-text">
+            HTML email body. The portal header/footer are added automatically.
+            Example: <code>&lt;p&gt;Hi &lt;strong&gt;{approver_name}&lt;/strong&gt;, please review &lt;em&gt;{subject}&lt;/em&gt; for {client}.&lt;/p&gt;</code>
+          </div>
+        </div>
+
+        <!-- SMS Template -->
+        <div>
+          <label class="form-label fw-semibold"><i class="bi bi-phone me-1"></i>SMS Message (plain text)</label>
+          <textarea class="form-control" rows="3"
+                    id="sms_template_{{ client.id }}"
+                    placeholder="Leave blank for default: Approval needed: {subject} Review: {approve_url}">{{ client.sms_template or '' }}</textarea>
+          <div class="form-text">
+            Plain text SMS. Keep it short. Example: <code>Hi {approver_name}, approval needed for {client}: {subject}. Review: {approve_url}</code>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" onclick="saveTemplates({{ client.id }})">
+          <i class="bi bi-floppy me-1"></i>Save Templates
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
 {% endblock %}
 
 {% block scripts %}
@@ -266,6 +325,48 @@ async function saveClientField(clientId, field) {
   } catch (e) {
     btn.innerHTML = '<i class="bi bi-x-lg text-danger"></i>';
     setTimeout(() => { btn.innerHTML = origHtml; }, 2000);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function saveTemplates(clientId) {
+  const emailTpl = document.getElementById('email_template_' + clientId).value;
+  const smsTpl   = document.getElementById('sms_template_' + clientId).value;
+  const btn = event.target;
+  const origHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Saving...';
+
+  try {
+    // Save both fields
+    const r1 = await fetch(`/clients/${clientId}/update-field`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'field=email_template&value=' + encodeURIComponent(emailTpl),
+    });
+    const r2 = await fetch(`/clients/${clientId}/update-field`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'field=sms_template&value=' + encodeURIComponent(smsTpl),
+    });
+    if (r1.ok && r2.ok) {
+      btn.innerHTML = '<i class="bi bi-check-lg me-1"></i>Saved!';
+      btn.className = 'btn btn-success';
+      setTimeout(() => {
+        btn.innerHTML = origHtml;
+        btn.className = 'btn btn-primary';
+        bootstrap.Modal.getInstance(document.getElementById('templatesModal-' + clientId)).hide();
+      }, 1500);
+    } else {
+      btn.innerHTML = '<i class="bi bi-x-lg me-1"></i>Error';
+      btn.className = 'btn btn-danger';
+      setTimeout(() => { btn.innerHTML = origHtml; btn.className = 'btn btn-primary'; }, 2000);
+    }
+  } catch (e) {
+    btn.innerHTML = '<i class="bi bi-x-lg me-1"></i>Error';
+    btn.className = 'btn btn-danger';
+    setTimeout(() => { btn.innerHTML = origHtml; btn.className = 'btn btn-primary'; }, 2000);
   } finally {
     btn.disabled = false;
   }
