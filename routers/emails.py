@@ -84,12 +84,18 @@ def bulk_delete(
     ids = [int(x) for x in email_ids.split(",") if x.strip().isdigit()]
     if not ids:
         return RedirectResponse("/emails", status_code=302)
-    for eid in ids:
-        log_action(db, email_id=eid, user_id=current_user.id,
-                   actor_name=current_user.name, action="delete", detail="Bulk delete")
+    # Get subjects for audit before deleting
+    emails = db.query(Email).filter(Email.id.in_(ids)).all()
+    subjects = {e.id: e.subject for e in emails}
+    # Delete children first, then emails
     db.query(Approval).filter(Approval.email_id.in_(ids)).delete(synchronize_session=False)
     db.query(Comment).filter(Comment.email_id.in_(ids)).delete(synchronize_session=False)
     db.query(Email).filter(Email.id.in_(ids)).delete(synchronize_session=False)
+    # Audit log after delete (no FK reference, just record what was deleted)
+    for eid in ids:
+        log_action(db, user_id=current_user.id,
+                   actor_name=current_user.name, action="delete",
+                   detail=f"Deleted email {eid}: {subjects.get(eid, '?')}")
     db.commit()
     return RedirectResponse("/emails", status_code=302)
 
