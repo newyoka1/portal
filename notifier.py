@@ -112,13 +112,29 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
     gmail_address = get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
     client_sender = email.client.from_email if email.client and email.client.from_email else ""
     sender_name = email.client.from_name if email.client and email.client.from_name else ""
-    # Use client's from_email if set (impersonate that user), otherwise default
-    sender_email = client_sender or gmail_address
-    sender = formataddr((sender_name, sender_email)) if sender_name else sender_email
+    # DWD can only impersonate users within the Workspace domain.
+    # If the client's from_email is an external address (e.g. noreply@hubspot.com),
+    # fall back to the default Gmail service.
+    workspace_domain = gmail_address.split("@")[-1] if gmail_address else ""
+    can_impersonate = (
+        client_sender
+        and client_sender != gmail_address
+        and workspace_domain
+        and client_sender.lower().endswith(f"@{workspace_domain}")
+    )
 
-    # Build Gmail service impersonating the actual sender address (DWD)
+    if can_impersonate:
+        sender_email = client_sender
+    else:
+        sender_email = gmail_address
+
+    # From header still shows client name even when we can't impersonate the address
+    display_email = client_sender or gmail_address
+    sender = formataddr((sender_name, display_email)) if sender_name else display_email
+
+    # Build Gmail service
     try:
-        if sender_email != gmail_address:
+        if can_impersonate:
             from gcp_credentials import build_credentials
             from googleapiclient.discovery import build as build_svc
             creds = build_credentials(SCOPES, sender_email)
@@ -126,6 +142,7 @@ def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
             logger.info("Sending as %s (impersonating via DWD)", sender_email)
         else:
             service = _gmail_service()
+            logger.info("Sending via default service (%s), From header: %s", gmail_address, sender)
     except Exception as exc:
         logger.error("Notifier: could not build Gmail service for %s: %s", sender_email, exc)
         return {"emails": 0, "sms": 0}
