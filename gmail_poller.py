@@ -402,12 +402,8 @@ def _process_message(service, msg_id: str, db: Session) -> int:
 
 
 def _mark_read(service, msg_id: str) -> None:
-    """Remove the UNREAD label so we don't re-process this message."""
+    """Remove the UNREAD label and trash the message so the inbox stays clean."""
     try:
-        service.users().messages().modify(
-            userId="me",
-            id=msg_id,
-            body={"removeLabelIds": ["UNREAD"]},
-        ).execute()
+        service.users().messages().trash(userId="me", id=msg_id).execute()
     except HttpError as exc:
-        logger.warning("Could not mark message %s as read: %s", msg_id, exc)
+        logger.warning("Could not trash message %s: %s", msg_id, exc)
