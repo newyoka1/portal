@@ -125,6 +125,54 @@
         </div>
       </div>
 
+      <!-- Email Aliases & Routing -->
+      <div class="accordion-item border-0 border-bottom">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed px-0" type="button" data-bs-toggle="collapse" data-bs-target="#guideAliases">
+            <i class="bi bi-signpost-split me-2 text-primary"></i><strong>Email Aliases &amp; Auto-Routing</strong>
+          </button>
+        </h2>
+        <div id="guideAliases" class="accordion-collapse collapse" data-bs-parent="#guideAccordion">
+          <div class="accordion-body px-0 text-muted small">
+            <p>The portal supports three email addresses. Each uses Gmail's <code>+tag</code> addressing to route emails to the correct client automatically &mdash; no subject filter needed.</p>
+
+            <h6 class="fw-semibold text-dark mt-3">Addresses:</h6>
+            <table class="table table-sm small mb-3">
+              <thead><tr><th>Address</th><th>Behavior</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><code>support@politikanyc.com</code></td>
+                  <td>Main inbox. Emails matching a client's <strong>subject filter</strong> are pulled into the queue. Must be manually assigned and sent for approval.</td>
+                </tr>
+                <tr>
+                  <td><code>email+{id}@politikanyc.com</code></td>
+                  <td><strong>Auto-assigns</strong> to the client with that ID. Still requires a manual "Send for Approval" click.<br>
+                  Example: <code>email+1@politikanyc.com</code> &rarr; assigns to client #1.</td>
+                </tr>
+                <tr>
+                  <td><code>direct+{id}@politikanyc.com</code></td>
+                  <td><strong>Fully automatic.</strong> Auto-assigns to client AND immediately sends approval emails to all approvers. Zero manual steps.<br>
+                  Example: <code>direct+1@politikanyc.com</code> &rarr; assigns to client #1 and sends for approval.</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h6 class="fw-semibold text-dark mt-3">Finding the Client ID:</h6>
+            <p>Each client's ID is shown on the <a href="/clients"><strong>Clients</strong></a> page as a badge (e.g. <span class="badge bg-secondary">ID: 1</span>), along with the ready-to-use <code>direct+{id}@</code> address.</p>
+
+            <h6 class="fw-semibold text-dark mt-3">How it works:</h6>
+            <ul>
+              <li>Gmail's <code>+tag</code> feature delivers <code>direct+1@politikanyc.com</code> to the same inbox as <code>direct@politikanyc.com</code>. No extra aliases or Google config needed.</li>
+              <li>The poller reads the <code>Delivered-To</code> header to detect which address received the email, then parses the <code>+tag</code> to identify the client.</li>
+              <li>If no <code>+tag</code> is present, the system falls back to subject filter matching.</li>
+            </ul>
+
+            <h6 class="fw-semibold text-dark mt-3">Setup in HubSpot / Campaign Monitor:</h6>
+            <p>Configure the preview or test-send recipient address as <code>direct+{id}@politikanyc.com</code> for hands-free approval, or <code>email+{id}@politikanyc.com</code> if you want to review before sending for approval.</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Usage: Daily Workflow -->
       <div class="accordion-item border-0 border-bottom">
         <h2 class="accordion-header">
@@ -141,6 +189,7 @@
               <li><strong>Monitor</strong> &mdash; the detail page shows real-time approval status. Comments from approvers appear in the thread.</li>
               <li><strong>Done</strong> &mdash; once all required approvers respond, the email moves to Approved or Rejected. Check the <a href="/log">Approval Log</a> for a history of all decisions.</li>
             </ol>
+            <p class="mt-2"><strong>Shortcut:</strong> Use <code>direct+{id}@</code> addressing to skip steps 1-3 entirely. The email goes straight from ingest to approval notifications.</p>
           </div>
         </div>
       </div>
@@ -159,9 +208,10 @@
               <li><strong>Full email preview</strong> (left column) &mdash; the original marketing email rendered cleanly.</li>
               <li><strong>Approver status</strong> (right sidebar) &mdash; who has approved, rejected, or is still pending.</li>
               <li><strong>Comments thread</strong> &mdash; shared across all approvers. Anyone can post comments visible to the group.</li>
-              <li><strong>Approve / Reject buttons</strong> with optional note.</li>
+              <li><strong>Approve / Needs Revision / Reject buttons</strong> with optional note.</li>
             </ul>
-            <p>No login or account is needed. Each link is unique and single-use &mdash; once a decision is submitted, the link expires.</p>
+            <p>No login or account is needed. Each link is unique &mdash; once an approver clicks Approve or Reject, the link expires.</p>
+            <p><strong>Needs Revision</strong> is different: it records the feedback as a comment visible to all approvers, but keeps the link active. The approver stays on the page and can approve or reject later once the revision is made.</p>
           </div>
         </div>
       </div>
