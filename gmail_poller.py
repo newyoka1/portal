@@ -100,11 +100,31 @@ def fetch_and_store_emails() -> int:
         finally:
             _db.close()
 
+        # Build subject filter clauses
         if client_filters:
-            query_str = " OR ".join(f"subject:{f}" for f in client_filters)
+            subject_clause = " OR ".join(f"subject:{f}" for f in client_filters)
         else:
             global_filter = get_setting("EMAIL_SUBJECT_FILTER", "").strip()
-            query_str = f"subject:{global_filter}" if global_filter else ""
+            subject_clause = f"subject:{global_filter}" if global_filter else ""
+
+        # Also pull emails addressed to additional aliases (queue + direct)
+        alias_clauses = []
+        queue_aliases = get_setting("EMAIL_QUEUE_ALIASES", "").strip()
+        direct_alias = get_setting("EMAIL_DIRECT_ALIAS", "").strip()
+        for addr in (queue_aliases.split(",") if queue_aliases else []):
+            addr = addr.strip()
+            if addr:
+                alias_clauses.append(f"to:{addr}")
+        if direct_alias:
+            alias_clauses.append(f"to:{direct_alias}")
+
+        # Combine: (subject filters) OR (alias matches)
+        parts = []
+        if subject_clause:
+            parts.append(f"({subject_clause})")
+        if alias_clauses:
+            parts.append("(" + " OR ".join(alias_clauses) + ")")
+        query_str = " OR ".join(parts) if parts else ""
 
         list_kwargs = {
             "userId":    "me",
@@ -150,6 +170,113 @@ def fetch_and_store_emails() -> int:
     return ingested
 
 
+def _detect_delivered_to(msg) -> str:
+    """Extract the alias/address this email was actually delivered to."""
+    # Check Delivered-To first (most reliable), then X-Original-To, then To
+    for header in ("Delivered-To", "X-Original-To"):
+        val = msg.get(header, "").strip()
+        if val:
+            _, addr = parseaddr(val)
+            if addr:
+                return addr.lower()
+    # Fall back to To header (may have multiple recipients)
+    to_header = msg.get("To", "")
+    if to_header:
+        _, addr = parseaddr(to_header)
+        if addr:
+            return addr.lower()
+    return ""
+
+
+def _match_client_by_subject(subject: str, db: Session):
+    """Find the client whose subject_filter matches the email subject."""
+    from models import Client as _Client
+    for c in db.query(_Client).all():
+        if c.subject_filter and c.subject_filter.strip():
+            if c.subject_filter.strip().lower() in subject.lower():
+                return c
+    return None
+
+
+def _auto_send_for_approval(email_obj, db: Session) -> None:
+    """Auto-assign to client and send for approval without manual intervention."""
+    import secrets
+    import threading
+    from datetime import timedelta
+    from models import Approval, ClientApprover
+    from portal_config import get_setting
+    from audit import log_action
+
+    client = _match_client_by_subject(email_obj.subject, db)
+    if not client:
+        logger.warning("Auto-send: no client matched subject '%s' — skipping", email_obj.subject)
+        return
+
+    # Assign to client
+    email_obj.client_id = client.id
+    email_obj.assigned_at = datetime.now(timezone.utc)
+    email_obj.status = "in_review"
+
+    # Create approval records for each client approver
+    approvers = db.query(ClientApprover).filter(ClientApprover.client_id == client.id).all()
+    if not approvers:
+        logger.warning("Auto-send: client '%s' has no approvers — skipping send", client.name)
+        db.flush()
+        return
+
+    for ca in approvers:
+        db.add(Approval(
+            email_id=email_obj.id,
+            user_id=ca.user_id,
+            approver_email=ca.approver_email,
+            approver_name=ca.approver_name,
+            approver_phone=getattr(ca, "approver_phone", None),
+            required=ca.required,
+            decision="pending",
+            token=secrets.token_urlsafe(32),
+        ))
+    db.flush()
+
+    # Set deadline
+    deadline_hours = int(get_setting("APPROVAL_DEADLINE_HOURS", "48") or "48")
+    email_obj.deadline_at = datetime.now(timezone.utc) + timedelta(hours=deadline_hours)
+    email_obj.sent_for_approval_at = datetime.now(timezone.utc)
+
+    log_action(db, email_id=email_obj.id, actor_name="system",
+               action="auto_send", detail=f"Auto-sent via direct@ to {len(approvers)} approver(s)")
+
+    db.flush()
+
+    # Snapshot for background thread
+    pending = db.query(Approval).filter(
+        Approval.email_id == email_obj.id, Approval.decision == "pending"
+    ).all()
+    approval_pairs = [
+        (a.display_name, a.display_email, a.approver_phone or "", a.token)
+        for a in pending
+    ]
+    app_url = get_setting("APP_URL", "http://localhost:8000").rstrip("/")
+    email_snapshot = {
+        "id": email_obj.id,
+        "subject": email_obj.subject,
+        "from_name": email_obj.from_name,
+        "from_address": email_obj.from_address,
+        "client_name": client.name,
+        "client_from_email": client.from_email,
+        "client_from_name": client.from_name,
+        "client_email_template": client.email_template,
+        "client_sms_template": client.sms_template,
+    }
+
+    def _bg_send():
+        from notifier import send_approval_requests_bg
+        send_approval_requests_bg(email_snapshot, approval_pairs, app_url)
+
+    threading.Thread(target=_bg_send, daemon=True).start()
+    logger.info("Auto-sent for approval: '%s' → client '%s' (%d approvers)",
+                email_obj.subject, client.name, len(approvers))
+
+
 def _process_message(service, msg_id: str, db: Session) -> int:
     """Fetch, parse, and insert one message. Returns 1 if inserted, 0 if skipped."""
 
@@ -175,6 +302,7 @@ def _process_message(service, msg_id: str, db: Session) -> int:
     html_body   = extract_html_body(msg)
     text_body   = extract_text_body(msg)
     origin      = detect_origin(raw_headers, html_body)
+    delivered_to = _detect_delivered_to(msg)
 
     date_header = msg.get("Date", "")
     try:
@@ -182,21 +310,37 @@ def _process_message(service, msg_id: str, db: Session) -> int:
     except Exception:
         received_at = datetime.now(timezone.utc)
 
-    db.add(Email(
+    email_obj = Email(
         gmail_message_id = gmail_uid,
         subject          = subject[:500],
         from_address     = from_address[:200],
         from_name        = from_name[:200],
+        delivered_to     = delivered_to[:200],
         html_body        = html_body,
         clean_html       = sanitize_email_html(html_body),
         text_body        = text_body,
         origin_system    = origin,
         received_at      = received_at,
         status           = "pending",
-    ))
+    )
+    db.add(email_obj)
+    db.flush()  # get the ID assigned
+
+    # Auto-assign to client by subject match (for all aliases)
+    client = _match_client_by_subject(subject, db)
+    if client and not email_obj.client_id:
+        email_obj.client_id = client.id
+        email_obj.assigned_at = datetime.now(timezone.utc)
+
+    # If sent to the direct alias, auto-send for approval
+    from portal_config import get_setting
+    direct_alias = get_setting("EMAIL_DIRECT_ALIAS", "").strip().lower()
+    if direct_alias and delivered_to == direct_alias:
+        logger.info("Direct alias hit (%s) — auto-sending for approval: %s", delivered_to, subject)
+        _auto_send_for_approval(email_obj, db)
 
     _mark_read(service, msg_id)
-    logger.info("Ingested: %s from %s", subject, from_address)
+    logger.info("Ingested: %s from %s (delivered-to: %s)", subject, from_address, delivered_to)
     return 1
 
 

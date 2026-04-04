@@ -140,6 +140,7 @@ class Email(Base):
     html_body     = Column(Text, default="")
     clean_html    = Column(Text, default="")  # sanitized version for fast rendering
     text_body     = Column(Text, default="")
+    delivered_to  = Column(String(200), default="")  # alias that received the email
     origin_system = Column(String(50), default=OriginSystem.unknown)
     received_at          = Column(DateTime, nullable=False)
     status               = Column(String(20), default=EmailStatus.pending)

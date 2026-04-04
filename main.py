@@ -152,6 +152,9 @@ def _startup() -> BackgroundScheduler:
         _make_nullable(conn, "comments",         "user_id", "INT NULL")
         _add_column_if_missing(conn, "comments", "commenter_name", "VARCHAR(200) NULL")
 
+        # Delivered-to alias tracking
+        _add_column_if_missing(conn, "emails",    "delivered_to",     "VARCHAR(200) DEFAULT ''")
+
         # Batch improvements — deadlines, reminders, roles
         _add_column_if_missing(conn, "emails",    "deadline_at",      "DATETIME NULL")
         _add_column_if_missing(conn, "approvals", "last_reminded_at", "DATETIME NULL")
