@@ -1,7 +1,7 @@
 """
 Mailchimp campaign fetcher.
 Uses an API key (format: key-us1, where 'us1' is the data center prefix).
-Pulls sent/sending campaigns and their HTML content.
+Pulls DRAFT campaigns only — acts as a pre-send approval gate.
 
 API ref: https://mailchimp.com/developer/marketing/api/campaigns/
 """
@@ -24,7 +24,8 @@ def _data_center(api_key: str) -> str:
 
 def fetch(api_key: str, db: Session, client_id: int) -> int:
     """
-    Pull all sent/sending Mailchimp campaigns and insert new ones.
+    Pull draft Mailchimp campaigns and insert new ones into the approval queue.
+    Only drafts (status='save') are fetched — sent campaigns are ignored.
     Returns the number of new emails ingested.
     """
     dc      = _data_center(api_key)
@@ -40,7 +41,7 @@ def fetch(api_key: str, db: Session, client_id: int) -> int:
                 f"{base}/campaigns",
                 auth=auth,
                 params={
-                    "status": "sent",
+                    "status": "save",
                     "count":  count,
                     "offset": offset,
                     "fields": "campaigns.id,campaigns.settings,campaigns.send_time,campaigns.reply_to,total_items",
