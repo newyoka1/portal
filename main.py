@@ -567,12 +567,12 @@ def approve_submit(
     request: Request,
     decision: str  = Form(...),
     note: str      = Form(""),
-    _csrf: str     = Form(""),
+    csrf_token: str = Form(""),
     db: Session    = Depends(get_db),
 ):
     # CSRF check (double-submit cookie)
     csrf_cookie = request.cookies.get("_csrf", "")
-    if not csrf_cookie or csrf_cookie != _csrf:
+    if not csrf_cookie or csrf_cookie != csrf_token:
         return HTMLResponse("Invalid request — please reload the page.", status_code=403)
 
     approval = db.query(Approval).filter(Approval.token == token).first()
@@ -640,7 +640,7 @@ def approve_add_comment(
 ):
     """Add a comment from the public approval page (token-gated)."""
     csrf_cookie = request.cookies.get("_csrf", "") if request else ""
-    if not csrf_cookie or csrf_cookie != _csrf:
+    if not csrf_cookie or csrf_cookie != csrf_token:
         return HTMLResponse("Invalid request — please reload the page.", status_code=403)
 
     approval = db.query(Approval).filter(Approval.token == token).first()
