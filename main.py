@@ -634,7 +634,7 @@ def approve_submit(
 def approve_add_comment(
     token: str,
     body: str   = Form(...),
-    _csrf: str  = Form(""),
+    csrf_token: str = Form(""),
     request: Request = None,
     db: Session = Depends(get_db),
 ):
