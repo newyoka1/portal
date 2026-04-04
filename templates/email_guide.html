@@ -164,7 +164,7 @@
             <ul>
               <li>Gmail's <code>+tag</code> feature delivers <code>direct+1@politikanyc.com</code> to the same inbox as <code>direct@politikanyc.com</code>. No extra aliases or Google config needed.</li>
               <li>The poller reads the <code>Delivered-To</code> header to detect which address received the email, then parses the <code>+tag</code> to identify the client.</li>
-              <li>If no <code>+tag</code> is present, the system falls back to subject filter matching.</li>
+              <li>If no <code>+tag</code> is present on <code>email@</code>, the system falls back to subject filter matching. On <code>direct@</code>, a <code>+tag</code> is <strong>required</strong> &mdash; bare <code>direct@</code> with no tag is ignored and queued as pending.</li>
             </ul>
 
             <h6 class="fw-semibold text-dark mt-3">Setup in HubSpot / Campaign Monitor:</h6>

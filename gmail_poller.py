@@ -383,16 +383,18 @@ def _process_message(service, msg_id: str, db: Session) -> int:
             break
 
     # Direct alias (direct+{id}@) — auto-assign AND auto-send for approval
+    # Requires a +tag — bare direct@ with no tag is ignored
     direct_alias = get_setting("EMAIL_DIRECT_ALIAS", "").strip()
-    if _alias_matches(direct_alias):
-        target_client = tag_client or assign_client
-        if target_client:
+    if _alias_matches(direct_alias) and plus_tag:
+        if tag_client:
             logger.info("Direct alias hit (%s, client=%s) — auto-sending: %s",
-                        delivered_to, target_client.name, subject)
-            _auto_send_for_approval(email_obj, target_client, db)
+                        delivered_to, tag_client.name, subject)
+            _auto_send_for_approval(email_obj, tag_client, db)
         else:
             logger.warning("Direct alias hit (%s) but no client matched tag '%s' — queued as pending",
                            delivered_to, plus_tag)
+    elif _alias_matches(direct_alias) and not plus_tag:
+        logger.info("Direct alias hit (%s) with no +tag — ignored, queued as pending", delivered_to)
 
     _mark_read(service, msg_id)
     logger.info("Ingested: %s from %s (delivered-to: %s)", subject, from_address, delivered_to)
