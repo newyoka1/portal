@@ -39,6 +39,61 @@ def poll_now(
     return RedirectResponse(f"/emails?polled={count}", status_code=302)
 
 
+# ── Bulk actions (must be before /{email_id} routes to avoid path conflict) ──
+@router.post("/bulk/assign")
+def bulk_assign(
+    email_ids: str = Form(""),
+    client_id: str = Form(""),
+    db: Session    = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    """Assign multiple emails to a client at once."""
+    ids = [int(x) for x in email_ids.split(",") if x.strip().isdigit()]
+    if not ids or not client_id:
+        return RedirectResponse("/emails", status_code=302)
+    cid = int(client_id)
+    approvers = db.query(ClientApprover).filter(ClientApprover.client_id == cid).all()
+    for eid in ids:
+        email = db.query(Email).filter(Email.id == eid).first()
+        if not email:
+            continue
+        db.query(Approval).filter(Approval.email_id == eid).delete()
+        email.client_id = cid
+        email.assigned_at = datetime.now(timezone.utc)
+        email.status = "in_review"
+        for ca in approvers:
+            db.add(Approval(
+                email_id=eid, user_id=ca.user_id,
+                approver_name=ca.approver_name, approver_email=ca.approver_email,
+                approver_phone=ca.approver_phone, required=ca.required, decision="pending",
+            ))
+        log_action(db, email_id=eid, user_id=current_user.id,
+                   actor_name=current_user.name, action="assign",
+                   detail=f"Bulk assigned to client {cid}")
+    db.commit()
+    return RedirectResponse("/emails", status_code=302)
+
+
+@router.post("/bulk/delete")
+def bulk_delete(
+    email_ids: str = Form(""),
+    db: Session    = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    """Delete multiple emails at once."""
+    ids = [int(x) for x in email_ids.split(",") if x.strip().isdigit()]
+    if not ids:
+        return RedirectResponse("/emails", status_code=302)
+    for eid in ids:
+        log_action(db, email_id=eid, user_id=current_user.id,
+                   actor_name=current_user.name, action="delete", detail="Bulk delete")
+    db.query(Approval).filter(Approval.email_id.in_(ids)).delete(synchronize_session=False)
+    db.query(Comment).filter(Comment.email_id.in_(ids)).delete(synchronize_session=False)
+    db.query(Email).filter(Email.id.in_(ids)).delete(synchronize_session=False)
+    db.commit()
+    return RedirectResponse("/emails", status_code=302)
+
+
 @router.get("/{email_id}/body", response_class=HTMLResponse)
 def email_body(
     email_id: int,
@@ -269,60 +324,6 @@ def send_for_approval(
     return RedirectResponse(
         f"/emails/{email_id}?notified={len(approval_pairs)}&sms=0", status_code=302
     )
-
-
-@router.post("/bulk/assign")
-def bulk_assign(
-    email_ids: str = Form(""),
-    client_id: str = Form(""),
-    db: Session    = Depends(get_db),
-    current_user: User = Depends(require_manager),
-):
-    """Assign multiple emails to a client at once."""
-    ids = [int(x) for x in email_ids.split(",") if x.strip().isdigit()]
-    if not ids or not client_id:
-        return RedirectResponse("/emails", status_code=302)
-    cid = int(client_id)
-    approvers = db.query(ClientApprover).filter(ClientApprover.client_id == cid).all()
-    for eid in ids:
-        email = db.query(Email).filter(Email.id == eid).first()
-        if not email:
-            continue
-        db.query(Approval).filter(Approval.email_id == eid).delete()
-        email.client_id = cid
-        email.assigned_at = datetime.now(timezone.utc)
-        email.status = "in_review"
-        for ca in approvers:
-            db.add(Approval(
-                email_id=eid, user_id=ca.user_id,
-                approver_name=ca.approver_name, approver_email=ca.approver_email,
-                approver_phone=ca.approver_phone, required=ca.required, decision="pending",
-            ))
-        log_action(db, email_id=eid, user_id=current_user.id,
-                   actor_name=current_user.name, action="assign",
-                   detail=f"Bulk assigned to client {cid}")
-    db.commit()
-    return RedirectResponse("/emails", status_code=302)
-
-
-@router.post("/bulk/delete")
-def bulk_delete(
-    email_ids: str = Form(""),
-    db: Session    = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    """Delete multiple emails at once."""
-    ids = [int(x) for x in email_ids.split(",") if x.strip().isdigit()]
-    if not ids:
-        return RedirectResponse("/emails", status_code=302)
-    for eid in ids:
-        log_action(db, email_id=eid, user_id=current_user.id,
-                   actor_name=current_user.name, action="delete", detail="Bulk delete")
-    db.query(Approval).filter(Approval.email_id.in_(ids)).delete(synchronize_session=False)
-    db.query(Comment).filter(Comment.email_id.in_(ids)).delete(synchronize_session=False)
-    db.query(Email).filter(Email.id.in_(ids)).delete(synchronize_session=False)
-    db.commit()
-    return RedirectResponse("/emails", status_code=302)
 
 
 def recalculate_status(email_id: int, db: Session) -> None:
