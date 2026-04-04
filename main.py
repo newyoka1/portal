@@ -236,6 +236,7 @@ def _startup() -> BackgroundScheduler:
         try:
             stale = db.query(Approval).filter(
                 Approval.decision == "pending",
+                Approval.required == True,
                 Approval.token != None,
                 (Approval.last_reminded_at == None) | (Approval.last_reminded_at < cutoff),
             ).all()
