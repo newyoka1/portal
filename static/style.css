@@ -115,8 +115,9 @@ a:hover { color: var(--pk-red-dk); }
 /* ── Status pills (class from DB enum, display label via status_label filter) */
 .status-pending   { background: #ffc107; color: #333; }  /* "Pending" */
 .status-in_review { background: var(--pk-red); }          /* "Awaiting Approval" */
-.status-approved  { background: #198754; }                /* "Approved" */
-.status-rejected  { background: #6c757d; }                /* "Rejected" */
+.status-approved         { background: #198754; }                /* "Approved" */
+.status-rejected         { background: #6c757d; }                /* "Rejected" */
+.status-revision_needed  { background: #8b5cf6; }                /* "Needs Revision" */
 
 /* ── Email iframe ────────────────────────────────────────────────────────── */
 #email-frame {

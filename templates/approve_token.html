@@ -464,15 +464,15 @@
           <span style="color:#86868b;">&#128101;</span>
           Approvers
         </div>
-        <div class="sidebar-body" style="padding-top:10px;padding-bottom:10px;">
+        <div class="sidebar-body" style="padding-top:10px;padding-bottom:10px;" id="approvers-list">
           {% for a in all_approvals %}
           <div style="display:flex;align-items:center;gap:8px;padding:6px 0;{% if not loop.last %}border-bottom:1px solid #f5f5f7;{% endif %}">
             <span style="font-size:16px;">
-              {% if a.decision == 'approved' %}&#9989;{% elif a.decision == 'rejected' %}&#10060;{% else %}&#9898;{% endif %}
+              {% if a.decision == 'approved' %}&#9989;{% elif a.decision == 'rejected' %}&#10060;{% elif a.decision == 'revision_needed' %}&#9998;{% else %}&#9898;{% endif %}
             </span>
             <span style="font-size:13px;font-weight:500;flex:1;">{{ a.display_name }}</span>
             <span style="font-size:11px;color:#86868b;">
-              {% if a.decision == 'pending' %}Pending{% elif a.decision == 'approved' %}Approved{% else %}Rejected{% endif %}
+              {% if a.decision == 'pending' %}Pending{% elif a.decision == 'approved' %}Approved{% elif a.decision == 'revision_needed' %}Needs Revision{% else %}Rejected{% endif %}
             </span>
           </div>
           {% endfor %}
@@ -488,11 +488,15 @@
         </div>
         <div class="sidebar-body">
           <form method="post">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
             <label class="comment-label">Comment <span style="color:#aeaeb2;">(optional)</span></label>
             <textarea name="note" class="comment-box" placeholder="Leave feedback or a note…"></textarea>
             <div class="btn-row">
               <button name="decision" value="approved" class="btn-action btn-approve">
                 &#10003; Approve
+              </button>
+              <button name="decision" value="revision_needed" class="btn-action" style="background:#f59e0b;color:#fff;box-shadow:0 2px 8px rgba(245,158,11,.3);">
+                &#9998; Needs Revision
               </button>
               <button name="decision" value="rejected" class="btn-action btn-reject">
                 &#10007; Reject
@@ -509,7 +513,7 @@
           Comments
           {% if comments %}<span style="color:#aeaeb2;font-weight:400;font-size:12px;margin-left:4px;">({{ comments|length }})</span>{% endif %}
         </div>
-        <div class="sidebar-body" style="padding-top:10px;padding-bottom:10px;">
+        <div class="sidebar-body" style="padding-top:10px;padding-bottom:10px;" id="comments-list">
           {% if comments %}
             {% for c in comments %}
             <div style="padding:8px 0;{% if not loop.last %}border-bottom:1px solid #f5f5f7;{% endif %}">
@@ -530,6 +534,7 @@
 
           <!-- Add comment form -->
           <form method="post" action="/approve/{{ approval.token }}/comment" style="margin-top:12px;border-top:1px solid #f0f0f2;padding-top:12px;">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
             <textarea name="body" class="comment-box" style="min-height:60px;" placeholder="Add a comment…"></textarea>
             <button type="submit" style="
               margin-top:8px;width:100%;padding:8px;border:none;border-radius:8px;
@@ -595,6 +600,55 @@
     clearInterval(poll);
     reveal();
   }, 3000);
+})();
+
+// ── Real-time polling: refresh approvals + comments every 10s ──
+(function() {
+  const token = '{{ approval.token or "" }}';
+  if (!token) return;  // already decided
+
+  const statusEl = document.getElementById('approvers-list');
+  const commentsEl = document.getElementById('comments-list');
+  if (!statusEl && !commentsEl) return;
+
+  setInterval(function() {
+    fetch('/approve/' + token + '/status')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        // Update approvers
+        if (statusEl && data.approvals) {
+          let html = '';
+          data.approvals.forEach(function(a) {
+            const icon = a.decision === 'approved' ? '&#9989;' :
+                         a.decision === 'rejected' ? '&#10060;' :
+                         a.decision === 'revision_needed' ? '&#9998;' : '&#9898;';
+            const label = a.decision === 'pending' ? 'Pending' :
+                          a.decision === 'approved' ? 'Approved' :
+                          a.decision === 'rejected' ? 'Rejected' : 'Needs Revision';
+            html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f7;">' +
+              '<span style="font-size:16px;">' + icon + '</span>' +
+              '<span style="font-size:13px;font-weight:500;flex:1;">' + a.name + '</span>' +
+              '<span style="font-size:11px;color:#86868b;">' + label + '</span></div>';
+          });
+          statusEl.innerHTML = html;
+        }
+        // Update comments
+        if (commentsEl && data.comments) {
+          let html = '';
+          data.comments.forEach(function(c) {
+            html += '<div style="padding:8px 0;border-bottom:1px solid #f5f5f7;">' +
+              '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+              '<span style="font-size:12px;font-weight:600;color:#1d1d1f;">' + c.author + '</span>' +
+              '<span style="font-size:11px;color:#aeaeb2;">' + c.created_at + '</span></div>' +
+              '<div style="font-size:13px;color:#333;line-height:1.4;">' + c.body + '</div></div>';
+          });
+          if (!html) html = '<p style="font-size:13px;color:#aeaeb2;margin:4px 0;">No comments yet.</p>';
+          commentsEl.innerHTML = html;
+        }
+      })
+      .catch(function() {});  // silently ignore network errors
+  }, 10000);
 })();
 </script>
 </body>

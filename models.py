@@ -10,16 +10,18 @@ from database import Base
 
 
 class EmailStatus(str, enum.Enum):
-    pending   = "pending"     # in queue, not yet assigned
-    in_review = "in_review"   # assigned to client, awaiting approvals
-    approved  = "approved"    # all required approvers signed off
-    rejected  = "rejected"    # at least one required approver rejected
+    pending          = "pending"          # in queue, not yet assigned
+    in_review        = "in_review"        # assigned to client, awaiting approvals
+    approved         = "approved"         # all required approvers signed off
+    rejected         = "rejected"         # at least one required approver rejected
+    revision_needed  = "revision_needed"  # approver requested changes
 
 
 class ApprovalDecision(str, enum.Enum):
-    pending  = "pending"
-    approved = "approved"
-    rejected = "rejected"
+    pending          = "pending"
+    approved         = "approved"
+    rejected         = "rejected"
+    revision_needed  = "revision_needed"
 
 
 class OriginSystem(str, enum.Enum):
@@ -40,6 +42,7 @@ class User(Base):
     email         = Column(String(200), unique=True, nullable=False, index=True)
     password_hash = Column(String(200), nullable=False)
     is_admin      = Column(Boolean, default=False)
+    role          = Column(String(20), default="viewer")  # admin | manager | viewer
     voter_role    = Column(String(20), nullable=True, default=None)
     # voter_role: None = no pipeline access, "full" = all tabs, "export_viewer" = export+status+issues
     created_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -142,6 +145,7 @@ class Email(Base):
     status               = Column(String(20), default=EmailStatus.pending)
     assigned_at          = Column(DateTime, nullable=True)
     sent_for_approval_at = Column(DateTime, nullable=True)
+    deadline_at          = Column(DateTime, nullable=True)
 
     client        = relationship("Client",   back_populates="emails")
     approvals     = relationship("Approval", back_populates="email", cascade="all, delete-orphan")
@@ -166,6 +170,7 @@ class Approval(Base):
     note            = Column(Text, default="")
     decided_at      = Column(DateTime, nullable=True)
     token           = Column(String(100), unique=True, nullable=True, index=True)
+    last_reminded_at = Column(DateTime, nullable=True)
 
     email      = relationship("Email", back_populates="approvals")
     user       = relationship("User",  back_populates="approvals")
@@ -216,3 +221,18 @@ class Comment(Base):
     email      = relationship("Email",   back_populates="comments")
     user       = relationship("User",    back_populates="comments")
     replies    = relationship("Comment", backref="parent", remote_side=[id])
+
+
+# ---------------------------------------------------------------------------
+# Audit log (tracks all state changes for compliance)
+# ---------------------------------------------------------------------------
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id         = Column(Integer, primary_key=True, index=True)
+    email_id   = Column(Integer, ForeignKey("emails.id"), nullable=True)
+    user_id    = Column(Integer, ForeignKey("users.id"), nullable=True)
+    actor_name = Column(String(200), nullable=True)
+    action     = Column(String(50), nullable=False)   # assign, send, approve, reject, revision_needed, comment, delete
+    detail     = Column(Text, default="")
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

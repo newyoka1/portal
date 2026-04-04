@@ -117,7 +117,14 @@ def require_user(user: Optional[User] = Depends(get_current_user)) -> User:
     return user
 
 
+def require_manager(user: User = Depends(require_user)) -> User:
+    """Allow admin or manager roles."""
+    if user.is_admin or getattr(user, "role", "") in ("admin", "manager"):
+        return user
+    raise HTTPException(status_code=403, detail="Manager access required.")
+
+
 def require_admin(user: User = Depends(require_user)) -> User:
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Admin access required.")
-    return user
+    if user.is_admin or getattr(user, "role", "") == "admin":
+        return user
+    raise HTTPException(status_code=403, detail="Admin access required.")

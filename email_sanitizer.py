@@ -26,6 +26,12 @@ def sanitize_email_html(raw_html: str) -> str:
     # 1. Remove <script> blocks entirely
     html = re.sub(r"<script[^>]*>.*?</script>", "", html, flags=re.I | re.S)
 
+    # 1b. Strip event handler attributes (onerror, onload, onclick, onmouseover, etc.)
+    html = re.sub(r'\s+on\w+\s*=\s*(?:"[^"]*"|\'[^\']*\'|[^\s>]+)', '', html, flags=re.I)
+
+    # 1c. Neutralize javascript: protocol in href/src attributes
+    html = re.sub(r'(href|src)\s*=\s*(["\']?)\s*javascript:', r'\1=\2#blocked:', html, flags=re.I)
+
     # 2. Remove external <link> stylesheets (keep <style> blocks — they're inline)
     html = re.sub(r"<link[^>]*stylesheet[^>]*/?>", "", html, flags=re.I)
 

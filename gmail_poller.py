@@ -25,6 +25,24 @@ logger = logging.getLogger(__name__)
 
 SCOPES = ["https://mail.google.com/"]
 
+# ── Poller health tracking ────────────────────────────────────────────────
+_poller_healthy: bool = True
+_last_poll_time: float = 0
+_last_poll_error: str = ""
+_consecutive_failures: int = 0
+
+
+def get_poller_health() -> dict:
+    """Return a snapshot of poller health for the /health/gmail endpoint."""
+    from datetime import datetime, timezone
+    last_dt = datetime.fromtimestamp(_last_poll_time, tz=timezone.utc).isoformat() if _last_poll_time else None
+    return {
+        "healthy": _poller_healthy,
+        "last_poll": last_dt,
+        "consecutive_failures": _consecutive_failures,
+        "last_error": _last_poll_error,
+    }
+
 # Cached Gmail API service — avoids re-downloading the discovery document on
 # every poll cycle.  Refreshed every 30 minutes to pick up credential changes.
 _gmail_svc = None
@@ -53,10 +71,15 @@ def fetch_and_store_emails() -> int:
     Fetch UNREAD messages from the inbox, parse and insert new ones into MySQL.
     Returns the number of new emails ingested.
     """
+    global _poller_healthy, _last_poll_time, _last_poll_error, _consecutive_failures
     try:
         service = _gmail_service()
     except RuntimeError as exc:
         logger.error("Gmail poller config error: %s", exc)
+        _poller_healthy = False
+        _last_poll_error = str(exc)
+        _consecutive_failures += 1
+        _last_poll_time = _time.time()
         return 0
 
     ingested = 0
@@ -113,7 +136,17 @@ def fetch_and_store_emails() -> int:
 
     except HttpError as exc:
         logger.error("Gmail API error: %s", exc)
+        _poller_healthy = False
+        _last_poll_error = str(exc)
+        _consecutive_failures += 1
+        _last_poll_time = _time.time()
+        return ingested
 
+    # Success
+    _poller_healthy = True
+    _last_poll_error = ""
+    _consecutive_failures = 0
+    _last_poll_time = _time.time()
     return ingested
 
 

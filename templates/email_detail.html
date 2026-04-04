@@ -36,6 +36,11 @@
           <span class="badge fs-6 status-{{ email.status }}">
             {{ email.status|status_label }}
           </span>
+          {% if email.deadline_at %}
+          <div class="small mt-1 {% if email.status == 'in_review' %}text-danger{% else %}text-muted{% endif %}">
+            <i class="bi bi-alarm me-1"></i>Deadline: {{ email.deadline_at.strftime('%b %d, %I:%M %p') }}
+          </div>
+          {% endif %}
         </div>
       </div>
 
@@ -120,6 +125,10 @@
             <button name="decision" value="approved"
                     class="btn btn-success flex-fill">
               <i class="bi bi-check-lg me-1"></i>Approve
+            </button>
+            <button name="decision" value="revision_needed"
+                    class="btn btn-warning flex-fill">
+              <i class="bi bi-pencil me-1"></i>Revise
             </button>
             <button name="decision" value="rejected"
                     class="btn btn-danger flex-fill">
@@ -245,6 +254,10 @@
                 <button name="decision" value="approved"
                         class="btn btn-success btn-sm flex-fill">
                   <i class="bi bi-check-lg me-1"></i>Approve
+                </button>
+                <button name="decision" value="revision_needed"
+                        class="btn btn-warning btn-sm flex-fill">
+                  <i class="bi bi-pencil me-1"></i>Revise
                 </button>
                 <button name="decision" value="rejected"
                         class="btn btn-danger btn-sm flex-fill">

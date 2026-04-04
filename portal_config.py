@@ -71,6 +71,12 @@ DEFAULTS = [
 
     # Email Approval
     ("EMAIL_SUBJECT_FILTER", "test", "Subject Filter Word (only ingest emails containing this)", "email_approval", False),
+    ("APPROVAL_DEADLINE_HOURS", "48", "Default Approval Deadline (hours)", "email_approval", False),
+    ("APPROVAL_REMINDER_HOURS", "24", "Send Reminder After (hours)", "email_approval", False),
+
+    # Webhook (reverse sync)
+    ("WEBHOOK_URL", "", "Webhook URL for approval decisions", "email_approval", False),
+    ("WEBHOOK_SECRET", "", "Webhook signing secret (HMAC-SHA256)", "email_approval", True),
 
     # Twilio SMS (optional — for texting approval links)
     ("TWILIO_ACCOUNT_SID",  "", "Twilio Account SID",              "twilio", True),

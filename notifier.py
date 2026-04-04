@@ -78,6 +78,29 @@ def _safe_substitute(template: str, variables: dict) -> str:
 
 
 
+class _EmailSnapshot:
+    """Lightweight stand-in for an ORM Email, usable across threads."""
+    def __init__(self, d: dict):
+        self.id = d["id"]
+        self.subject = d["subject"]
+        self.from_name = d["from_name"]
+        self.from_address = d["from_address"]
+        # Mimic email.client.* via a simple inner object
+        self.client = type("C", (), {
+            "name": d["client_name"],
+            "from_email": d.get("client_from_email"),
+            "from_name": d.get("client_from_name"),
+            "email_template": d.get("client_email_template"),
+            "sms_template": d.get("client_sms_template"),
+        })() if d.get("client_name") else None
+
+
+def send_approval_requests_bg(email_dict: dict, approval_pairs: list, app_url: str) -> dict:
+    """Thread-safe wrapper: accepts a plain dict snapshot instead of ORM object."""
+    snap = _EmailSnapshot(email_dict)
+    return send_approval_requests(snap, approval_pairs, app_url)
+
+
 def send_approval_requests(email, approval_pairs: list, app_url: str) -> dict:
     """
     Send approval-request emails and SMS.
@@ -199,3 +222,90 @@ def _send_sms(to: str, body: str) -> bool:
     except Exception as exc:
         logger.error("Failed to send SMS to %s: %s", to, exc)
         return False
+
+
+# ---------------------------------------------------------------------------
+# Stale approval reminder
+# ---------------------------------------------------------------------------
+def send_reminder(approval, app_url: str) -> None:
+    """Re-send a reminder email for a single pending approval."""
+    from email.mime.multipart import MIMEMultipart as _MM
+    from email.mime.text import MIMEText as _MT
+    from email.utils import formataddr
+    from portal_config import get_setting
+
+    if not approval.token or not approval.display_email:
+        return
+
+    gmail_address = get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
+    approve_url = f"{app_url}/approve/{approval.token}"
+    email_obj = approval.email
+
+    subject_line = f"[Reminder] Approval needed: {email_obj.subject}"
+    html_body = _EMAIL_WRAPPER.replace("{inner_body}", f"""
+    <p>Hi <strong>{approval.display_name}</strong>,</p>
+    <p>This is a friendly reminder that the following email is still waiting for your review:</p>
+    <p><strong>{email_obj.subject}</strong></p>
+    <p style="text-align:center;margin:24px 0;">
+      <a href="{approve_url}"
+         style="background:#0d6efd;color:#fff;padding:12px 28px;border-radius:6px;
+                text-decoration:none;font-weight:bold;display:inline-block;">
+        Review &amp; Approve
+      </a>
+    </p>
+    """)
+
+    try:
+        service = _gmail_service()
+        msg = _MM("alternative")
+        msg["From"] = gmail_address
+        msg["To"] = approval.display_email
+        msg["Subject"] = subject_line
+        msg.attach(_MT(html_body, "html"))
+        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+        service.users().messages().send(userId="me", body={"raw": raw}).execute()
+        logger.info("Reminder sent to %s for email %d", approval.display_email, email_obj.id)
+    except Exception as exc:
+        logger.error("Reminder to %s failed: %s", approval.display_email, exc)
+
+
+# ---------------------------------------------------------------------------
+# Comment notification
+# ---------------------------------------------------------------------------
+def send_comment_notification(email_subject: str, commenter: str, comment_body: str,
+                              recipients: list, app_url: str) -> None:
+    """Notify approvers when someone posts a comment. Thread-safe."""
+    from email.mime.multipart import MIMEMultipart as _MM
+    from email.mime.text import MIMEText as _MT
+    from portal_config import get_setting
+
+    gmail_address = get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
+    subject_line = f"[Comment] {email_subject}"
+    inner = f"""
+    <p><strong>{commenter}</strong> commented:</p>
+    <blockquote style="border-left:3px solid #ddd;padding:8px 16px;color:#555;margin:12px 0;">
+      {comment_body}
+    </blockquote>
+    <p style="color:#888;font-size:12px;">
+      Regarding: <strong>{email_subject}</strong>
+    </p>
+    """
+    html_body = _EMAIL_WRAPPER.replace("{inner_body}", inner)
+
+    try:
+        service = _gmail_service()
+        for name, email_addr in recipients:
+            if not email_addr:
+                continue
+            msg = _MM("alternative")
+            msg["From"] = gmail_address
+            msg["To"] = email_addr
+            msg["Subject"] = subject_line
+            msg.attach(_MT(html_body, "html"))
+            raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+            try:
+                service.users().messages().send(userId="me", body={"raw": raw}).execute()
+            except Exception as exc:
+                logger.warning("Comment notification to %s failed: %s", email_addr, exc)
+    except Exception as exc:
+        logger.error("Comment notification service error: %s", exc)
