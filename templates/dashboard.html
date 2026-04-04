@@ -4,62 +4,78 @@
 {% block content %}
 <h5 class="fw-bold mb-4"><i class="bi bi-grid me-2"></i>Dashboard</h5>
 
-<!-- Poller health warning -->
-{% if poller_health and not poller_health.healthy %}
-<div class="alert alert-warning alert-dismissible fade show" role="alert">
-  <i class="bi bi-exclamation-triangle me-1"></i>
-  <strong>Gmail poller issue:</strong>
-  {{ poller_health.consecutive_failures }} consecutive failure(s).
-  {% if poller_health.last_error %}Last error: <code>{{ poller_health.last_error[:120] }}</code>{% endif %}
-  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-{% endif %}
+<!-- ── Email Approval section ─────────────────────────────────────── -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white d-flex align-items-center justify-content-between py-3">
+    <div>
+      <h6 class="mb-0 fw-bold"><i class="bi bi-envelope-check me-2 text-primary"></i>Email Approval</h6>
+      <span class="text-muted small">Outbound email review &amp; approval status</span>
+    </div>
+    <a href="/emails" class="btn btn-outline-primary btn-sm">
+      <i class="bi bi-arrow-right me-1"></i>Open Queue
+    </a>
+  </div>
+  <div class="card-body">
 
-<!-- Analytics cards -->
-<div class="row g-3 mb-4">
-  <div class="col-6 col-lg-3">
-    <div class="card shadow-sm border-start border-warning border-4">
-      <div class="card-body py-3">
-        <div class="text-muted small text-uppercase fw-semibold">Pending</div>
-        <div class="fs-3 fw-bold text-warning">{{ status_counts.get('pending', 0) }}</div>
+    <!-- Poller health warning -->
+    {% if poller_health and not poller_health.healthy %}
+    <div class="alert alert-warning alert-dismissible fade show mb-3" role="alert">
+      <i class="bi bi-exclamation-triangle me-1"></i>
+      <strong>Gmail poller issue:</strong>
+      {{ poller_health.consecutive_failures }} consecutive failure(s).
+      {% if poller_health.last_error %}Last error: <code>{{ poller_health.last_error[:120] }}</code>{% endif %}
+      <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+    {% endif %}
+
+    {% if overdue_count %}
+    <div class="alert alert-danger py-2 mb-3">
+      <i class="bi bi-alarm me-1"></i>
+      <strong>{{ overdue_count }}</strong> email(s) overdue — past approval deadline.
+      <a href="/emails?status=in_review" class="alert-link">View queue</a>
+    </div>
+    {% endif %}
+
+    <!-- Analytics cards -->
+    <div class="row g-3">
+      <div class="col-6 col-lg-3">
+        <div class="card border-start border-warning border-4 bg-light">
+          <div class="card-body py-3">
+            <div class="text-muted small text-uppercase fw-semibold">Pending</div>
+            <div class="fs-3 fw-bold text-warning">{{ status_counts.get('pending', 0) }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card border-start border-info border-4 bg-light">
+          <div class="card-body py-3">
+            <div class="text-muted small text-uppercase fw-semibold">Awaiting Approval</div>
+            <div class="fs-3 fw-bold text-info">{{ status_counts.get('in_review', 0) }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card border-start border-success border-4 bg-light">
+          <div class="card-body py-3">
+            <div class="text-muted small text-uppercase fw-semibold">Avg Approval Time</div>
+            <div class="fs-3 fw-bold text-success">{{ avg_approval_hours or '—' }}<span class="fs-6 text-muted">{% if avg_approval_hours %} hrs{% endif %}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="col-6 col-lg-3">
+        <div class="card border-start border-primary border-4 bg-light">
+          <div class="card-body py-3">
+            <div class="text-muted small text-uppercase fw-semibold">Decisions This Week</div>
+            <div class="fs-3 fw-bold text-primary">{{ decisions_week }}</div>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="card shadow-sm border-start border-info border-4">
-      <div class="card-body py-3">
-        <div class="text-muted small text-uppercase fw-semibold">Awaiting Approval</div>
-        <div class="fs-3 fw-bold text-info">{{ status_counts.get('in_review', 0) }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="card shadow-sm border-start border-success border-4">
-      <div class="card-body py-3">
-        <div class="text-muted small text-uppercase fw-semibold">Avg Approval Time</div>
-        <div class="fs-3 fw-bold text-success">{{ avg_approval_hours or '—' }}<span class="fs-6 text-muted">{% if avg_approval_hours %} hrs{% endif %}</span></div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="card shadow-sm border-start border-primary border-4">
-      <div class="card-body py-3">
-        <div class="text-muted small text-uppercase fw-semibold">Decisions This Week</div>
-        <div class="fs-3 fw-bold text-primary">{{ decisions_week }}</div>
-      </div>
-    </div>
+
   </div>
 </div>
 
-{% if overdue_count %}
-<div class="alert alert-danger py-2 mb-4">
-  <i class="bi bi-alarm me-1"></i>
-  <strong>{{ overdue_count }}</strong> email(s) overdue — past approval deadline.
-  <a href="/emails?status=in_review" class="alert-link">View queue</a>
-</div>
-{% endif %}
-
-<!-- Nav cards -->
+<!-- ── Quick links ────────────────────────────────────────────────── -->
 <div class="row g-3">
   <div class="col-md-6 col-lg-3">
     <a href="/emails" class="card shadow-sm text-decoration-none text-dark h-100">
