@@ -323,6 +323,22 @@ def _process_message(service, msg_id: str, db: Session) -> int:
     origin      = detect_origin(raw_headers, html_body)
     delivered_to = _detect_delivered_to(msg)
 
+    # Reject bare direct@ with no +tag — trash and skip entirely
+    from portal_config import get_setting
+    direct_alias = get_setting("EMAIL_DIRECT_ALIAS", "").strip().lower()
+    if direct_alias and delivered_to:
+        da_local = direct_alias.split("@")[0] if "@" in direct_alias else direct_alias
+        da_domain = direct_alias.split("@")[1] if "@" in direct_alias else ""
+        dt_local = delivered_to.split("@")[0] if "@" in delivered_to else ""
+        dt_domain = delivered_to.split("@")[1] if "@" in delivered_to else ""
+        dt_base = dt_local.split("+")[0] if "+" in dt_local else dt_local
+        is_direct = da_domain == dt_domain and dt_base == da_local
+        has_tag = "+" in dt_local
+        if is_direct and not has_tag:
+            logger.info("Bare direct@ with no +tag — trashing and skipping: %s", subject)
+            _mark_read(service, msg_id)
+            return 0
+
     date_header = msg.get("Date", "")
     try:
         received_at = parsedate_to_datetime(date_header).replace(tzinfo=None)
@@ -349,7 +365,6 @@ def _process_message(service, msg_id: str, db: Session) -> int:
     # Both email+{id}@ and direct+{id}@ use +tag to identify the client.
     # email+{id}@ → auto-assign only (manual send for approval)
     # direct+{id}@ → auto-assign AND auto-send for approval
-    from portal_config import get_setting
 
     def _alias_matches(alias_setting: str) -> bool:
         """Check if delivered_to matches the given alias (with or without +tag)."""
@@ -393,8 +408,6 @@ def _process_message(service, msg_id: str, db: Session) -> int:
         else:
             logger.warning("Direct alias hit (%s) but no client matched tag '%s' — queued as pending",
                            delivered_to, plus_tag)
-    elif _alias_matches(direct_alias) and not plus_tag:
-        logger.info("Direct alias hit (%s) with no +tag — ignored, queued as pending", delivered_to)
 
     _mark_read(service, msg_id)
     logger.info("Ingested: %s from %s (delivered-to: %s)", subject, from_address, delivered_to)
