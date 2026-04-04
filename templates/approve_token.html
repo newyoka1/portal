@@ -359,6 +359,26 @@
 
 {% else %}
   <!-- ── Two-column: email left, decision right ────────────── -->
+
+  {% if revision_sent %}
+  <div style="max-width:1280px;margin:16px auto 0;padding:0 20px;">
+    <div id="revision-banner" style="
+      background:linear-gradient(135deg,#fef3c7,#fde68a);
+      border:1px solid #f59e0b;border-radius:10px;
+      padding:14px 20px;display:flex;align-items:center;gap:10px;
+      animation:slidein .3s ease-out;
+    ">
+      <span style="font-size:20px;">&#9998;</span>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;color:#92400e;">Revision Requested</div>
+        <div style="font-size:13px;color:#78350f;">Your feedback has been recorded. You can approve or reject once the revision is made.</div>
+      </div>
+      <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#92400e;padding:4px;">&times;</button>
+    </div>
+  </div>
+  <style>@keyframes slidein{from{opacity:0;transform:translateY(-10px);}to{opacity:1;transform:translateY(0);}}</style>
+  {% endif %}
+
   <div class="page-layout">
 
     <!-- LEFT: full email view -->
@@ -481,24 +501,24 @@
       {% endif %}
 
       <!-- Decision form -->
-      <div class="sidebar-card">
+      <div class="sidebar-card" id="decision-card">
         <div class="sidebar-header">
           <span style="color:#86868b;">&#9998;</span>
           Your Decision
         </div>
         <div class="sidebar-body">
-          <form method="post">
+          <form method="post" id="decision-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label class="comment-label">Comment <span style="color:#aeaeb2;">(optional)</span></label>
-            <textarea name="note" class="comment-box" placeholder="Leave feedback or a note…"></textarea>
+            <textarea name="note" id="decision-note" class="comment-box" placeholder="Leave feedback or a note…"></textarea>
             <div class="btn-row">
-              <button name="decision" value="approved" class="btn-action btn-approve">
+              <button name="decision" value="approved" class="btn-action btn-approve" onclick="return submitDecision(event,'approved')">
                 &#10003; Approve
               </button>
-              <button name="decision" value="revision_needed" class="btn-action" style="background:#f59e0b;color:#fff;box-shadow:0 2px 8px rgba(245,158,11,.3);">
+              <button name="decision" value="revision_needed" class="btn-action" style="background:#f59e0b;color:#fff;box-shadow:0 2px 8px rgba(245,158,11,.3);" onclick="return submitDecision(event,'revision_needed')">
                 &#9998; Needs Revision
               </button>
-              <button name="decision" value="rejected" class="btn-action btn-reject">
+              <button name="decision" value="rejected" class="btn-action btn-reject" onclick="return submitDecision(event,'rejected')">
                 &#10007; Reject
               </button>
             </div>
@@ -554,8 +574,7 @@
 </div>
 
 <script>
-// Poll the iframe until content appears, then hide spinner immediately
-// (don't wait for onload which blocks on slow external images)
+// ── Iframe loader ──────────────────────────────────────────────────
 (function() {
   const frame = document.getElementById('email-frame');
   if (!frame) return;
@@ -576,16 +595,13 @@
     } catch(e) {}
   }
 
-  // Check every 100ms if iframe has content
   const poll = setInterval(function() {
     try {
       const doc = frame.contentDocument;
       if (doc && doc.body && doc.body.innerHTML.length > 50) {
         clearInterval(poll);
         reveal();
-        // Keep resizing as images load
-        const imgs = doc.querySelectorAll('img');
-        imgs.forEach(function(img) {
+        doc.querySelectorAll('img').forEach(function(img) {
           if (!img.complete) {
             img.addEventListener('load', resize);
             img.addEventListener('error', resize);
@@ -595,60 +611,131 @@
     } catch(e) {}
   }, 100);
 
-  // Fallback: hide spinner after 3s no matter what
-  setTimeout(function() {
-    clearInterval(poll);
-    reveal();
-  }, 3000);
+  setTimeout(function() { clearInterval(poll); reveal(); }, 3000);
 })();
 
-// ── Real-time polling: refresh approvals + comments every 10s ──
-(function() {
+// ── AJAX decision submit ───────────────────────────────────────────
+function submitDecision(event, decision) {
+  event.preventDefault();
+  const form = document.getElementById('decision-form');
+  const note = document.getElementById('decision-note').value;
+  const csrf = form.querySelector('[name="csrf_token"]').value;
   const token = '{{ approval.token or "" }}';
-  if (!token) return;  // already decided
+  if (!token) return false;
+
+  // Disable buttons while submitting
+  form.querySelectorAll('button').forEach(b => { b.disabled = true; b.style.opacity = '0.6'; });
+
+  const body = new URLSearchParams({ decision: decision, note: note, csrf_token: csrf });
+
+  fetch('/approve/' + token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'text/html' },
+    body: body,
+    credentials: 'same-origin',
+  })
+  .then(r => r.text())
+  .then(html => {
+    if (decision === 'revision_needed') {
+      // Show inline banner, refresh data, keep page alive
+      showRevisionBanner();
+      document.getElementById('decision-note').value = '';
+      form.querySelectorAll('button').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+      refreshStatus();  // immediately pull fresh approvers + comments
+    } else {
+      // For approve/reject, replace the whole page with the "done" response
+      document.open();
+      document.write(html);
+      document.close();
+    }
+  })
+  .catch(function() {
+    form.querySelectorAll('button').forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+    alert('Something went wrong. Please try again.');
+  });
+
+  return false;
+}
+
+function showRevisionBanner() {
+  // Remove existing banner if any
+  const old = document.getElementById('revision-banner');
+  if (old) old.parentElement.remove();
+
+  const wrapper = document.createElement('div');
+  wrapper.style.cssText = 'max-width:1280px;margin:16px auto 0;padding:0 20px;';
+  wrapper.innerHTML = '<div id="revision-banner" style="' +
+    'background:linear-gradient(135deg,#fef3c7,#fde68a);' +
+    'border:1px solid #f59e0b;border-radius:10px;' +
+    'padding:14px 20px;display:flex;align-items:center;gap:10px;' +
+    'animation:slidein .3s ease-out;">' +
+    '<span style="font-size:20px;">&#9998;</span>' +
+    '<div style="flex:1;">' +
+    '<div style="font-size:14px;font-weight:600;color:#92400e;">Revision Requested</div>' +
+    '<div style="font-size:13px;color:#78350f;">Your feedback has been recorded. You can approve or reject once the revision is made.</div>' +
+    '</div>' +
+    '<button onclick="this.parentElement.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:18px;color:#92400e;padding:4px;">&times;</button>' +
+    '</div>';
+  const layout = document.querySelector('.page-layout');
+  if (layout) layout.parentNode.insertBefore(wrapper, layout);
+}
+
+// ── Real-time polling: refresh approvers + comments every 10s ──────
+function refreshStatus() {
+  const token = '{{ approval.token or "" }}';
+  if (!token) return;
 
   const statusEl = document.getElementById('approvers-list');
   const commentsEl = document.getElementById('comments-list');
-  if (!statusEl && !commentsEl) return;
 
-  setInterval(function() {
-    fetch('/approve/' + token + '/status')
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data) return;
-        // Update approvers
-        if (statusEl && data.approvals) {
-          let html = '';
-          data.approvals.forEach(function(a) {
-            const icon = a.decision === 'approved' ? '&#9989;' :
-                         a.decision === 'rejected' ? '&#10060;' :
-                         a.decision === 'revision_needed' ? '&#9998;' : '&#9898;';
-            const label = a.decision === 'pending' ? 'Pending' :
-                          a.decision === 'approved' ? 'Approved' :
-                          a.decision === 'rejected' ? 'Rejected' : 'Needs Revision';
-            html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f7;">' +
-              '<span style="font-size:16px;">' + icon + '</span>' +
-              '<span style="font-size:13px;font-weight:500;flex:1;">' + a.name + '</span>' +
-              '<span style="font-size:11px;color:#86868b;">' + label + '</span></div>';
-          });
-          statusEl.innerHTML = html;
-        }
-        // Update comments
-        if (commentsEl && data.comments) {
-          let html = '';
-          data.comments.forEach(function(c) {
-            html += '<div style="padding:8px 0;border-bottom:1px solid #f5f5f7;">' +
-              '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
-              '<span style="font-size:12px;font-weight:600;color:#1d1d1f;">' + c.author + '</span>' +
-              '<span style="font-size:11px;color:#aeaeb2;">' + c.created_at + '</span></div>' +
-              '<div style="font-size:13px;color:#333;line-height:1.4;">' + c.body + '</div></div>';
-          });
-          if (!html) html = '<p style="font-size:13px;color:#aeaeb2;margin:4px 0;">No comments yet.</p>';
+  fetch('/approve/' + token + '/status')
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data) return;
+      if (statusEl && data.approvals) {
+        let html = '';
+        data.approvals.forEach(function(a) {
+          const icon = a.decision === 'approved' ? '&#9989;' :
+                       a.decision === 'rejected' ? '&#10060;' :
+                       a.decision === 'revision_needed' ? '&#9998;' : '&#9898;';
+          const label = a.decision === 'pending' ? 'Pending' :
+                        a.decision === 'approved' ? 'Approved' :
+                        a.decision === 'rejected' ? 'Rejected' : 'Needs Revision';
+          html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f5f5f7;">' +
+            '<span style="font-size:16px;">' + icon + '</span>' +
+            '<span style="font-size:13px;font-weight:500;flex:1;">' + a.name + '</span>' +
+            '<span style="font-size:11px;color:#86868b;">' + label + '</span></div>';
+        });
+        statusEl.innerHTML = html;
+      }
+      if (commentsEl && data.comments) {
+        // Preserve the comment form at the bottom
+        const commentForm = commentsEl.querySelector('form');
+        let html = '';
+        data.comments.forEach(function(c) {
+          html += '<div style="padding:8px 0;border-bottom:1px solid #f5f5f7;">' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+            '<span style="font-size:12px;font-weight:600;color:#1d1d1f;">' + c.author + '</span>' +
+            '<span style="font-size:11px;color:#aeaeb2;">' + c.created_at + '</span></div>' +
+            '<div style="font-size:13px;color:#333;line-height:1.4;">' + c.body + '</div></div>';
+        });
+        if (!html) html = '<p style="font-size:13px;color:#aeaeb2;margin:4px 0;">No comments yet.</p>';
+        // Re-insert form after comments
+        if (commentForm) {
+          commentsEl.innerHTML = html;
+          commentsEl.appendChild(commentForm);
+        } else {
           commentsEl.innerHTML = html;
         }
-      })
-      .catch(function() {});  // silently ignore network errors
-  }, 10000);
+      }
+    })
+    .catch(function() {});
+}
+
+(function() {
+  const token = '{{ approval.token or "" }}';
+  if (!token) return;
+  setInterval(refreshStatus, 10000);
 })();
 </script>
 </body>

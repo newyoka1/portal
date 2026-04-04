@@ -587,26 +587,41 @@ def approve_submit(
         })
 
     if decision in ("approved", "rejected", "revision_needed"):
-        approval.decision   = decision
-        approval.note       = note.strip()
-        approval.decided_at = datetime.now(timezone.utc)
-        token_val = approval.token      # save before nulling
-        approval.token      = None      # invalidate — one-time use
+        is_revision = decision == "revision_needed"
 
-        if note.strip():
-            label = {"approved": "Approved", "rejected": "Rejected", "revision_needed": "Needs Revision"}[decision]
+        # Record the comment regardless of decision type
+        comment_body = note.strip()
+        label = {"approved": "Approved", "rejected": "Rejected", "revision_needed": "Needs Revision"}[decision]
+        # Always add a comment for revision requests (even without a note)
+        if comment_body or is_revision:
             db.add(Comment(
                 email_id=approval.email_id,
                 user_id=approval.user_id,
                 commenter_name=approval.display_name if not approval.user_id else None,
-                body=f"[{label}] {note.strip()}",
+                body=f"[{label}] {comment_body}" if comment_body else f"[{label}] Revision requested",
             ))
-
-        recalculate_status(approval.email_id, db)
 
         # Audit trail
         log_action(db, email_id=approval.email_id, user_id=approval.user_id,
-                   actor_name=approval.display_name, action=decision, detail=note.strip())
+                   actor_name=approval.display_name, action=decision, detail=comment_body)
+
+        if is_revision:
+            # Revision is NOT a final decision — keep token alive, stay on page
+            # Temporarily set to revision_needed so recalculate picks it up,
+            # then reset to pending so the approver can decide again later.
+            approval.decision = "revision_needed"
+            recalculate_status(approval.email_id, db)
+            approval.decision = "pending"
+            approval.note = ""
+            approval.decided_at = None
+            # Token stays — link keeps working
+        else:
+            # Final decision — invalidate the token
+            approval.decision   = decision
+            approval.note       = comment_body
+            approval.decided_at = datetime.now(timezone.utc)
+            approval.token      = None
+            recalculate_status(approval.email_id, db)
 
         db.commit()
 
@@ -618,9 +633,25 @@ def approve_submit(
             "email_subject": email_obj.subject,
             "approver": approval.display_name,
             "decision": decision,
-            "note": note.strip(),
+            "note": comment_body,
             "final_status": email_obj.status,
         })
+
+        if is_revision:
+            # Stay on the live approval page with a confirmation banner
+            all_approvals = db.query(Approval).filter(Approval.email_id == approval.email_id).all()
+            new_csrf = secrets.token_urlsafe(32)
+            response = templates.TemplateResponse(request, "approve_token.html", {
+                "approval":      approval,
+                "email":         email_obj,
+                "all_approvals": all_approvals,
+                "comments":      email_obj.comments,
+                "csrf_token":    new_csrf,
+                "revision_sent": True,
+                "current_user":  None,
+            })
+            response.set_cookie("_csrf", new_csrf, httponly=False, samesite="strict", max_age=3600)
+            return response
 
     return templates.TemplateResponse(request, "approve_token.html", {
         "approval":      approval,
