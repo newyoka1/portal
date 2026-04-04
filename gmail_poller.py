@@ -345,36 +345,54 @@ def _process_message(service, msg_id: str, db: Session) -> int:
     db.add(email_obj)
     db.flush()  # get the ID assigned
 
-    # Auto-assign to client by subject match (for all aliases)
-    client = _match_client_by_subject(subject, db)
-    if client and not email_obj.client_id:
-        email_obj.client_id = client.id
-        email_obj.assigned_at = datetime.now(timezone.utc)
-
-    # If sent to the direct alias (direct+clientslug@), auto-send for approval.
-    # The +tag identifies which client to assign to.
-    # e.g. direct+malliotakis@politikanyc.com → client with slug "malliotakis"
+    # ── Alias-based client routing ──────────────────────────────────────
+    # Both email+{id}@ and direct+{id}@ use +tag to identify the client.
+    # email+{id}@ → auto-assign only (manual send for approval)
+    # direct+{id}@ → auto-assign AND auto-send for approval
     from portal_config import get_setting
-    direct_alias = get_setting("EMAIL_DIRECT_ALIAS", "").strip().lower()
-    if direct_alias and delivered_to:
-        direct_local = direct_alias.split("@")[0] if "@" in direct_alias else direct_alias
-        direct_domain = direct_alias.split("@")[1] if "@" in direct_alias else ""
-        delivered_local = delivered_to.split("@")[0] if "@" in delivered_to else ""
-        delivered_domain = delivered_to.split("@")[1] if "@" in delivered_to else ""
 
-        # Match: same domain, local part starts with the direct alias prefix (before @)
-        # e.g. direct_local="direct", delivered could be "direct" or "direct+slug"
-        base_local = delivered_local.split("+")[0] if "+" in delivered_local else delivered_local
-        if direct_domain == delivered_domain and base_local == direct_local:
-            plus_tag = _parse_plus_tag(delivered_to)
-            direct_client = _match_client_by_tag(plus_tag, db) if plus_tag else client
-            if direct_client:
-                logger.info("Direct alias hit (%s, client=%s) — auto-sending: %s",
-                            delivered_to, direct_client.name, subject)
-                _auto_send_for_approval(email_obj, direct_client, db)
-            else:
-                logger.warning("Direct alias hit (%s) but no client matched tag '%s' — queued as pending",
-                               delivered_to, plus_tag)
+    def _alias_matches(alias_setting: str) -> bool:
+        """Check if delivered_to matches the given alias (with or without +tag)."""
+        alias = alias_setting.strip().lower()
+        if not alias or not delivered_to:
+            return False
+        alias_local, alias_domain = alias.split("@") if "@" in alias else (alias, "")
+        deliv_local = delivered_to.split("@")[0] if "@" in delivered_to else ""
+        deliv_domain = delivered_to.split("@")[1] if "@" in delivered_to else ""
+        base_local = deliv_local.split("+")[0] if "+" in deliv_local else deliv_local
+        return alias_domain == deliv_domain and base_local == alias_local
+
+    plus_tag = _parse_plus_tag(delivered_to)
+    tag_client = _match_client_by_tag(plus_tag, db) if plus_tag else None
+
+    # Auto-assign: by +tag first, then fall back to subject match
+    assign_client = tag_client or _match_client_by_subject(subject, db)
+    if assign_client and not email_obj.client_id:
+        email_obj.client_id = assign_client.id
+        email_obj.assigned_at = datetime.now(timezone.utc)
+        logger.info("Auto-assigned to client '%s' (id=%d)", assign_client.name, assign_client.id)
+
+    # Queue alias (email+{id}@) — assignment only, no auto-send
+    queue_aliases = get_setting("EMAIL_QUEUE_ALIASES", "").strip()
+    for alias_addr in (queue_aliases.split(",") if queue_aliases else []):
+        if _alias_matches(alias_addr):
+            if tag_client and not email_obj.client_id:
+                email_obj.client_id = tag_client.id
+                email_obj.assigned_at = datetime.now(timezone.utc)
+            logger.info("Queue alias hit (%s) — assigned to queue", delivered_to)
+            break
+
+    # Direct alias (direct+{id}@) — auto-assign AND auto-send for approval
+    direct_alias = get_setting("EMAIL_DIRECT_ALIAS", "").strip()
+    if _alias_matches(direct_alias):
+        target_client = tag_client or assign_client
+        if target_client:
+            logger.info("Direct alias hit (%s, client=%s) — auto-sending: %s",
+                        delivered_to, target_client.name, subject)
+            _auto_send_for_approval(email_obj, target_client, db)
+        else:
+            logger.warning("Direct alias hit (%s) but no client matched tag '%s' — queued as pending",
+                           delivered_to, plus_tag)
 
     _mark_read(service, msg_id)
     logger.info("Ingested: %s from %s (delivered-to: %s)", subject, from_address, delivered_to)
