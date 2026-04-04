@@ -5,31 +5,117 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h5 class="fw-bold mb-0"><i class="bi bi-envelope-check me-2"></i>Email Approval Settings</h5>
   <div>
-    <button class="btn btn-primary" onclick="saveGlobalFilter()">
-      <i class="bi bi-floppy me-1"></i>Save Default
+    <button class="btn btn-primary" onclick="saveAll()">
+      <i class="bi bi-floppy me-1"></i>Save All
     </button>
     <span id="saveStatus" class="ms-2 d-none"></span>
   </div>
 </div>
 
-<!-- Default / Fallback Subject Filter -->
+<!-- Ingestion & Routing -->
 <div class="card shadow-sm mb-4">
   <div class="card-header bg-white py-2">
-    <h6 class="fw-bold mb-0"><i class="bi bi-funnel me-1"></i>Default Subject Filter</h6>
+    <h6 class="fw-bold mb-0"><i class="bi bi-signpost-split me-1"></i>Ingestion &amp; Routing</h6>
   </div>
   <div class="card-body">
-    <div class="row align-items-center">
+    <div class="row mb-3">
       <div class="col-md-4">
-        <label class="form-label fw-semibold mb-0" for="subject_filter">Fallback Filter Word</label>
-        <div class="text-muted" style="font-size:.75rem">Used when no client-specific filters are set</div>
+        <label class="form-label fw-semibold mb-0">Subject Filter</label>
+        <div class="text-muted" style="font-size:.75rem">Fallback when no client filter matches</div>
       </div>
       <div class="col-md-8">
-        <input type="text" class="form-control" id="subject_filter"
-               data-key="EMAIL_SUBJECT_FILTER"
-               value="{{ subject_filter }}"
-               placeholder="e.g. test">
-        <div class="form-text">
-          Leave empty to ingest all emails. Overridden by per-client filters below.
+        <input type="text" class="form-control setting-input" data-key="EMAIL_SUBJECT_FILTER"
+               value="{{ subject_filter }}" placeholder="e.g. test">
+      </div>
+    </div>
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold mb-0">Queue Aliases</label>
+        <div class="text-muted" style="font-size:.75rem">Comma-separated. Use <code>email+{id}@</code> for auto-assign</div>
+      </div>
+      <div class="col-md-8">
+        <input type="text" class="form-control setting-input" data-key="EMAIL_QUEUE_ALIASES"
+               value="{{ queue_aliases }}" placeholder="e.g. email@politikanyc.com">
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold mb-0">Direct Alias</label>
+        <div class="text-muted" style="font-size:.75rem">Auto-sends for approval. Use <code>direct+{id}@</code></div>
+      </div>
+      <div class="col-md-8">
+        <input type="text" class="form-control setting-input" data-key="EMAIL_DIRECT_ALIAS"
+               value="{{ direct_alias }}" placeholder="e.g. direct@politikanyc.com">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Deadlines & Reminders -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white py-2">
+    <h6 class="fw-bold mb-0"><i class="bi bi-alarm me-1"></i>Deadlines &amp; Reminders</h6>
+  </div>
+  <div class="card-body">
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold mb-0">Approval Deadline</label>
+        <div class="text-muted" style="font-size:.75rem">Hours before an email is marked overdue</div>
+      </div>
+      <div class="col-md-8">
+        <div class="input-group" style="max-width:200px;">
+          <input type="number" class="form-control setting-input" data-key="APPROVAL_DEADLINE_HOURS"
+                 value="{{ deadline_hours }}" min="1">
+          <span class="input-group-text">hours</span>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold mb-0">Reminder After</label>
+        <div class="text-muted" style="font-size:.75rem">Send reminder to pending approvers after this many hours</div>
+      </div>
+      <div class="col-md-8">
+        <div class="input-group" style="max-width:200px;">
+          <input type="number" class="form-control setting-input" data-key="APPROVAL_REMINDER_HOURS"
+                 value="{{ reminder_hours }}" min="1">
+          <span class="input-group-text">hours</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Webhook -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-white py-2">
+    <h6 class="fw-bold mb-0"><i class="bi bi-broadcast me-1"></i>Webhook (Reverse Sync)</h6>
+  </div>
+  <div class="card-body">
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold mb-0">Webhook URL</label>
+        <div class="text-muted" style="font-size:.75rem">POST endpoint called on approval decisions</div>
+      </div>
+      <div class="col-md-8">
+        <input type="url" class="form-control setting-input" data-key="WEBHOOK_URL"
+               value="{{ webhook_url }}" placeholder="https://example.com/webhook">
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold mb-0">Webhook Secret</label>
+        <div class="text-muted" style="font-size:.75rem">HMAC-SHA256 signing key</div>
+      </div>
+      <div class="col-md-8">
+        <div class="input-group">
+          <input type="password" class="form-control setting-input" data-key="WEBHOOK_SECRET"
+                 value="{{ webhook_secret }}" placeholder="Leave empty to disable signing"
+                 id="webhook_secret_input">
+          <button class="btn btn-outline-secondary" type="button"
+                  onclick="const i=document.getElementById('webhook_secret_input');i.type=i.type==='password'?'text':'password';">
+            <i class="bi bi-eye"></i>
+          </button>
         </div>
       </div>
     </div>
@@ -49,8 +135,10 @@
     <table class="table table-hover mb-0">
       <thead class="table-light">
         <tr>
+          <th>ID</th>
           <th>Client</th>
           <th>Subject Filter</th>
+          <th>Direct Address</th>
           <th>From Email</th>
           <th>Approvers</th>
         </tr>
@@ -58,6 +146,7 @@
       <tbody>
         {% for client in clients %}
         <tr>
+          <td><span class="badge bg-secondary">{{ client.id }}</span></td>
           <td class="fw-semibold">{{ client.name }}</td>
           <td>
             {% if client.subject_filter %}
@@ -66,6 +155,7 @@
               <span class="text-muted fst-italic">default</span>
             {% endif %}
           </td>
+          <td><code class="small">direct+{{ client.id }}@politikanyc.com</code></td>
           <td>
             {% if client.from_email %}
               {{ client.from_email }}
@@ -96,24 +186,23 @@
 
 <div class="text-muted small">
   <i class="bi bi-info-circle me-1"></i>
-  The Gmail poller combines all client subject filters with <code>OR</code>.
-  If no clients have filters, the default above is used.
-  Changes take effect on the next poll (within 60 seconds).
+  Changes take effect on the next poll cycle.
   &mdash; <a href="/email-guide">View full setup guide</a>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
-async function saveGlobalFilter() {
+async function saveAll() {
   const status = document.getElementById('saveStatus');
   status.className = 'ms-2 text-muted';
   status.textContent = 'Saving...';
   status.classList.remove('d-none');
 
   const data = {};
-  const input = document.getElementById('subject_filter');
-  data[input.dataset.key] = input.value;
+  document.querySelectorAll('.setting-input').forEach(input => {
+    data[input.dataset.key] = input.value;
+  });
 
   try {
     const resp = await fetch('/settings', {

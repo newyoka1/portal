@@ -406,12 +406,17 @@ def email_settings(
 ):
     from portal_config import get_setting
     from models import Client
-    subject_filter = get_setting("EMAIL_SUBJECT_FILTER", "")
     clients = db.query(Client).order_by(Client.name).all()
     return templates.TemplateResponse(request, "email_settings.html", {
-        "current_user":   current_user,
-        "subject_filter": subject_filter,
-        "clients":        clients,
+        "current_user":          current_user,
+        "subject_filter":        get_setting("EMAIL_SUBJECT_FILTER", ""),
+        "queue_aliases":         get_setting("EMAIL_QUEUE_ALIASES", ""),
+        "direct_alias":          get_setting("EMAIL_DIRECT_ALIAS", ""),
+        "deadline_hours":        get_setting("APPROVAL_DEADLINE_HOURS", "48"),
+        "reminder_hours":        get_setting("APPROVAL_REMINDER_HOURS", "24"),
+        "webhook_url":           get_setting("WEBHOOK_URL", ""),
+        "webhook_secret":        get_setting("WEBHOOK_SECRET", ""),
+        "clients":               clients,
     })
 
 
