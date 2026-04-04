@@ -199,19 +199,23 @@ def _match_client_by_subject(subject: str, db: Session):
 
 
 def _parse_plus_tag(delivered_to: str) -> str:
-    """Extract the +tag from an address like direct+slug@domain.com → 'slug'."""
+    """Extract the +tag from an address like direct+1@domain.com → '1'."""
     local = delivered_to.split("@")[0] if "@" in delivered_to else delivered_to
     if "+" in local:
-        return local.split("+", 1)[1].strip().lower()
+        return local.split("+", 1)[1].strip()
     return ""
 
 
-def _match_client_by_slug(slug: str, db: Session):
-    """Find the client whose slug matches the +tag from the direct alias."""
+def _match_client_by_tag(tag: str, db: Session):
+    """Find the client by numeric ID from the +tag (e.g. +1 → client id=1)."""
     from models import Client as _Client
-    if not slug:
+    if not tag:
         return None
-    return db.query(_Client).filter(_Client.slug == slug).first()
+    # Primary: numeric ID
+    if tag.isdigit():
+        return db.query(_Client).filter(_Client.id == int(tag)).first()
+    # Fallback: slug (for backwards compat)
+    return db.query(_Client).filter(_Client.slug == tag.lower()).first()
 
 
 def _auto_send_for_approval(email_obj, client, db: Session) -> None:
@@ -363,7 +367,7 @@ def _process_message(service, msg_id: str, db: Session) -> int:
         base_local = delivered_local.split("+")[0] if "+" in delivered_local else delivered_local
         if direct_domain == delivered_domain and base_local == direct_local:
             plus_tag = _parse_plus_tag(delivered_to)
-            direct_client = _match_client_by_slug(plus_tag, db) if plus_tag else client
+            direct_client = _match_client_by_tag(plus_tag, db) if plus_tag else client
             if direct_client:
                 logger.info("Direct alias hit (%s, client=%s) — auto-sending: %s",
                             delivered_to, direct_client.name, subject)
