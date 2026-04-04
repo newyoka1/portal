@@ -70,8 +70,8 @@ DEFAULTS = [
     ("APP_URL",             "https://politika.run", "Portal URL (for approval links)", "email", False),
 
     # Email Approval
-    ("EMAIL_QUEUE_ALIASES", "email@politikanyc.com", "Additional inbox aliases to pull into queue (comma-separated)", "email", False),
-    ("EMAIL_DIRECT_ALIAS", "direct@politikanyc.com", "Alias that triggers auto-send for approval (no manual step)", "email", False),
+    ("EMAIL_QUEUE_ALIASES", "email@politikanyc.com", "Additional inbox aliases to pull into queue (comma-separated)", "email_approval", False),
+    ("EMAIL_DIRECT_ALIAS", "direct@politikanyc.com", "Alias that triggers auto-send for approval (no manual step)", "email_approval", False),
     ("EMAIL_SUBJECT_FILTER", "test", "Subject Filter Word (only ingest emails containing this)", "email_approval", False),
     ("APPROVAL_DEADLINE_HOURS", "48", "Default Approval Deadline (hours)", "email_approval", False),
     ("APPROVAL_REMINDER_HOURS", "24", "Send Reminder After (hours)", "email_approval", False),
@@ -124,6 +124,11 @@ def seed_defaults():
                         category=category,
                         is_secret=is_secret,
                     ))
+                else:
+                    # Keep category and label in sync with DEFAULTS
+                    if existing.category != category or existing.label != label:
+                        existing.category = category
+                        existing.label = label
             # Remove stale settings — but preserve dynamically-managed voter tokens
             DYNAMIC_PREFIXES = ("HUBSPOT_TOKEN_", "CM_API_KEY_", "MAILCHIMP_KEY_", "FB_")
             valid_keys = {d[0] for d in DEFAULTS}
