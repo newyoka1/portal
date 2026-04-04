@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session, joinedload
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -344,13 +344,15 @@ def dashboard(
 
     # Avg approval time (emails approved in last 30 days)
     month_ago = now - timedelta(days=30)
-    avg_hours = db.query(
-        func.avg(func.timestampdiff(func.literal_column("HOUR"), Email.sent_for_approval_at, Approval.decided_at))
-    ).join(Approval, Approval.email_id == Email.id).filter(
-        Approval.decision == "approved",
-        Approval.decided_at >= month_ago,
-        Email.sent_for_approval_at != None,
-    ).scalar()
+    try:
+        avg_hours = db.execute(text(
+            "SELECT AVG(TIMESTAMPDIFF(HOUR, e.sent_for_approval_at, a.decided_at)) "
+            "FROM approvals a JOIN emails e ON a.email_id = e.id "
+            "WHERE a.decision = 'approved' AND a.decided_at >= :cutoff "
+            "AND e.sent_for_approval_at IS NOT NULL"
+        ), {"cutoff": month_ago}).scalar()
+    except Exception:
+        avg_hours = None
 
     # Decisions this week
     decisions_week = db.query(func.count(Approval.id)).filter(
