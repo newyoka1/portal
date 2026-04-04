@@ -152,6 +152,7 @@ class Email(Base):
     approvals     = relationship("Approval", back_populates="email", cascade="all, delete-orphan")
     comments      = relationship("Comment",  back_populates="email", cascade="all, delete-orphan",
                                  order_by="Comment.created_at")
+    audit_logs    = relationship("AuditLog", back_populates="email", cascade="all, delete-orphan")
 
 
 # ---------------------------------------------------------------------------
@@ -237,3 +238,5 @@ class AuditLog(Base):
     action     = Column(String(50), nullable=False)   # assign, send, approve, reject, revision_needed, comment, delete
     detail     = Column(Text, default="")
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    email      = relationship("Email", back_populates="audit_logs")

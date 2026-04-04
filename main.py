@@ -152,6 +152,18 @@ def _startup() -> BackgroundScheduler:
         _make_nullable(conn, "comments",         "user_id", "INT NULL")
         _add_column_if_missing(conn, "comments", "commenter_name", "VARCHAR(200) NULL")
 
+        # Fix audit_logs FK to cascade on email delete
+        try:
+            conn.execute(sa.text(
+                "ALTER TABLE audit_logs DROP FOREIGN KEY audit_logs_ibfk_1"
+            ))
+            conn.execute(sa.text(
+                "ALTER TABLE audit_logs ADD CONSTRAINT audit_logs_ibfk_1 "
+                "FOREIGN KEY (email_id) REFERENCES emails(id) ON DELETE CASCADE"
+            ))
+        except Exception:
+            pass  # already fixed or table doesn't exist yet
+
         # Delivered-to alias tracking
         _add_column_if_missing(conn, "emails",    "delivered_to",     "VARCHAR(200) DEFAULT ''")
 
