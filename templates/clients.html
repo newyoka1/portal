@@ -14,8 +14,14 @@
   <div class="col-md-6 col-lg-4">
     <div class="card shadow-sm h-100">
       <div class="card-body">
-        <h6 class="fw-bold mb-1">{{ client.name }}</h6>
-        <div class="text-muted small mb-2">{{ client.emails|length }} email(s)</div>
+        <div class="d-flex justify-content-between align-items-center mb-1">
+          <h6 class="fw-bold mb-0">{{ client.name }}</h6>
+          <span class="badge bg-secondary" title="Client ID — use direct+{{ client.id }}@politikanyc.com for auto-approval">ID: {{ client.id }}</span>
+        </div>
+        <div class="text-muted small mb-1">{{ client.emails|length }} email(s)</div>
+        <div class="text-muted small mb-2" style="font-size:.75rem;">
+          <i class="bi bi-lightning me-1"></i>Direct: <code>direct+{{ client.id }}@politikanyc.com</code>
+        </div>
 
         <div class="mb-2">
           <label class="form-label small text-muted mb-1">
