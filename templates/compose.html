@@ -2,121 +2,215 @@
 {% block title %}Compose Email{% endblock %}
 
 {% block extra_head %}
-<!-- GrapeJS core (modern v0.21) — no preset, we configure everything manually -->
 <link rel="stylesheet" href="https://unpkg.com/grapesjs@0.21.13/dist/css/grapes.min.css">
 <style>
-  /* ── Kill container padding for full-bleed builder ───────── */
-  .main-content:has(.compose-page) main.container-fluid { padding:0 !important; max-width:100% !important; }
+  /* ── Kill default container padding ──────────────────────── */
+  .main-content:has(.compose-page) main.container-fluid {
+    padding:0 !important; max-width:100% !important;
+  }
 
-  /* ── Page wrapper ────────────────────────────────────────── */
-  .compose-page { display:flex; flex-direction:column; height:calc(100vh - 56px); overflow:hidden; }
+  /* ── Page shell ──────────────────────────────────────────── */
+  .compose-page {
+    display:flex; flex-direction:column;
+    height:calc(100vh - 56px); overflow:hidden; background:#f4f5f7;
+  }
 
   /* ── Top bar ─────────────────────────────────────────────── */
-  .compose-bar {
-    background:#fff; border-bottom:1px solid #dee2e6; padding:8px 16px;
-    display:flex; align-items:center; gap:10px; flex-shrink:0; z-index:10;
+  .compose-topbar {
+    background:#fff; border-bottom:1px solid #e2e5ea; padding:8px 20px;
+    display:flex; align-items:center; gap:12px; flex-shrink:0; z-index:20;
   }
-  .compose-bar .form-control, .compose-bar .form-select { font-size:.85rem; height:34px; }
-  .compose-bar label { font-weight:600; font-size:.7rem; color:#6c757d; margin-bottom:1px; }
-  .compose-bar .field { display:flex; flex-direction:column; }
-  .compose-bar .field-grow { flex:1; min-width:0; }
+  .compose-topbar .field { display:flex; flex-direction:column; }
+  .compose-topbar .field-grow { flex:1; min-width:0; }
+  .compose-topbar label {
+    font-weight:600; font-size:.65rem; color:#8b8fa3;
+    text-transform:uppercase; letter-spacing:.04em; margin-bottom:2px;
+  }
+  .compose-topbar .form-control,
+  .compose-topbar .form-select {
+    font-size:.85rem; height:34px; border-color:#e2e5ea; border-radius:8px;
+  }
+  .compose-topbar .form-control:focus,
+  .compose-topbar .form-select:focus {
+    border-color:#ce2825; box-shadow:0 0 0 2px rgba(206,40,37,.12);
+  }
 
-  /* ── Editor layout: canvas + right panel ─────────────────── */
-  .editor-wrap { display:flex; flex:1; min-height:0; overflow:hidden; }
-  .editor-canvas { flex:1; min-width:0; position:relative; }
+  /* ── Main editor area: left-panel + canvas ───────────────── */
+  .editor-area { display:flex; flex:1; min-height:0; overflow:hidden; }
 
-  /* ── Right panel (blocks / style / settings) ─────────────── */
-  .editor-panel {
-    width:280px; flex-shrink:0; background:#fff; border-left:1px solid #dee2e6;
-    display:flex; flex-direction:column; overflow:hidden;
+  /* ── Left panel (BeeFree style) ──────────────────────────── */
+  .left-panel {
+    width:300px; flex-shrink:0; background:#fff;
+    border-right:1px solid #e2e5ea; display:flex; flex-direction:column;
+    overflow:hidden;
   }
-  .panel-tabs {
-    display:flex; border-bottom:1px solid #dee2e6; flex-shrink:0;
+  .lp-tabs {
+    display:flex; border-bottom:1px solid #e2e5ea; flex-shrink:0; background:#fff;
   }
-  .panel-tabs button {
-    flex:1; padding:10px 4px; font-size:.75rem; font-weight:700; text-transform:uppercase;
-    letter-spacing:.05em; border:none; background:#fff; color:#6c757d; cursor:pointer;
-    border-bottom:2px solid transparent; transition:all .15s;
+  .lp-tabs button {
+    flex:1; padding:12px 6px; font-size:.72rem; font-weight:700;
+    text-transform:uppercase; letter-spacing:.06em;
+    border:none; background:transparent; color:#8b8fa3;
+    cursor:pointer; transition:all .15s; position:relative;
   }
-  .panel-tabs button.active { color:#ce2825; border-bottom-color:#ce2825; }
-  .panel-tabs button:hover:not(.active) { color:#333; background:#f8f9fa; }
+  .lp-tabs button.active { color:#ce2825; }
+  .lp-tabs button.active::after {
+    content:''; position:absolute; bottom:0; left:12px; right:12px;
+    height:2px; background:#ce2825; border-radius:2px 2px 0 0;
+  }
+  .lp-tabs button:hover:not(.active) { color:#444; background:#fafbfc; }
+  .lp-tabs button i { display:block; font-size:1rem; margin-bottom:2px; }
 
-  .panel-body { flex:1; overflow-y:auto; padding:0; }
-  .panel-section { display:none; }
-  .panel-section.active { display:block; }
+  .lp-body { flex:1; overflow-y:auto; }
+  .lp-section { display:none; height:100%; }
+  .lp-section.active { display:flex; flex-direction:column; }
 
-  /* ── Blocks grid (BeeFree style) ─────────────────────────── */
-  .blocks-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:2px; padding:8px; }
-  .block-item {
-    display:flex; flex-direction:column; align-items:center; justify-content:center;
-    padding:14px 6px; cursor:grab; border-radius:6px; border:1px solid transparent;
-    transition:all .15s; background:#fff; min-height:80px;
+  /* ── Content blocks (BeeFree grid) ───────────────────────── */
+  #blocks-container {
+    display:grid !important; grid-template-columns:1fr 1fr 1fr;
+    gap:0; padding:6px;
   }
-  .block-item:hover { background:#f0f3f7; border-color:#dee2e6; }
-  .block-item:active { cursor:grabbing; background:#e8ebf0; }
-  .block-item i { font-size:1.5rem; color:#555; margin-bottom:6px; }
-  .block-item span { font-size:.65rem; font-weight:600; color:#666; text-transform:uppercase; letter-spacing:.03em; text-align:center; line-height:1.2; }
+  /* Override GrapeJS default block styles */
+  #blocks-container .gjs-block {
+    display:flex !important; flex-direction:column; align-items:center; justify-content:center;
+    padding:16px 8px 12px !important; margin:0 !important;
+    min-height:88px; width:auto !important;
+    border:1px solid transparent !important; border-radius:8px !important;
+    background:#fff !important; cursor:grab !important;
+    transition:all .15s !important; position:relative;
+  }
+  #blocks-container .gjs-block:hover {
+    background:#f6f7fb !important; border-color:#e2e5ea !important;
+    box-shadow:0 2px 8px rgba(0,0,0,.06) !important;
+  }
+  #blocks-container .gjs-block:active { cursor:grabbing !important; }
 
-  .blocks-category {
-    font-size:.7rem; font-weight:700; color:#999; text-transform:uppercase;
-    letter-spacing:.08em; padding:12px 12px 4px; border-top:1px solid #eee;
+  /* Drag handle dots */
+  #blocks-container .gjs-block::before {
+    content:'⠿'; position:absolute; top:4px; left:50%; transform:translateX(-50%);
+    font-size:10px; color:#ccc; line-height:1;
   }
-  .blocks-category:first-child { border-top:none; }
+  #blocks-container .gjs-block:hover::before { color:#999; }
 
-  /* ── Row layouts grid ────────────────────────────────────── */
-  .rows-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:12px; }
-  .row-item {
-    display:flex; align-items:center; justify-content:center; gap:3px;
-    padding:16px 8px; cursor:grab; border-radius:6px; border:2px solid #e0e0e0;
-    transition:all .15s; background:#fff; min-height:56px;
+  /* Block icons */
+  #blocks-container .gjs-block__media {
+    margin-bottom:6px !important;
   }
-  .row-item:hover { border-color:#ce2825; background:#fef7f7; }
-  .row-item .col-block {
-    background:#d0d4db; border-radius:3px; height:28px; flex:1;
+  #blocks-container .gjs-block__media i {
+    font-size:1.4rem !important; color:#5a5f78 !important;
   }
-  .row-item .col-block + .col-block { margin-left:3px; }
+  #blocks-container .gjs-block:hover .gjs-block__media i {
+    color:#ce2825 !important;
+  }
 
-  /* ── Settings panel ──────────────────────────────────────── */
-  .settings-section { padding:16px; }
-  .settings-section h6 { font-size:.8rem; font-weight:700; margin-bottom:10px; color:#333; }
-  #style-manager-container .gjs-sm-sector { border:none; }
-  #style-manager-container .gjs-sm-sector-title {
-    font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em;
-    padding:10px 12px; background:#f8f9fa; border-bottom:1px solid #eee; cursor:pointer;
+  /* Block labels */
+  #blocks-container .gjs-block-label {
+    font-size:.68rem !important; font-weight:600 !important;
+    color:#6b7084 !important; text-transform:capitalize !important;
+    line-height:1.2 !important;
   }
-  #trait-manager-container { padding:8px 12px; }
 
-  /* ── GrapeJS canvas overrides ────────────────────────────── */
+  /* Hide GrapeJS block category headers */
+  #blocks-container .gjs-block-category {
+    display:contents !important;
+  }
+  #blocks-container .gjs-block-category .gjs-title {
+    grid-column: 1 / -1; padding:10px 8px 4px !important;
+    font-size:.65rem !important; font-weight:700 !important;
+    color:#a0a4b8 !important; text-transform:uppercase !important;
+    letter-spacing:.08em !important; background:transparent !important;
+    border:none !important; border-top:1px solid #eee !important;
+    margin-top:4px;
+  }
+  #blocks-container .gjs-block-category:first-child .gjs-title {
+    border-top:none !important; margin-top:0;
+  }
+
+  /* ── Rows panel ──────────────────────────────────────────── */
+  #rows-container {
+    display:grid !important; grid-template-columns:1fr 1fr;
+    gap:0; padding:6px;
+  }
+  #rows-container .gjs-block {
+    display:flex !important; flex-direction:column; align-items:center; justify-content:center;
+    padding:14px 10px 10px !important; margin:0 !important;
+    min-height:72px; width:auto !important;
+    border:2px solid #e8eaef !important; border-radius:10px !important;
+    background:#fff !important; cursor:grab !important; transition:all .15s !important;
+    position:relative;
+  }
+  #rows-container .gjs-block:hover {
+    border-color:#ce2825 !important; background:#fef7f7 !important;
+  }
+  #rows-container .gjs-block::before {
+    content:'⠿'; position:absolute; top:3px; left:50%; transform:translateX(-50%);
+    font-size:9px; color:#ccc; line-height:1;
+  }
+  #rows-container .gjs-block__media { margin-bottom:4px !important; }
+  #rows-container .gjs-block-label {
+    font-size:.65rem !important; font-weight:600 !important; color:#6b7084 !important;
+  }
+  #rows-container .gjs-block-category { display:contents !important; }
+  #rows-container .gjs-block-category .gjs-title { display:none !important; }
+
+  /* ── Design tab (style + traits) ─────────────────────────── */
+  .design-panel { padding:0; }
+  .design-empty {
+    text-align:center; padding:40px 20px; color:#a0a4b8;
+  }
+  .design-empty i { font-size:2.2rem; margin-bottom:10px; display:block; }
+  .design-empty p { font-size:.85rem; margin:0; }
+
+  #trait-container { padding:10px 14px; }
+  #trait-container .gjs-trt-trait { margin-bottom:8px; }
+  #trait-container .gjs-label-wrp { font-size:.75rem; font-weight:600; color:#6b7084; }
+
+  #style-container .gjs-sm-sector { border:none !important; }
+  #style-container .gjs-sm-sector-title {
+    font-size:.7rem !important; font-weight:700 !important;
+    text-transform:uppercase !important; letter-spacing:.06em !important;
+    padding:12px 14px 8px !important; background:#fafbfc !important;
+    border-bottom:1px solid #eee !important; color:#6b7084 !important;
+    cursor:pointer;
+  }
+  #style-container .gjs-sm-properties { padding:8px 14px !important; }
+  #style-container .gjs-field { border-radius:6px !important; border-color:#e2e5ea !important; }
+
+  /* ── Canvas overrides ────────────────────────────────────── */
+  .editor-canvas { flex:1; min-width:0; position:relative; background:#f4f5f7; }
+  #gjs { height:100%; }
   .gjs-cv-canvas { background:#e9ecef !important; }
-  .gjs-frame-wrapper { background:#e9ecef !important; }
 
-  /* Hide default GrapeJS panels — we build our own */
+  /* Hide GrapeJS default panels (we built our own) */
   .gjs-pn-panels { display:none !important; }
 
-  /* ── Device toggle in canvas ─────────────────────────────── */
-  .device-bar {
-    position:absolute; top:8px; left:50%; transform:translateX(-50%); z-index:5;
-    display:flex; gap:2px; background:rgba(255,255,255,.95); border-radius:6px;
-    padding:3px; box-shadow:0 1px 4px rgba(0,0,0,.1);
+  /* ── Device switcher (floating above canvas) ─────────────── */
+  .device-switcher {
+    position:absolute; top:10px; left:50%; transform:translateX(-50%); z-index:10;
+    display:flex; gap:0; background:#fff; border-radius:10px;
+    padding:3px; box-shadow:0 2px 12px rgba(0,0,0,.08); border:1px solid #e8eaef;
   }
-  .device-bar .btn {
-    padding:4px 12px; font-size:.8rem; border:none; background:transparent;
-    color:#666; border-radius:4px;
+  .device-switcher button {
+    padding:6px 14px; font-size:.82rem; border:none; background:transparent;
+    color:#8b8fa3; border-radius:7px; cursor:pointer; transition:all .15s;
   }
-  .device-bar .btn.active { background:#ce2825; color:#fff; }
+  .device-switcher button.active { background:#ce2825; color:#fff; }
+  .device-switcher button:hover:not(.active) { color:#333; background:#f0f1f5; }
 
   /* ── Template picker modal ───────────────────────────────── */
-  .tmpl-card { cursor:pointer; transition:transform .15s, box-shadow .15s; border:2px solid transparent; }
-  .tmpl-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.12); border-color:#ce2825; }
-  .tmpl-card .card-body { padding:10px 12px; }
-  .tmpl-card .card-title { font-size:.9rem; font-weight:700; margin-bottom:2px; }
-  .tmpl-card .card-text  { font-size:.75rem; color:#6c757d; }
-
-  /* ── Responsive ──────────────────────────────────────────── */
-  @media (max-width:768px) {
-    .editor-panel { width:220px; }
-    .blocks-grid { grid-template-columns:1fr 1fr; }
+  .tmpl-card {
+    cursor:pointer; transition:all .2s; border:2px solid transparent; border-radius:12px;
+    overflow:hidden;
   }
+  .tmpl-card:hover { transform:translateY(-3px); box-shadow:0 6px 20px rgba(0,0,0,.1); border-color:#ce2825; }
+  .tmpl-card .card-body { padding:12px 14px; }
+  .tmpl-card .card-title { font-size:.95rem; font-weight:700; margin-bottom:3px; }
+  .tmpl-card .card-text  { font-size:.78rem; color:#8b8fa3; }
+  .tmpl-preview {
+    height:160px; display:flex; align-items:center; justify-content:center;
+    background:#f6f7fb;
+  }
+  .tmpl-preview i { font-size:3rem; }
 </style>
 {% endblock %}
 
@@ -126,108 +220,92 @@
     <input type="hidden" name="html_body" id="html_body">
 
     <!-- ── Top bar ───────────────────────────────────────────── -->
-    <div class="compose-bar">
+    <div class="compose-topbar">
       <div class="field" style="min-width:170px;">
-        <label>Client <span class="text-danger">*</span></label>
+        <label>Client <span style="color:#ce2825;">*</span></label>
         <select name="client_id" id="clientSelect" class="form-select" required>
           <option value="">Select client...</option>
           {% for c in clients %}
           <option value="{{ c.id }}"
                   data-from-name="{{ c.from_name or c.name }}"
                   data-from-email="{{ c.from_email or '' }}"
-                  data-approvers="{{ c.approvers|length }}">
-            {{ c.name }}
-          </option>
+                  data-approvers="{{ c.approvers|length }}">{{ c.name }}</option>
           {% endfor %}
         </select>
       </div>
       <div class="field field-grow">
         <label>Subject</label>
         <input type="text" name="subject" id="subject" class="form-control"
-               placeholder="Email subject line" required>
+               placeholder="Enter email subject..." required>
       </div>
-      <div class="field" style="min-width:190px;">
+      <div class="field" style="min-width:180px;">
         <label>Recipients</label>
         <input type="text" name="recipients" id="recipients" class="form-control"
-               placeholder="email@example.com, ...">
+               placeholder="email@example.com">
       </div>
-      <div class="d-flex gap-2 align-items-end">
+      <div class="d-flex gap-2 align-items-end" style="padding-bottom:1px;">
         <button type="button" class="btn btn-outline-secondary btn-sm" onclick="showTemplates()"
-                style="height:34px;font-size:.8rem;">
+                style="height:34px;font-size:.8rem;border-radius:8px;border-color:#e2e5ea;">
           <i class="bi bi-grid-3x2-gap me-1"></i>Templates
         </button>
         <button type="submit" class="btn btn-primary btn-sm" id="submitBtn"
-                style="height:34px;font-size:.8rem;white-space:nowrap;">
+                style="height:34px;font-size:.8rem;border-radius:8px;white-space:nowrap;">
           <i class="bi bi-send-check me-1"></i>Submit for Approval
         </button>
       </div>
     </div>
 
     <!-- ── Editor area ───────────────────────────────────────── -->
-    <div class="editor-wrap">
+    <div class="editor-area">
 
-      <!-- Canvas -->
-      <div class="editor-canvas">
-        <div id="gjs" style="height:100%;"></div>
-        <div class="device-bar">
-          <button type="button" class="btn active" id="btnDesktop" onclick="setDevice('Desktop',this)">
-            <i class="bi bi-display"></i>
+      <!-- LEFT PANEL (BeeFree style) -->
+      <div class="left-panel">
+        <div class="lp-tabs">
+          <button class="active" onclick="switchTab('content',this)">
+            <i class="bi bi-grid-3x3-gap-fill"></i>Content
           </button>
-          <button type="button" class="btn" id="btnTablet" onclick="setDevice('Tablet',this)">
-            <i class="bi bi-tablet"></i>
+          <button onclick="switchTab('rows',this)">
+            <i class="bi bi-layout-three-columns"></i>Rows
           </button>
-          <button type="button" class="btn" id="btnMobile" onclick="setDevice('Mobile',this)">
-            <i class="bi bi-phone"></i>
+          <button onclick="switchTab('design',this)">
+            <i class="bi bi-palette"></i>Design
           </button>
+        </div>
+        <div class="lp-body">
+          <!-- Content tab — GrapeJS renders blocks here automatically -->
+          <div class="lp-section active" id="tab-content">
+            <div id="blocks-container"></div>
+          </div>
+
+          <!-- Rows tab — column layout blocks -->
+          <div class="lp-section" id="tab-rows">
+            <div style="padding:12px 14px 6px;">
+              <p style="font-size:.78rem;color:#8b8fa3;margin:0;">Drag a row layout onto the canvas.</p>
+            </div>
+            <div id="rows-container"></div>
+          </div>
+
+          <!-- Design tab — style manager + traits -->
+          <div class="lp-section" id="tab-design">
+            <div class="design-panel">
+              <div class="design-empty" id="design-empty">
+                <i class="bi bi-cursor"></i>
+                <p>Select an element on the canvas to edit its style.</p>
+              </div>
+              <div id="trait-container"></div>
+              <div id="style-container"></div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Right panel -->
-      <div class="editor-panel">
-        <div class="panel-tabs">
-          <button class="active" onclick="switchTab('content',this)">
-            <i class="bi bi-grid-3x3-gap me-1"></i>Content
-          </button>
-          <button onclick="switchTab('rows',this)">
-            <i class="bi bi-layout-three-columns me-1"></i>Rows
-          </button>
-          <button onclick="switchTab('settings',this)">
-            <i class="bi bi-sliders me-1"></i>Settings
-          </button>
-        </div>
-
-        <div class="panel-body">
-
-          <!-- CONTENT tab — draggable blocks -->
-          <div class="panel-section active" id="tab-content">
-            <div class="blocks-category">Basic</div>
-            <div class="blocks-grid" id="blocks-basic"></div>
-            <div class="blocks-category">Media</div>
-            <div class="blocks-grid" id="blocks-media"></div>
-            <div class="blocks-category">Sections</div>
-            <div class="blocks-grid" id="blocks-sections"></div>
-          </div>
-
-          <!-- ROWS tab — column layouts -->
-          <div class="panel-section" id="tab-rows">
-            <div style="padding:12px 12px 4px;">
-              <div class="text-muted" style="font-size:.75rem;">Drag a row layout onto the canvas to create a section.</div>
-            </div>
-            <div class="rows-grid" id="rows-grid"></div>
-          </div>
-
-          <!-- SETTINGS tab — style + traits -->
-          <div class="panel-section" id="tab-settings">
-            <div class="settings-section" id="no-selection-msg">
-              <div class="text-center text-muted py-4">
-                <i class="bi bi-cursor" style="font-size:2rem;"></i>
-                <div class="mt-2" style="font-size:.85rem;">Click an element on the canvas to edit its properties.</div>
-              </div>
-            </div>
-            <div id="trait-manager-container"></div>
-            <div id="style-manager-container"></div>
-          </div>
-
+      <!-- CANVAS -->
+      <div class="editor-canvas">
+        <div id="gjs"></div>
+        <div class="device-switcher">
+          <button class="active" onclick="setDevice('Desktop',this)"><i class="bi bi-display"></i></button>
+          <button onclick="setDevice('Tablet',this)"><i class="bi bi-tablet"></i></button>
+          <button onclick="setDevice('Mobile',this)"><i class="bi bi-phone"></i></button>
         </div>
       </div>
 
@@ -238,43 +316,43 @@
 <!-- ── Template picker modal ─────────────────────────────────── -->
 <div class="modal fade" id="templateModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold">Choose a Starting Template</h5>
+    <div class="modal-content" style="border-radius:16px;overflow:hidden;">
+      <div class="modal-header border-0 pb-0 pt-4 px-4">
+        <h5 class="modal-title fw-bold">Choose a template to get started</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
+      <div class="modal-body px-4 pb-4">
         <div class="row g-3">
           <div class="col-md-4">
             <div class="card tmpl-card" onclick="loadTemplate('blank')">
-              <div class="d-flex align-items-center justify-content-center bg-light" style="height:140px;">
-                <i class="bi bi-file-earmark-plus" style="font-size:3rem;color:#adb5bd;"></i>
+              <div class="tmpl-preview">
+                <i class="bi bi-file-earmark-plus" style="color:#c0c4d4;"></i>
               </div>
               <div class="card-body">
                 <div class="card-title">Blank</div>
-                <div class="card-text">Start from scratch with an empty canvas.</div>
+                <div class="card-text">Start from an empty canvas.</div>
               </div>
             </div>
           </div>
           <div class="col-md-4">
             <div class="card tmpl-card" onclick="loadTemplate('newsletter')">
-              <div class="d-flex align-items-center justify-content-center bg-light" style="height:140px;">
-                <i class="bi bi-newspaper" style="font-size:3rem;color:#ce2825;"></i>
+              <div class="tmpl-preview">
+                <i class="bi bi-newspaper" style="color:#ce2825;"></i>
               </div>
               <div class="card-body">
                 <div class="card-title">Newsletter</div>
-                <div class="card-text">Header, two-column content, and footer.</div>
+                <div class="card-text">Header, two columns, and footer.</div>
               </div>
             </div>
           </div>
           <div class="col-md-4">
             <div class="card tmpl-card" onclick="loadTemplate('announcement')">
-              <div class="d-flex align-items-center justify-content-center bg-light" style="height:140px;">
-                <i class="bi bi-megaphone" style="font-size:3rem;color:#0d6efd;"></i>
+              <div class="tmpl-preview">
+                <i class="bi bi-megaphone" style="color:#5b6abf;"></i>
               </div>
               <div class="card-body">
                 <div class="card-title">Announcement</div>
-                <div class="card-text">Centered hero, CTA button, and footer.</div>
+                <div class="card-text">Hero banner with CTA button.</div>
               </div>
             </div>
           </div>
@@ -294,51 +372,47 @@
 <script src="https://unpkg.com/grapesjs@0.21.13/dist/grapes.min.js"></script>
 <script>
 // ═══════════════════════════════════════════════════════════════
-// Templates (table-based, 600px, email-safe HTML)
+// Email Templates
 // ═══════════════════════════════════════════════════════════════
 const TEMPLATES = {
   blank: `<table style="width:100%;max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;">
     <tr><td style="padding:40px 20px;text-align:center;">
-      <p style="font-size:16px;color:#999;">Drag content blocks from the right panel to build your email.</p>
+      <p style="font-size:16px;color:#b0b4c8;">Drag blocks from the left panel to start building.</p>
     </td></tr>
   </table>`,
 
   newsletter: `<table style="width:100%;max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;border-collapse:collapse;">
     <tr>
-      <td style="background-color:#ce2825;padding:30px 20px;text-align:center;">
-        <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:bold;">Newsletter Title</h1>
-        <p style="color:#f8d7da;margin:8px 0 0;font-size:14px;">Monthly Update — April 2026</p>
+      <td style="background-color:#ce2825;padding:32px 24px;text-align:center;">
+        <h1 style="color:#fff;margin:0;font-size:26px;font-weight:bold;">Newsletter Title</h1>
+        <p style="color:rgba(255,255,255,.8);margin:8px 0 0;font-size:14px;">Monthly Update — April 2026</p>
       </td>
     </tr>
     <tr>
-      <td style="padding:30px 20px;">
-        <h2 style="color:#333;font-size:22px;margin:0 0 12px;">Featured Story</h2>
-        <p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 20px;">
-          Write your main story here. This section is perfect for your lead content, announcements, or featured article.
+      <td style="padding:28px 24px;">
+        <h2 style="color:#333;font-size:20px;margin:0 0 10px;">Featured Story</h2>
+        <p style="color:#555;font-size:15px;line-height:1.6;margin:0;">
+          Write your main story here. This section is ideal for lead content or featured articles.
         </p>
       </td>
     </tr>
     <tr>
-      <td style="padding:0 20px 30px;">
+      <td style="padding:0 24px 28px;">
         <table style="width:100%;border-collapse:collapse;">
           <tr>
             <td style="width:48%;vertical-align:top;padding-right:2%;">
-              <table style="width:100%;background:#f8f9fa;border-radius:6px;">
+              <table style="width:100%;background:#f6f7fb;border-radius:8px;">
                 <tr><td style="padding:20px;">
-                  <h3 style="color:#333;font-size:17px;margin:0 0 8px;">Column One</h3>
-                  <p style="color:#666;font-size:14px;line-height:1.5;margin:0;">
-                    Add supporting content, a secondary story, or highlight a key metric.
-                  </p>
+                  <h3 style="color:#333;font-size:16px;margin:0 0 6px;">Column One</h3>
+                  <p style="color:#666;font-size:14px;line-height:1.5;margin:0;">Supporting content or a secondary story.</p>
                 </td></tr>
               </table>
             </td>
             <td style="width:48%;vertical-align:top;padding-left:2%;">
-              <table style="width:100%;background:#f8f9fa;border-radius:6px;">
+              <table style="width:100%;background:#f6f7fb;border-radius:8px;">
                 <tr><td style="padding:20px;">
-                  <h3 style="color:#333;font-size:17px;margin:0 0 8px;">Column Two</h3>
-                  <p style="color:#666;font-size:14px;line-height:1.5;margin:0;">
-                    Another block of content. Use this for a second topic, event, or call to action.
-                  </p>
+                  <h3 style="color:#333;font-size:16px;margin:0 0 6px;">Column Two</h3>
+                  <p style="color:#666;font-size:14px;line-height:1.5;margin:0;">Another topic, event, or call to action.</p>
                 </td></tr>
               </table>
             </td>
@@ -347,10 +421,9 @@ const TEMPLATES = {
       </td>
     </tr>
     <tr>
-      <td style="padding:20px;border-top:1px solid #eee;text-align:center;">
+      <td style="padding:20px 24px;border-top:1px solid #eee;text-align:center;">
         <p style="color:#999;font-size:12px;margin:0;">
-          You received this email because you are subscribed.<br>
-          <a href="#" style="color:#ce2825;">Unsubscribe</a> | <a href="#" style="color:#ce2825;">View in browser</a>
+          <a href="#" style="color:#ce2825;">Unsubscribe</a> &nbsp;|&nbsp; <a href="#" style="color:#ce2825;">View in browser</a>
         </p>
       </td>
     </tr>
@@ -359,32 +432,30 @@ const TEMPLATES = {
   announcement: `<table style="width:100%;max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;border-collapse:collapse;">
     <tr>
       <td style="padding:20px;text-align:center;">
-        <p style="color:#999;font-size:12px;margin:0;letter-spacing:2px;text-transform:uppercase;">YOUR ORGANIZATION</p>
+        <p style="color:#999;font-size:11px;margin:0;letter-spacing:2px;text-transform:uppercase;">YOUR ORGANIZATION</p>
       </td>
     </tr>
     <tr>
-      <td style="background:#ce2825;padding:50px 30px;text-align:center;">
-        <h1 style="color:#fff;font-size:32px;margin:0 0 12px;font-weight:bold;">Big Announcement</h1>
-        <p style="color:rgba(255,255,255,.85);font-size:16px;line-height:1.5;margin:0 0 25px;">
+      <td style="background:#ce2825;padding:48px 32px;text-align:center;">
+        <h1 style="color:#fff;font-size:30px;margin:0 0 12px;font-weight:bold;">Big Announcement</h1>
+        <p style="color:rgba(255,255,255,.85);font-size:16px;line-height:1.5;margin:0 0 24px;">
           Share your exciting news here. Keep it concise and impactful.
         </p>
-        <a href="#" style="display:inline-block;background:#fff;color:#ce2825;padding:14px 36px;
-                          border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">
+        <a href="#" style="display:inline-block;background:#fff;color:#ce2825;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:15px;">
           Learn More
         </a>
       </td>
     </tr>
     <tr>
-      <td style="padding:30px 20px;">
+      <td style="padding:28px 24px;">
         <p style="color:#555;font-size:15px;line-height:1.6;text-align:center;margin:0;">
-          Add supporting details here. Explain what this announcement means, what action readers should take, or provide additional context.
+          Add supporting details here. Explain what this means and what action readers should take.
         </p>
       </td>
     </tr>
     <tr>
       <td style="padding:20px;border-top:1px solid #eee;text-align:center;">
         <p style="color:#999;font-size:12px;margin:0;">
-          Questions? Reply to this email or contact us.<br>
           <a href="#" style="color:#ce2825;">Unsubscribe</a>
         </p>
       </td>
@@ -392,8 +463,9 @@ const TEMPLATES = {
   </table>`
 };
 
+
 // ═══════════════════════════════════════════════════════════════
-// GrapeJS Editor — manual configuration (no preset)
+// GrapeJS Init — using appendTo for native block rendering
 // ═══════════════════════════════════════════════════════════════
 const editor = grapesjs.init({
   container: '#gjs',
@@ -401,7 +473,15 @@ const editor = grapesjs.init({
   height: '100%',
   width: 'auto',
   storageManager: false,
-  panels: { defaults: [] },   // We build our own panel UI
+
+  // Render blocks natively into our left-panel container
+  blockManager: {
+    appendTo: '#blocks-container',
+  },
+
+  // No default panels — we built our own UI
+  panels: { defaults: [] },
+
   deviceManager: {
     devices: [
       { name: 'Desktop', width: '' },
@@ -409,8 +489,9 @@ const editor = grapesjs.init({
       { name: 'Mobile', width: '375px', widthMedia: '480px' },
     ],
   },
+
   styleManager: {
-    appendTo: '#style-manager-container',
+    appendTo: '#style-container',
     sectors: [
       {
         name: 'Typography',
@@ -422,22 +503,21 @@ const editor = grapesjs.init({
             { id: 'Verdana, Geneva, sans-serif', label: 'Verdana' },
             { id: 'Tahoma, Geneva, sans-serif', label: 'Tahoma' },
             { id: '"Trebuchet MS", Helvetica, sans-serif', label: 'Trebuchet' },
-            { id: '"Times New Roman", Times, serif', label: 'Times New Roman' },
-            { id: '"Courier New", Courier, monospace', label: 'Courier New' },
+            { id: '"Times New Roman", Times, serif', label: 'Times' },
           ]},
-          'font-size', 'font-weight', 'letter-spacing', 'line-height',
+          'font-size', 'font-weight', 'line-height', 'letter-spacing',
           'color', 'text-align', 'text-decoration',
         ],
       },
       {
         name: 'Spacing',
         open: false,
-        properties: ['padding', 'margin'],
+        properties: ['padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left', 'margin'],
       },
       {
         name: 'Background',
         open: false,
-        properties: ['background-color', 'background-image', 'background-size'],
+        properties: ['background-color', 'background-image', 'background-size', 'background-repeat'],
       },
       {
         name: 'Borders',
@@ -445,358 +525,222 @@ const editor = grapesjs.init({
         properties: ['border-radius', 'border-width', 'border-style', 'border-color'],
       },
       {
-        name: 'Dimensions',
+        name: 'Size',
         open: false,
         properties: ['width', 'max-width', 'height', 'min-height'],
       },
     ],
   },
+
   traitManager: {
-    appendTo: '#trait-manager-container',
+    appendTo: '#trait-container',
   },
+
   canvas: {
     styles: [
       'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap',
     ],
   },
-  // Allow inline styles (important for email)
-  forceClass: false,
 });
 
 
 // ═══════════════════════════════════════════════════════════════
-// Register blocks — CONTENT tab
+// Register Content Blocks
 // ═══════════════════════════════════════════════════════════════
 const bm = editor.Blocks;
 
-// ── Basic ─────────────────────────────────────────────────────
+// ─── Basic ────────────────────────────────────────────────────
 bm.add('title', {
   label: 'Title',
   category: 'Basic',
-  media: '<i class="bi bi-type-h1" style="font-size:1.6rem;"></i>',
+  media: '<i class="bi bi-type-h1"></i>',
   content: '<h1 style="font-size:28px;font-weight:bold;color:#333;margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;">Your Title Here</h1>',
 });
-bm.add('paragraph', {
-  label: 'Paragraph',
+bm.add('text', {
+  label: 'Text',
   category: 'Basic',
-  media: '<i class="bi bi-text-paragraph" style="font-size:1.6rem;"></i>',
-  content: '<p style="font-size:15px;line-height:1.6;color:#555;margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;">Write your paragraph text here. Click to edit this content and customize it for your audience.</p>',
+  media: '<i class="bi bi-text-paragraph"></i>',
+  content: '<p style="font-size:15px;line-height:1.6;color:#555;margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;">Write your text here. Click to edit and customize.</p>',
 });
-bm.add('list', {
-  label: 'List',
-  category: 'Basic',
-  media: '<i class="bi bi-list-ul" style="font-size:1.6rem;"></i>',
-  content: '<ul style="font-size:15px;line-height:1.8;color:#555;padding-left:20px;font-family:Arial,Helvetica,sans-serif;"><li>First item</li><li>Second item</li><li>Third item</li></ul>',
-});
-bm.add('link', {
-  label: 'Link',
-  category: 'Basic',
-  media: '<i class="bi bi-link-45deg" style="font-size:1.6rem;"></i>',
-  content: '<a href="#" style="color:#ce2825;font-size:15px;font-family:Arial,Helvetica,sans-serif;">Click here</a>',
-});
-
-// ── Media ─────────────────────────────────────────────────────
 bm.add('image', {
   label: 'Image',
-  category: 'Media',
-  media: '<i class="bi bi-image" style="font-size:1.6rem;"></i>',
-  content: { type: 'image', style: { width:'100%', 'max-width':'100%', height:'auto' }, attributes: { alt: 'Image' } },
+  category: 'Basic',
+  media: '<i class="bi bi-image"></i>',
+  content: { type: 'image', style: { width:'100%', 'max-width':'100%', height:'auto' }, attributes: { alt:'Image' } },
   activate: true,
 });
 bm.add('button', {
   label: 'Button',
-  category: 'Media',
-  media: '<i class="bi bi-hand-index" style="font-size:1.6rem;"></i>',
-  content: '<a href="#" style="display:inline-block;background:#ce2825;color:#ffffff;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;font-family:Arial,Helvetica,sans-serif;text-align:center;">Call to Action</a>',
+  category: 'Basic',
+  media: '<i class="bi bi-hand-index"></i>',
+  content: '<a href="#" style="display:inline-block;background:#ce2825;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;font-family:Arial,Helvetica,sans-serif;text-align:center;">Call to Action</a>',
 });
+bm.add('list', {
+  label: 'List',
+  category: 'Basic',
+  media: '<i class="bi bi-list-ul"></i>',
+  content: '<ul style="font-size:15px;line-height:1.8;color:#555;padding-left:20px;font-family:Arial,sans-serif;"><li>First item</li><li>Second item</li><li>Third item</li></ul>',
+});
+bm.add('link', {
+  label: 'Link',
+  category: 'Basic',
+  media: '<i class="bi bi-link-45deg"></i>',
+  content: '<a href="#" style="color:#ce2825;font-size:15px;font-family:Arial,sans-serif;">Click here</a>',
+});
+
+// ─── Media ────────────────────────────────────────────────────
 bm.add('divider', {
   label: 'Divider',
   category: 'Media',
-  media: '<i class="bi bi-hr" style="font-size:1.6rem;"></i>',
+  media: '<i class="bi bi-hr"></i>',
   content: '<hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0;">',
 });
 bm.add('spacer', {
   label: 'Spacer',
   category: 'Media',
-  media: '<i class="bi bi-distribute-vertical" style="font-size:1.6rem;"></i>',
+  media: '<i class="bi bi-distribute-vertical"></i>',
   content: '<div style="height:30px;width:100%;"></div>',
 });
-bm.add('html-block', {
-  label: 'HTML',
-  category: 'Media',
-  media: '<i class="bi bi-code-slash" style="font-size:1.6rem;"></i>',
-  content: '<div style="padding:10px;font-size:14px;color:#666;font-family:monospace;">Custom HTML here</div>',
-});
-
-// ── Sections ──────────────────────────────────────────────────
-bm.add('hero-section', {
-  label: 'Hero',
-  category: 'Sections',
-  media: '<i class="bi bi-card-heading" style="font-size:1.6rem;"></i>',
-  content: `<table style="width:100%;background-color:#ce2825;border-collapse:collapse;">
-    <tr><td style="padding:40px 20px;text-align:center;">
-      <h1 style="color:#ffffff;font-size:28px;margin:0 0 10px;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">Hero Headline</h1>
-      <p style="color:rgba(255,255,255,.85);font-size:16px;margin:0 0 20px;font-family:Arial,Helvetica,sans-serif;">Subheadline text goes here</p>
-      <a href="#" style="display:inline-block;background:#ffffff;color:#ce2825;padding:12px 30px;border-radius:4px;text-decoration:none;font-weight:bold;font-family:Arial,Helvetica,sans-serif;">Call to Action</a>
-    </td></tr>
-  </table>`,
-});
-bm.add('footer-section', {
-  label: 'Footer',
-  category: 'Sections',
-  media: '<i class="bi bi-card-text" style="font-size:1.6rem;"></i>',
-  content: `<table style="width:100%;border-top:1px solid #eeeeee;border-collapse:collapse;">
-    <tr><td style="padding:20px;text-align:center;">
-      <p style="color:#999999;font-size:12px;margin:0;font-family:Arial,Helvetica,sans-serif;">
-        You received this email because you are subscribed.<br>
-        <a href="#" style="color:#ce2825;">Unsubscribe</a> | <a href="#" style="color:#ce2825;">View in browser</a>
-      </p>
-    </td></tr>
-  </table>`,
-});
-bm.add('social-section', {
+bm.add('social', {
   label: 'Social',
-  category: 'Sections',
-  media: '<i class="bi bi-share" style="font-size:1.6rem;"></i>',
+  category: 'Media',
+  media: '<i class="bi bi-share"></i>',
   content: `<table style="margin:0 auto;border-collapse:collapse;"><tr>
     <td style="padding:0 10px;"><a href="#" style="color:#ce2825;text-decoration:none;font-size:14px;font-family:Arial,sans-serif;">Facebook</a></td>
     <td style="padding:0 10px;"><a href="#" style="color:#ce2825;text-decoration:none;font-size:14px;font-family:Arial,sans-serif;">Twitter</a></td>
     <td style="padding:0 10px;"><a href="#" style="color:#ce2825;text-decoration:none;font-size:14px;font-family:Arial,sans-serif;">Instagram</a></td>
   </tr></table>`,
 });
+bm.add('html-block', {
+  label: 'HTML',
+  category: 'Media',
+  media: '<i class="bi bi-code-slash"></i>',
+  content: '<div style="padding:10px;font-size:14px;color:#666;font-family:monospace;">Custom HTML</div>',
+});
 
-
-// ═══════════════════════════════════════════════════════════════
-// Register row layouts — ROWS tab
-// ═══════════════════════════════════════════════════════════════
-const ROW_LAYOUTS = [
-  { id: 'row-1', label: '1 Column', cols: [100],
-    html: `<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
-      <td style="padding:20px;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:15px;color:#555;">Content here</p>
-      </td>
-    </tr></table>` },
-  { id: 'row-2', label: '2 Columns', cols: [50,50],
-    html: `<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
-      <td style="width:50%;padding:20px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:15px;color:#555;">Left column</p>
-      </td>
-      <td style="width:50%;padding:20px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:15px;color:#555;">Right column</p>
-      </td>
-    </tr></table>` },
-  { id: 'row-3', label: '3 Columns', cols: [33,33,33],
-    html: `<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
-      <td style="width:33.33%;padding:15px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:14px;color:#555;">Col 1</p>
-      </td>
-      <td style="width:33.33%;padding:15px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:14px;color:#555;">Col 2</p>
-      </td>
-      <td style="width:33.33%;padding:15px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:14px;color:#555;">Col 3</p>
-      </td>
-    </tr></table>` },
-  { id: 'row-37', label: '30 / 70', cols: [30,70],
-    html: `<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
-      <td style="width:30%;padding:20px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:14px;color:#555;">Sidebar</p>
-      </td>
-      <td style="width:70%;padding:20px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:15px;color:#555;">Main content area</p>
-      </td>
-    </tr></table>` },
-  { id: 'row-73', label: '70 / 30', cols: [70,30],
-    html: `<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
-      <td style="width:70%;padding:20px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:15px;color:#555;">Main content area</p>
-      </td>
-      <td style="width:30%;padding:20px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:14px;color:#555;">Sidebar</p>
-      </td>
-    </tr></table>` },
-  { id: 'row-4', label: '4 Columns', cols: [25,25,25,25],
-    html: `<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
-      <td style="width:25%;padding:10px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:13px;color:#555;">Col 1</p>
-      </td>
-      <td style="width:25%;padding:10px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:13px;color:#555;">Col 2</p>
-      </td>
-      <td style="width:25%;padding:10px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:13px;color:#555;">Col 3</p>
-      </td>
-      <td style="width:25%;padding:10px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;">
-        <p style="margin:0;font-size:13px;color:#555;">Col 4</p>
-      </td>
-    </tr></table>` },
-];
-
-// Register row blocks in GrapeJS
-ROW_LAYOUTS.forEach(r => {
-  bm.add(r.id, { label: r.label, category: 'Rows', content: r.html, select: true });
+// ─── Sections ─────────────────────────────────────────────────
+bm.add('hero', {
+  label: 'Hero',
+  category: 'Sections',
+  media: '<i class="bi bi-card-heading"></i>',
+  content: `<table style="width:100%;background-color:#ce2825;border-collapse:collapse;">
+    <tr><td style="padding:40px 24px;text-align:center;">
+      <h1 style="color:#fff;font-size:28px;margin:0 0 10px;font-weight:bold;font-family:Arial,sans-serif;">Hero Headline</h1>
+      <p style="color:rgba(255,255,255,.85);font-size:16px;margin:0 0 20px;font-family:Arial,sans-serif;">Subheadline text goes here</p>
+      <a href="#" style="display:inline-block;background:#fff;color:#ce2825;padding:12px 30px;border-radius:6px;text-decoration:none;font-weight:bold;font-family:Arial,sans-serif;">Call to Action</a>
+    </td></tr>
+  </table>`,
+});
+bm.add('footer', {
+  label: 'Footer',
+  category: 'Sections',
+  media: '<i class="bi bi-card-text"></i>',
+  content: `<table style="width:100%;border-top:1px solid #eee;border-collapse:collapse;">
+    <tr><td style="padding:20px;text-align:center;">
+      <p style="color:#999;font-size:12px;margin:0;font-family:Arial,sans-serif;">
+        <a href="#" style="color:#ce2825;">Unsubscribe</a> &nbsp;|&nbsp; <a href="#" style="color:#ce2825;">View in browser</a>
+      </p>
+    </td></tr>
+  </table>`,
 });
 
 
 // ═══════════════════════════════════════════════════════════════
-// Render blocks into our custom panel (BeeFree-style grid)
+// Register Row Layout Blocks (separate category → Rows tab)
 // ═══════════════════════════════════════════════════════════════
-function renderBlocks() {
-  const containers = {
-    'Basic':    document.getElementById('blocks-basic'),
-    'Media':    document.getElementById('blocks-media'),
-    'Sections': document.getElementById('blocks-sections'),
-  };
+const ROW_DEFS = [
+  { id:'row-1', label:'1 Column', svg:'<rect x="4" y="8" width="32" height="16" rx="2" fill="#b0b4c8"/>',
+    html:`<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
+      <td style="padding:20px;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;">Content here</p></td>
+    </tr></table>` },
+  { id:'row-2', label:'2 Columns', svg:'<rect x="4" y="8" width="14" height="16" rx="2" fill="#b0b4c8"/><rect x="22" y="8" width="14" height="16" rx="2" fill="#b0b4c8"/>',
+    html:`<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
+      <td style="width:50%;padding:20px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;">Left column</p></td>
+      <td style="width:50%;padding:20px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;">Right column</p></td>
+    </tr></table>` },
+  { id:'row-3', label:'3 Columns', svg:'<rect x="3" y="8" width="9" height="16" rx="2" fill="#b0b4c8"/><rect x="15" y="8" width="9" height="16" rx="2" fill="#b0b4c8"/><rect x="27" y="8" width="9" height="16" rx="2" fill="#b0b4c8"/>',
+    html:`<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
+      <td style="width:33%;padding:16px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;">Col 1</p></td>
+      <td style="width:33%;padding:16px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;">Col 2</p></td>
+      <td style="width:33%;padding:16px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;">Col 3</p></td>
+    </tr></table>` },
+  { id:'row-37', label:'30 / 70', svg:'<rect x="4" y="8" width="10" height="16" rx="2" fill="#b0b4c8"/><rect x="17" y="8" width="19" height="16" rx="2" fill="#b0b4c8"/>',
+    html:`<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
+      <td style="width:30%;padding:20px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;">Sidebar</p></td>
+      <td style="width:70%;padding:20px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;">Main content</p></td>
+    </tr></table>` },
+  { id:'row-73', label:'70 / 30', svg:'<rect x="4" y="8" width="19" height="16" rx="2" fill="#b0b4c8"/><rect x="26" y="8" width="10" height="16" rx="2" fill="#b0b4c8"/>',
+    html:`<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
+      <td style="width:70%;padding:20px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;">Main content</p></td>
+      <td style="width:30%;padding:20px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;">Sidebar</p></td>
+    </tr></table>` },
+  { id:'row-4', label:'4 Columns', svg:'<rect x="2" y="8" width="6.5" height="16" rx="1.5" fill="#b0b4c8"/><rect x="11" y="8" width="6.5" height="16" rx="1.5" fill="#b0b4c8"/><rect x="20" y="8" width="6.5" height="16" rx="1.5" fill="#b0b4c8"/><rect x="29" y="8" width="6.5" height="16" rx="1.5" fill="#b0b4c8"/>',
+    html:`<table style="width:100%;max-width:600px;margin:0 auto;border-collapse:collapse;"><tr>
+      <td style="width:25%;padding:12px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;font-size:13px;">Col 1</p></td>
+      <td style="width:25%;padding:12px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;font-size:13px;">Col 2</p></td>
+      <td style="width:25%;padding:12px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;font-size:13px;">Col 3</p></td>
+      <td style="width:25%;padding:12px;vertical-align:top;font-family:Arial,sans-serif;"><p style="margin:0;color:#555;font-size:13px;">Col 4</p></td>
+    </tr></table>` },
+];
 
-  // Clear
-  Object.values(containers).forEach(c => { if(c) c.innerHTML = ''; });
-
-  bm.getAll().forEach(block => {
-    const cat = block.getCategoryLabel() || 'Basic';
-    const container = containers[cat];
-    if (!container) return;  // Skip "Rows" category — rendered separately
-
-    const el = document.createElement('div');
-    el.className = 'block-item';
-    el.innerHTML = (block.getMedia() || '<i class="bi bi-box"></i>') +
-                   '<span>' + block.getLabel() + '</span>';
-
-    // Make it draggable via GrapeJS drag API
-    el.addEventListener('dragstart', function(e) {
-      // Prevent default — GrapeJS handles its own drag
-      return true;
-    });
-
-    // Use GrapeJS block drag trigger
-    el.addEventListener('mousedown', function(e) {
-      // Trigger drag from the block
-      const sources = editor.getWrapper();
-      // We need to use the internal drag mechanism
-    });
-
-    container.appendChild(el);
-
-    // Attach GrapeJS drag behavior using the Blocks render API
-    block.set('el', el);
+ROW_DEFS.forEach(r => {
+  bm.add(r.id, {
+    label: r.label,
+    category: 'Rows',
+    media: `<svg viewBox="0 0 40 32" style="width:40px;height:28px;">${r.svg}</svg>`,
+    content: r.html,
   });
+});
 
-  // Use the proper GrapeJS method to render blocks into containers
-  // Re-render using block manager render
-  Object.keys(containers).forEach(catName => {
-    containers[catName].innerHTML = '';
-  });
 
-  const blocksEl = bm.render(bm.getAll().filter(b => b.getCategoryLabel() !== 'Rows').models || bm.getAll().filter(b => b.getCategoryLabel() !== 'Rows'), {
-    external: true,
-  });
-  // The render method returns a single element with all blocks
-  // We need to distribute them to the correct category containers
-  if (blocksEl) {
-    // Actually let's use a simpler approach: render all into one container
-    // and move children to correct categories
-    const tempDiv = document.createElement('div');
-    tempDiv.appendChild(blocksEl);
-    // Each child is a .gjs-block element with data-gjs-type
-  }
-}
-
-// Simpler approach: render blocks into a hidden container, then use
-// the GrapeJS block manager's built-in rendering
-function setupBlockPanel() {
-  const allBlocks = bm.getAll();
-  const categories = { 'Basic': [], 'Media': [], 'Sections': [] };
-
-  allBlocks.forEach(block => {
-    const cat = block.getCategoryLabel();
-    if (categories[cat] !== undefined) {
-      categories[cat].push(block);
-    }
-  });
-
-  Object.keys(categories).forEach(catName => {
-    const container = document.getElementById('blocks-' + catName.toLowerCase());
-    if (!container) return;
-    container.innerHTML = '';
-
-    const rendered = bm.render(categories[catName], { external: true });
-    if (rendered) {
-      container.appendChild(rendered);
-    }
-  });
-}
-
-// Render rows panel
-function setupRowsPanel() {
-  const container = document.getElementById('rows-grid');
-  container.innerHTML = '';
-
-  ROW_LAYOUTS.forEach(r => {
-    const rowBlock = bm.get(r.id);
-    if (!rowBlock) return;
-
-    // Create visual preview
-    const el = document.createElement('div');
-    el.className = 'row-item';
-    el.title = r.label;
-    r.cols.forEach(pct => {
-      const col = document.createElement('div');
-      col.className = 'col-block';
-      col.style.flex = '0 0 ' + pct + '%';
-      el.appendChild(col);
-    });
-    container.appendChild(el);
-
-    // Wrap it so GrapeJS can attach drag handlers
-    const rendered = bm.render([rowBlock], { external: true });
-    if (rendered) {
-      // Hide the default rendered block, use our visual el as a proxy
-      rendered.style.display = 'none';
-      container.appendChild(rendered);
-
-      // Attach mousedown from our visual element to trigger GrapeJS drag
-      el.addEventListener('mousedown', function(e) {
-        // Find the actual gjs-block inside rendered
-        const gjsBlock = rendered.querySelector('.gjs-block');
-        if (gjsBlock) {
-          const newEvt = new MouseEvent('mousedown', {
-            bubbles: true, cancelable: true,
-            clientX: e.clientX, clientY: e.clientY,
-          });
-          gjsBlock.dispatchEvent(newEvt);
-        }
-      });
-    }
-  });
-}
-
-// Init after editor is ready
+// ═══════════════════════════════════════════════════════════════
+// After editor loads, move Row blocks into the Rows tab
+// ═══════════════════════════════════════════════════════════════
 editor.on('load', function() {
-  setupBlockPanel();
-  setupRowsPanel();
+  // The blockManager.appendTo puts ALL blocks into #blocks-container.
+  // We need to move the "Rows" category into #rows-container.
+  setTimeout(function() {
+    const blocksEl = document.getElementById('blocks-container');
+    const rowsEl = document.getElementById('rows-container');
 
-  // Show template picker
-  setTimeout(showTemplates, 300);
+    // Find the Rows category wrapper and move it
+    const categories = blocksEl.querySelectorAll('.gjs-block-category');
+    categories.forEach(cat => {
+      const title = cat.querySelector('.gjs-title');
+      if (title && title.textContent.trim() === 'Rows') {
+        // Move all blocks from this category into rows container
+        const blocks = cat.querySelectorAll('.gjs-block');
+        blocks.forEach(b => rowsEl.appendChild(b));
+        // Remove the now-empty category from blocks panel
+        cat.remove();
+      }
+    });
+
+    // Show template picker
+    setTimeout(showTemplates, 200);
+  }, 100);
 });
 
 
 // ═══════════════════════════════════════════════════════════════
 // Tab switching
 // ═══════════════════════════════════════════════════════════════
-function switchTab(tabName, btn) {
-  document.querySelectorAll('.panel-tabs button').forEach(b => b.classList.remove('active'));
+function switchTab(name, btn) {
+  document.querySelectorAll('.lp-tabs button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  document.querySelectorAll('.panel-section').forEach(s => s.classList.remove('active'));
-  document.getElementById('tab-' + tabName).classList.add('active');
+  document.querySelectorAll('.lp-section').forEach(s => s.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
 }
 
-// Show settings tab when a component is selected
-editor.on('component:selected', function(model) {
-  const msg = document.getElementById('no-selection-msg');
-  if (msg) msg.style.display = 'none';
+// Auto-switch to Design tab when selecting an element
+editor.on('component:selected', function() {
+  document.getElementById('design-empty').style.display = 'none';
+  // Auto-switch to design tab
+  const designBtn = document.querySelectorAll('.lp-tabs button')[2];
+  switchTab('design', designBtn);
 });
 editor.on('component:deselected', function() {
-  const msg = document.getElementById('no-selection-msg');
-  if (msg) msg.style.display = '';
+  document.getElementById('design-empty').style.display = '';
 });
 
 
@@ -805,29 +749,27 @@ editor.on('component:deselected', function() {
 // ═══════════════════════════════════════════════════════════════
 function setDevice(name, btn) {
   editor.setDevice(name);
-  document.querySelectorAll('.device-bar .btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.device-switcher button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 }
 
 
 // ═══════════════════════════════════════════════════════════════
-// Template loading & modal
+// Templates
 // ═══════════════════════════════════════════════════════════════
 let templateModal;
 function showTemplates() {
   if (!templateModal) templateModal = new bootstrap.Modal(document.getElementById('templateModal'));
   templateModal.show();
 }
-
 function loadTemplate(name) {
-  const html = TEMPLATES[name] || TEMPLATES.blank;
-  editor.setComponents(html);
+  editor.setComponents(TEMPLATES[name] || TEMPLATES.blank);
   if (templateModal) templateModal.hide();
 }
 
 
 // ═══════════════════════════════════════════════════════════════
-// Form submission — combine HTML + CSS into inline styles
+// Form submission
 // ═══════════════════════════════════════════════════════════════
 document.getElementById('composeForm').addEventListener('submit', function(e) {
   e.preventDefault();
@@ -840,7 +782,7 @@ document.getElementById('composeForm').addEventListener('submit', function(e) {
     return;
   }
 
-  // Wrap with a <style> tag — the backend sanitizer will inline it
+  // Combine CSS + HTML (backend sanitizer will inline styles)
   const finalHtml = (css ? '<style>' + css + '</style>' : '') + bodyHtml;
   document.getElementById('html_body').value = finalHtml;
   this.submit();
