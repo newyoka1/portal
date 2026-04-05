@@ -562,6 +562,58 @@ async def compose_upload_image(
 
 
 # ---------------------------------------------------------------------------
+# Video thumbnail / animated GIF generator for composer
+# ---------------------------------------------------------------------------
+@app.post("/compose/video-thumbnail")
+async def compose_video_thumbnail(
+    request: Request,
+    current_user: User = Depends(require_user),
+):
+    """Parse a video URL and return a static thumbnail + start GIF generation."""
+    import json as _json
+    body = await request.json()
+    url = body.get("url", "").strip()
+    if not url:
+        return {"ok": False, "error": "No URL provided"}
+
+    from video_gif import parse_video_url, get_static_thumbnail
+    info = parse_video_url(url)
+    if not info:
+        return {"ok": False, "error": "Could not parse video URL. Supported: YouTube, Vimeo, Facebook."}
+
+    thumb = get_static_thumbnail(info)
+    return {
+        "ok": True,
+        "platform": info["platform"],
+        "video_id": info["video_id"],
+        "video_url": info["url"],
+        "thumbnail": thumb,
+    }
+
+
+@app.post("/compose/video-gif")
+async def compose_video_gif(
+    request: Request,
+    current_user: User = Depends(require_user),
+):
+    """Generate an animated GIF from a video URL (can take 10-30 seconds)."""
+    body = await request.json()
+    url = body.get("url", "").strip()
+    if not url:
+        return {"ok": False, "error": "No URL provided"}
+
+    from video_gif import parse_video_url, generate_gif
+    info = parse_video_url(url)
+    if not info:
+        return {"ok": False, "error": "Could not parse video URL."}
+
+    result = generate_gif(info["url"])
+    result["video_url"] = info["url"]
+    result["platform"] = info["platform"]
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Compose email for approval
 # ---------------------------------------------------------------------------
 @app.get("/compose", response_class=HTMLResponse)

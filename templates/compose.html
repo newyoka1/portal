@@ -446,6 +446,73 @@
     </div>
   </div>
 </div>
+<!-- ── Video Insert modal ──────────────────────────────────────── -->
+<div class="modal fade" id="videoModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:520px;">
+    <div class="modal-content" style="border-radius:16px;overflow:hidden;">
+      <div class="modal-header border-0 pb-0 pt-4 px-4">
+        <h5 class="modal-title fw-bold"><i class="bi bi-play-btn me-2"></i>Insert Video</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body px-4 pb-4">
+        <p style="font-size:.85rem;color:#8b8fa3;margin:0 0 12px;">
+          Paste a YouTube, Vimeo, or Facebook video URL. We'll generate an animated GIF thumbnail for your email.
+        </p>
+
+        <!-- Platform icons -->
+        <div class="d-flex gap-3 mb-3">
+          <span class="d-flex align-items-center gap-1" style="font-size:.78rem;color:#888;">
+            <i class="bi bi-youtube" style="color:#ff0000;font-size:1.1rem;"></i> YouTube
+          </span>
+          <span class="d-flex align-items-center gap-1" style="font-size:.78rem;color:#888;">
+            <i class="bi bi-vimeo" style="color:#1ab7ea;font-size:1.1rem;"></i> Vimeo
+          </span>
+          <span class="d-flex align-items-center gap-1" style="font-size:.78rem;color:#888;">
+            <i class="bi bi-facebook" style="color:#1877F2;font-size:1.1rem;"></i> Facebook
+          </span>
+        </div>
+
+        <!-- URL input -->
+        <div class="input-group mb-3">
+          <input type="text" id="videoUrlInput" class="form-control" style="border-radius:8px 0 0 8px;"
+                 placeholder="https://www.youtube.com/watch?v=...">
+          <button type="button" class="btn btn-primary" onclick="processVideoUrl()"
+                  id="videoFetchBtn" style="border-radius:0 8px 8px 0;">
+            <i class="bi bi-search me-1"></i>Fetch
+          </button>
+        </div>
+
+        <!-- Preview area (hidden until URL fetched) -->
+        <div id="videoPreview" style="display:none;">
+          <div class="text-center mb-3">
+            <img id="videoThumbImg" src="" alt="Video thumbnail"
+                 style="max-width:100%;height:auto;border-radius:8px;border:1px solid #eee;">
+          </div>
+          <div id="videoStatus" class="text-center mb-3" style="font-size:.85rem;"></div>
+
+          <!-- Options -->
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" onclick="insertVideoStatic()"
+                    id="btnInsertStatic">
+              <i class="bi bi-image me-1"></i>Use Static Thumbnail
+            </button>
+            <button type="button" class="btn btn-primary btn-sm flex-fill" onclick="insertVideoGif()"
+                    id="btnInsertGif">
+              <i class="bi bi-filetype-gif me-1"></i>Generate Animated GIF
+            </button>
+          </div>
+          <div id="gifProgress" style="display:none;" class="text-center mt-3">
+            <div class="spinner-border spinner-border-sm text-primary me-2"></div>
+            <span style="font-size:.85rem;color:#666;">Generating animated GIF (10-30 seconds)...</span>
+          </div>
+        </div>
+
+        <!-- Error area -->
+        <div id="videoError" class="alert alert-danger py-2 mt-2" style="display:none;font-size:.85rem;"></div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -707,12 +774,14 @@ bm.add('link', {
 bm.add('video', {
   label: 'Video', category: 'Elements',
   media: '<i class="bi bi-play-btn"></i>',
-  content: `<table style="width:100%;border-collapse:collapse;"><tr><td style="text-align:center;padding:10px;">
-    <a href="#" style="display:inline-block;position:relative;text-decoration:none;">
+  // Instead of dropping content, open the video modal
+  content: `<table style="width:100%;border-collapse:collapse;" data-video-placeholder="1"><tr><td style="text-align:center;padding:10px;">
+    <a href="#" style="display:inline-block;text-decoration:none;">
       <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='270'%3E%3Crect width='480' height='270' rx='8' fill='%23222'/%3E%3Cpolygon points='210,105 210,165 270,135' fill='%23fff' opacity='.9'/%3E%3Ccircle cx='240' cy='135' r='40' fill='none' stroke='%23fff' stroke-width='3' opacity='.7'/%3E%3C/svg%3E" alt="Video" style="width:100%;max-width:480px;height:auto;border-radius:8px;">
     </a>
-    <p style="margin:8px 0 0;font-size:12px;color:#999;${F}">Click the image to watch the video</p>
+    <p style="margin:8px 0 0;font-size:12px;color:#999;${F}">Double-click to set video URL</p>
   </td></tr></table>`,
+  select: true,
 });
 bm.add('html-block', {
   label: 'HTML', category: 'Elements',
@@ -958,6 +1027,161 @@ function loadTemplate(name) {
   if (templateModal) templateModal.hide();
   // Apply current content width to the loaded template
   setTimeout(() => setContentWidth(currentContentWidth), 200);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// Video Insert — YouTube / Vimeo / Facebook
+// ═══════════════════════════════════════════════════════════════
+let videoModal, videoData = {};
+
+// Open video modal when a video placeholder is double-clicked
+editor.on('component:dblclick', function(comp) {
+  const el = comp.getEl();
+  if (el && el.closest && el.closest('[data-video-placeholder]')) {
+    videoData.targetComponent = comp.closest('[data-video-placeholder]') || comp;
+    openVideoModal();
+  }
+});
+
+function openVideoModal() {
+  if (!videoModal) videoModal = new bootstrap.Modal(document.getElementById('videoModal'));
+  // Reset state
+  document.getElementById('videoUrlInput').value = '';
+  document.getElementById('videoPreview').style.display = 'none';
+  document.getElementById('videoError').style.display = 'none';
+  document.getElementById('gifProgress').style.display = 'none';
+  videoModal.show();
+}
+
+async function processVideoUrl() {
+  const url = document.getElementById('videoUrlInput').value.trim();
+  if (!url) return;
+
+  const fetchBtn = document.getElementById('videoFetchBtn');
+  const errEl = document.getElementById('videoError');
+  const previewEl = document.getElementById('videoPreview');
+  errEl.style.display = 'none';
+  fetchBtn.disabled = true;
+  fetchBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Fetching...';
+
+  try {
+    const resp = await fetch('/compose/video-thumbnail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await resp.json();
+
+    if (!data.ok) {
+      errEl.textContent = data.error || 'Failed to process URL.';
+      errEl.style.display = 'block';
+      previewEl.style.display = 'none';
+      return;
+    }
+
+    videoData = { ...videoData, ...data };
+
+    // Show preview
+    const thumbImg = document.getElementById('videoThumbImg');
+    if (data.thumbnail) {
+      thumbImg.src = data.thumbnail;
+      thumbImg.style.display = '';
+    } else {
+      // No static thumbnail available — show placeholder
+      thumbImg.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='270'%3E%3Crect width='480' height='270' rx='8' fill='%23333'/%3E%3Ctext x='240' y='125' text-anchor='middle' font-family='Arial' font-size='16' fill='%23888'%3E" + data.platform.toUpperCase() + " Video%3C/text%3E%3Ctext x='240' y='155' text-anchor='middle' font-family='Arial' font-size='12' fill='%23666'%3EUse 'Generate GIF' for a preview%3C/text%3E%3C/svg%3E";
+    }
+
+    const statusEl = document.getElementById('videoStatus');
+    const platformLabel = { youtube: 'YouTube', vimeo: 'Vimeo', facebook: 'Facebook', other: 'Video' }[data.platform] || 'Video';
+    statusEl.innerHTML = '<span class="badge bg-secondary me-1">' + platformLabel + '</span> <span class="text-muted" style="font-size:.8rem;">ID: ' + data.video_id + '</span>';
+    previewEl.style.display = 'block';
+
+    // Show/hide static button based on thumbnail availability
+    document.getElementById('btnInsertStatic').style.display = data.thumbnail ? '' : 'none';
+
+  } catch (err) {
+    errEl.textContent = 'Network error: ' + err.message;
+    errEl.style.display = 'block';
+  } finally {
+    fetchBtn.disabled = false;
+    fetchBtn.innerHTML = '<i class="bi bi-search me-1"></i>Fetch';
+  }
+}
+
+function insertVideoStatic() {
+  if (!videoData.thumbnail || !videoData.video_url) return;
+  insertVideoBlock(videoData.thumbnail, videoData.video_url);
+}
+
+async function insertVideoGif() {
+  const url = document.getElementById('videoUrlInput').value.trim();
+  if (!url) return;
+
+  const gifBtn = document.getElementById('btnInsertGif');
+  const progressEl = document.getElementById('gifProgress');
+  const errEl = document.getElementById('videoError');
+
+  gifBtn.disabled = true;
+  progressEl.style.display = 'block';
+  errEl.style.display = 'none';
+
+  try {
+    const resp = await fetch('/compose/video-gif', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const data = await resp.json();
+
+    if (!data.ok) {
+      errEl.textContent = data.error || 'Failed to generate GIF.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    // Update the thumbnail preview
+    document.getElementById('videoThumbImg').src = data.gif_url;
+
+    // Insert into canvas
+    insertVideoBlock(data.gif_url, data.video_url || videoData.video_url);
+
+  } catch (err) {
+    errEl.textContent = 'Network error: ' + err.message;
+    errEl.style.display = 'block';
+  } finally {
+    gifBtn.disabled = false;
+    progressEl.style.display = 'none';
+  }
+}
+
+function insertVideoBlock(imgSrc, videoUrl) {
+  const html = `<table style="width:100%;border-collapse:collapse;"><tr><td style="text-align:center;padding:10px;">
+    <a href="${videoUrl}" target="_blank" style="display:inline-block;text-decoration:none;position:relative;">
+      <img src="${imgSrc}" alt="Watch video" style="width:100%;max-width:480px;height:auto;border-radius:8px;display:block;">
+    </a>
+    <p style="margin:8px 0 0;font-size:12px;color:#999;font-family:Arial,sans-serif;">
+      <a href="${videoUrl}" target="_blank" style="color:#ce2825;text-decoration:none;">&#9654; Watch the video</a>
+    </p>
+  </td></tr></table>`;
+
+  // Replace the placeholder component if we have one, otherwise add to canvas
+  if (videoData.targetComponent) {
+    const parent = videoData.targetComponent.parent();
+    const idx = videoData.targetComponent.index();
+    videoData.targetComponent.remove();
+    if (parent) {
+      parent.append(html, { at: idx });
+    } else {
+      editor.addComponents(html);
+    }
+  } else {
+    editor.addComponents(html);
+  }
+
+  // Close modal
+  if (videoModal) videoModal.hide();
+  videoData = {};
 }
 
 
