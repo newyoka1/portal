@@ -529,6 +529,39 @@ def approval_log(
 
 
 # ---------------------------------------------------------------------------
+# Image upload for email composer
+# ---------------------------------------------------------------------------
+@app.post("/compose/upload-image")
+async def compose_upload_image(
+    request: Request,
+    current_user: User = Depends(require_user),
+):
+    """Handle image uploads from the GrapeJS asset manager."""
+    import uuid, os
+
+    upload_dir = os.path.join("static", "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+
+    form = await request.form()
+    results = []
+
+    for key in form:
+        upload = form[key]
+        if hasattr(upload, 'filename') and upload.filename:
+            ext = os.path.splitext(upload.filename)[1].lower()
+            if ext not in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'):
+                continue
+            fname = f"{uuid.uuid4().hex[:12]}{ext}"
+            fpath = os.path.join(upload_dir, fname)
+            content = await upload.read()
+            with open(fpath, 'wb') as f:
+                f.write(content)
+            results.append(f"/static/uploads/{fname}")
+
+    return {"data": results}
+
+
+# ---------------------------------------------------------------------------
 # Compose email for approval
 # ---------------------------------------------------------------------------
 @app.get("/compose", response_class=HTMLResponse)

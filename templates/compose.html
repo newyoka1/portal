@@ -562,6 +562,18 @@ const editor = grapesjs.init({
   // No default panels — we built our own UI
   panels: { defaults: [] },
 
+  // Image upload support
+  assetManager: {
+    upload: '/compose/upload-image',
+    uploadName: 'files',
+    multiUpload: true,
+    autoAdd: true,
+    dropzone: true,
+    openAssetsOnDrop: 1,
+    assets: [],
+    headers: {},
+  },
+
   deviceManager: {
     devices: [
       { name: 'Desktop', width: '' },
@@ -628,97 +640,200 @@ const editor = grapesjs.init({
 // Register Content Blocks
 // ═══════════════════════════════════════════════════════════════
 const bm = editor.Blocks;
+const F = 'font-family:Arial,Helvetica,sans-serif;';
 
-// ─── Basic ────────────────────────────────────────────────────
+// ─── Content ──────────────────────────────────────────────────
 bm.add('title', {
-  label: 'Title',
-  category: 'Basic',
+  label: 'Title', category: 'Content',
   media: '<i class="bi bi-type-h1"></i>',
-  content: '<h1 style="font-size:28px;font-weight:bold;color:#333;margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;">Your Title Here</h1>',
+  content: `<h1 style="font-size:28px;font-weight:bold;color:#333;margin:0 0 10px;${F}">Your Title Here</h1>`,
 });
 bm.add('text', {
-  label: 'Text',
-  category: 'Basic',
+  label: 'Text', category: 'Content',
   media: '<i class="bi bi-text-paragraph"></i>',
-  content: '<p style="font-size:15px;line-height:1.6;color:#555;margin:0 0 16px;font-family:Arial,Helvetica,sans-serif;">Write your text here. Click to edit and customize.</p>',
+  content: `<p style="font-size:15px;line-height:1.6;color:#555;margin:0 0 16px;${F}">Write your text here. Click to edit and customize for your audience.</p>`,
 });
 bm.add('image', {
-  label: 'Image',
-  category: 'Basic',
+  label: 'Image', category: 'Content',
   media: '<i class="bi bi-image"></i>',
-  content: { type: 'image', style: { width:'100%', 'max-width':'100%', height:'auto' }, attributes: { alt:'Image' } },
+  content: { type:'image', style:{ width:'100%','max-width':'100%',height:'auto' }, attributes:{ alt:'Image' } },
   activate: true,
 });
 bm.add('button', {
-  label: 'Button',
-  category: 'Basic',
+  label: 'Button', category: 'Content',
   media: '<i class="bi bi-hand-index"></i>',
-  content: '<a href="#" style="display:inline-block;background:#ce2825;color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;font-family:Arial,Helvetica,sans-serif;text-align:center;">Call to Action</a>',
+  content: `<table style="margin:0 auto;border-collapse:collapse;"><tr><td style="background:#ce2825;border-radius:6px;text-align:center;">
+    <a href="#" style="display:inline-block;padding:14px 32px;color:#fff;text-decoration:none;font-weight:bold;font-size:15px;${F}">Call to Action</a>
+  </td></tr></table>`,
 });
-bm.add('list', {
-  label: 'List',
-  category: 'Basic',
-  media: '<i class="bi bi-list-ul"></i>',
-  content: '<ul style="font-size:15px;line-height:1.8;color:#555;padding-left:20px;font-family:Arial,sans-serif;"><li>First item</li><li>Second item</li><li>Third item</li></ul>',
+bm.add('logo', {
+  label: 'Logo', category: 'Content',
+  media: '<i class="bi bi-badge-tm"></i>',
+  content: `<table style="margin:0 auto;border-collapse:collapse;"><tr><td style="padding:10px;text-align:center;">
+    <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='48' fill='%23999'%3E%3Crect width='160' height='48' rx='6' fill='%23f0f1f5'/%3E%3Ctext x='80' y='29' text-anchor='middle' font-family='Arial' font-size='14' fill='%23999'%3EYOUR LOGO%3C/text%3E%3C/svg%3E" alt="Logo" style="max-width:200px;height:auto;">
+  </td></tr></table>`,
 });
-bm.add('link', {
-  label: 'Link',
-  category: 'Basic',
-  media: '<i class="bi bi-link-45deg"></i>',
-  content: '<a href="#" style="color:#ce2825;font-size:15px;font-family:Arial,sans-serif;">Click here</a>',
+bm.add('social', {
+  label: 'Social', category: 'Content',
+  media: '<i class="bi bi-share"></i>',
+  content: `<table style="margin:0 auto;border-collapse:collapse;"><tr>
+    <td style="padding:0 6px;"><a href="#" style="text-decoration:none;"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%231877F2'/%3E%3Cpath d='M18 16.8h-1.5V22h-2.2v-5.2H13V15h1.3v-1.2c0-1.6.7-2.6 2.5-2.6h1.5v1.8h-1c-.7 0-.7.3-.7.7V15H18l-.2 1.8z' fill='%23fff'/%3E%3C/svg%3E" alt="Facebook" width="32" height="32" style="display:block;"></a></td>
+    <td style="padding:0 6px;"><a href="#" style="text-decoration:none;"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%231DA1F2'/%3E%3Cpath d='M22 12.4c-.5.2-1 .4-1.5.4.5-.3.9-.8 1.1-1.4-.5.3-1.1.5-1.7.7a2.9 2.9 0 00-5 2.6A8.2 8.2 0 019 11.7a2.9 2.9 0 00.9 3.8c-.4 0-.8-.1-1.2-.3a2.9 2.9 0 002.3 2.8c-.4.1-.8.1-1.2.1.3.9 1.1 1.6 2.2 1.6A5.8 5.8 0 019 21a8.2 8.2 0 004.4 1.3c5.3 0 8.2-4.4 8.2-8.2v-.4c.6-.4 1-.9 1.4-1.5l-1 .2z' fill='%23fff'/%3E%3C/svg%3E" alt="Twitter" width="32" height="32" style="display:block;"></a></td>
+    <td style="padding:0 6px;"><a href="#" style="text-decoration:none;"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='1' x2='1' y2='0'%3E%3Cstop offset='0%25' stop-color='%23feda75'/%3E%3Cstop offset='30%25' stop-color='%23fa7e1e'/%3E%3Cstop offset='60%25' stop-color='%23d62976'/%3E%3Cstop offset='100%25' stop-color='%23962fbf'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='16' fill='url(%23g)'/%3E%3Crect x='9' y='9' width='14' height='14' rx='4' fill='none' stroke='%23fff' stroke-width='1.5'/%3E%3Ccircle cx='16' cy='16' r='3.5' fill='none' stroke='%23fff' stroke-width='1.5'/%3E%3Ccircle cx='20.5' cy='11.5' r='1' fill='%23fff'/%3E%3C/svg%3E" alt="Instagram" width="32" height="32" style="display:block;"></a></td>
+  </tr></table>`,
 });
 
-// ─── Media ────────────────────────────────────────────────────
+// ─── Elements ─────────────────────────────────────────────────
 bm.add('divider', {
-  label: 'Divider',
-  category: 'Media',
+  label: 'Divider', category: 'Elements',
   media: '<i class="bi bi-hr"></i>',
-  content: '<hr style="border:none;border-top:1px solid #e0e0e0;margin:20px 0;">',
+  content: '<table style="width:100%;border-collapse:collapse;"><tr><td style="padding:10px 0;"><hr style="border:none;border-top:1px solid #e0e0e0;margin:0;"></td></tr></table>',
 });
 bm.add('spacer', {
-  label: 'Spacer',
-  category: 'Media',
+  label: 'Spacer', category: 'Elements',
   media: '<i class="bi bi-distribute-vertical"></i>',
   content: '<div style="height:30px;width:100%;"></div>',
 });
-bm.add('social', {
-  label: 'Social',
-  category: 'Media',
-  media: '<i class="bi bi-share"></i>',
-  content: `<table style="margin:0 auto;border-collapse:collapse;"><tr>
-    <td style="padding:0 10px;"><a href="#" style="color:#ce2825;text-decoration:none;font-size:14px;font-family:Arial,sans-serif;">Facebook</a></td>
-    <td style="padding:0 10px;"><a href="#" style="color:#ce2825;text-decoration:none;font-size:14px;font-family:Arial,sans-serif;">Twitter</a></td>
-    <td style="padding:0 10px;"><a href="#" style="color:#ce2825;text-decoration:none;font-size:14px;font-family:Arial,sans-serif;">Instagram</a></td>
-  </tr></table>`,
+bm.add('list', {
+  label: 'List', category: 'Elements',
+  media: '<i class="bi bi-list-ul"></i>',
+  content: `<ul style="font-size:15px;line-height:1.8;color:#555;padding-left:20px;${F}"><li>First item</li><li>Second item</li><li>Third item</li></ul>`,
+});
+bm.add('link', {
+  label: 'Link', category: 'Elements',
+  media: '<i class="bi bi-link-45deg"></i>',
+  content: `<a href="#" style="color:#ce2825;font-size:15px;${F}">Click here</a>`,
+});
+bm.add('video', {
+  label: 'Video', category: 'Elements',
+  media: '<i class="bi bi-play-btn"></i>',
+  content: `<table style="width:100%;border-collapse:collapse;"><tr><td style="text-align:center;padding:10px;">
+    <a href="#" style="display:inline-block;position:relative;text-decoration:none;">
+      <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='480' height='270'%3E%3Crect width='480' height='270' rx='8' fill='%23222'/%3E%3Cpolygon points='210,105 210,165 270,135' fill='%23fff' opacity='.9'/%3E%3Ccircle cx='240' cy='135' r='40' fill='none' stroke='%23fff' stroke-width='3' opacity='.7'/%3E%3C/svg%3E" alt="Video" style="width:100%;max-width:480px;height:auto;border-radius:8px;">
+    </a>
+    <p style="margin:8px 0 0;font-size:12px;color:#999;${F}">Click the image to watch the video</p>
+  </td></tr></table>`,
 });
 bm.add('html-block', {
-  label: 'HTML',
-  category: 'Media',
+  label: 'HTML', category: 'Elements',
   media: '<i class="bi bi-code-slash"></i>',
-  content: '<div style="padding:10px;font-size:14px;color:#666;font-family:monospace;">Custom HTML</div>',
+  content: '<div style="padding:16px;font-size:14px;color:#666;font-family:monospace;background:#f8f9fa;border:1px dashed #ddd;border-radius:6px;">Custom HTML code here</div>',
+});
+bm.add('navigation', {
+  label: 'Menu', category: 'Elements',
+  media: '<i class="bi bi-list"></i>',
+  content: `<table style="margin:0 auto;border-collapse:collapse;"><tr>
+    <td style="padding:8px 14px;"><a href="#" style="color:#333;text-decoration:none;font-size:14px;font-weight:600;${F}">Home</a></td>
+    <td style="padding:8px 14px;"><a href="#" style="color:#333;text-decoration:none;font-size:14px;font-weight:600;${F}">About</a></td>
+    <td style="padding:8px 14px;"><a href="#" style="color:#333;text-decoration:none;font-size:14px;font-weight:600;${F}">Services</a></td>
+    <td style="padding:8px 14px;"><a href="#" style="color:#333;text-decoration:none;font-size:14px;font-weight:600;${F}">Contact</a></td>
+  </tr></table>`,
+});
+bm.add('quote', {
+  label: 'Quote', category: 'Elements',
+  media: '<i class="bi bi-quote"></i>',
+  content: `<table style="width:100%;border-collapse:collapse;"><tr>
+    <td style="padding:20px 24px;border-left:4px solid #ce2825;background:#fafbfc;">
+      <p style="font-size:16px;font-style:italic;line-height:1.6;color:#444;margin:0 0 8px;${F}">"This is a powerful quote or testimonial that adds credibility to your message."</p>
+      <p style="font-size:13px;color:#888;margin:0;${F}">— Author Name, Title</p>
+    </td>
+  </tr></table>`,
 });
 
 // ─── Sections ─────────────────────────────────────────────────
+bm.add('header-logo', {
+  label: 'Header', category: 'Sections',
+  media: '<i class="bi bi-window-stack"></i>',
+  content: `<table style="width:100%;border-collapse:collapse;background:#ffffff;">
+    <tr><td style="padding:16px 24px;">
+      <table style="width:100%;border-collapse:collapse;"><tr>
+        <td style="vertical-align:middle;">
+          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='40' fill='%23999'%3E%3Crect width='140' height='40' rx='4' fill='%23f0f1f5'/%3E%3Ctext x='70' y='25' text-anchor='middle' font-family='Arial' font-size='13' fill='%23999'%3EYOUR LOGO%3C/text%3E%3C/svg%3E" alt="Logo" style="height:40px;width:auto;">
+        </td>
+        <td style="text-align:right;vertical-align:middle;">
+          <a href="#" style="color:#555;text-decoration:none;font-size:13px;font-weight:600;padding:0 10px;${F}">Home</a>
+          <a href="#" style="color:#555;text-decoration:none;font-size:13px;font-weight:600;padding:0 10px;${F}">About</a>
+          <a href="#" style="color:#555;text-decoration:none;font-size:13px;font-weight:600;padding:0 10px;${F}">Contact</a>
+        </td>
+      </tr></table>
+    </td></tr>
+  </table>`,
+});
 bm.add('hero', {
-  label: 'Hero',
-  category: 'Sections',
+  label: 'Hero', category: 'Sections',
   media: '<i class="bi bi-card-heading"></i>',
   content: `<table style="width:100%;background-color:#ce2825;border-collapse:collapse;">
-    <tr><td style="padding:40px 24px;text-align:center;">
-      <h1 style="color:#fff;font-size:28px;margin:0 0 10px;font-weight:bold;font-family:Arial,sans-serif;">Hero Headline</h1>
-      <p style="color:rgba(255,255,255,.85);font-size:16px;margin:0 0 20px;font-family:Arial,sans-serif;">Subheadline text goes here</p>
-      <a href="#" style="display:inline-block;background:#fff;color:#ce2825;padding:12px 30px;border-radius:6px;text-decoration:none;font-weight:bold;font-family:Arial,sans-serif;">Call to Action</a>
+    <tr><td style="padding:48px 24px;text-align:center;">
+      <h1 style="color:#fff;font-size:30px;margin:0 0 12px;font-weight:bold;${F}">Hero Headline</h1>
+      <p style="color:rgba(255,255,255,.85);font-size:16px;margin:0 0 22px;line-height:1.5;${F}">A compelling subheadline that supports your main message</p>
+      <a href="#" style="display:inline-block;background:#fff;color:#ce2825;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;${F}">Get Started</a>
+    </td></tr>
+  </table>`,
+});
+bm.add('image-text', {
+  label: 'Img + Text', category: 'Sections',
+  media: '<i class="bi bi-layout-sidebar"></i>',
+  content: `<table style="width:100%;border-collapse:collapse;"><tr>
+    <td style="width:40%;vertical-align:top;padding:20px;">
+      <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='180'%3E%3Crect width='240' height='180' rx='6' fill='%23e9ecef'/%3E%3Cpath d='M90 130l30-40 20 25 40-55 30 70z' fill='%23ced4da'/%3E%3Ccircle cx='85' cy='75' r='18' fill='%23ced4da'/%3E%3C/svg%3E" alt="Image" style="width:100%;height:auto;border-radius:6px;">
+    </td>
+    <td style="width:60%;vertical-align:top;padding:20px;">
+      <h3 style="font-size:20px;color:#333;margin:0 0 10px;font-weight:bold;${F}">Feature Title</h3>
+      <p style="font-size:15px;line-height:1.6;color:#555;margin:0 0 16px;${F}">Describe your feature, product, or story here. This layout pairs an image with descriptive text.</p>
+      <a href="#" style="color:#ce2825;font-size:14px;font-weight:600;text-decoration:none;${F}">Learn more &rarr;</a>
+    </td>
+  </tr></table>`,
+});
+bm.add('features', {
+  label: 'Features', category: 'Sections',
+  media: '<i class="bi bi-grid-3x2-gap"></i>',
+  content: `<table style="width:100%;border-collapse:collapse;"><tr>
+    <td style="width:33%;padding:20px;text-align:center;vertical-align:top;">
+      <div style="width:48px;height:48px;border-radius:12px;background:#fef0f0;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">
+        <span style="font-size:22px;">&#9733;</span>
+      </div>
+      <h4 style="font-size:16px;color:#333;margin:0 0 6px;${F}">Feature One</h4>
+      <p style="font-size:13px;color:#777;line-height:1.5;margin:0;${F}">Brief description of this feature.</p>
+    </td>
+    <td style="width:33%;padding:20px;text-align:center;vertical-align:top;">
+      <div style="width:48px;height:48px;border-radius:12px;background:#eef4ff;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">
+        <span style="font-size:22px;">&#9830;</span>
+      </div>
+      <h4 style="font-size:16px;color:#333;margin:0 0 6px;${F}">Feature Two</h4>
+      <p style="font-size:13px;color:#777;line-height:1.5;margin:0;${F}">Brief description of this feature.</p>
+    </td>
+    <td style="width:33%;padding:20px;text-align:center;vertical-align:top;">
+      <div style="width:48px;height:48px;border-radius:12px;background:#f0faf0;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">
+        <span style="font-size:22px;">&#9829;</span>
+      </div>
+      <h4 style="font-size:16px;color:#333;margin:0 0 6px;${F}">Feature Three</h4>
+      <p style="font-size:13px;color:#777;line-height:1.5;margin:0;${F}">Brief description of this feature.</p>
+    </td>
+  </tr></table>`,
+});
+bm.add('cta-banner', {
+  label: 'CTA Banner', category: 'Sections',
+  media: '<i class="bi bi-megaphone"></i>',
+  content: `<table style="width:100%;border-collapse:collapse;background:#f8f9fa;border-radius:8px;">
+    <tr><td style="padding:32px 24px;text-align:center;">
+      <h2 style="font-size:22px;color:#333;margin:0 0 8px;font-weight:bold;${F}">Ready to get started?</h2>
+      <p style="font-size:15px;color:#666;margin:0 0 20px;${F}">Join thousands of others who have already signed up.</p>
+      <a href="#" style="display:inline-block;background:#ce2825;color:#fff;padding:14px 36px;border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;${F}">Sign Up Now</a>
     </td></tr>
   </table>`,
 });
 bm.add('footer', {
-  label: 'Footer',
-  category: 'Sections',
+  label: 'Footer', category: 'Sections',
   media: '<i class="bi bi-card-text"></i>',
   content: `<table style="width:100%;border-top:1px solid #eee;border-collapse:collapse;">
-    <tr><td style="padding:20px;text-align:center;">
-      <p style="color:#999;font-size:12px;margin:0;font-family:Arial,sans-serif;">
-        <a href="#" style="color:#ce2825;">Unsubscribe</a> &nbsp;|&nbsp; <a href="#" style="color:#ce2825;">View in browser</a>
+    <tr><td style="padding:24px 20px;text-align:center;">
+      <p style="color:#999;font-size:12px;margin:0 0 8px;${F}">
+        Your Company, 123 Main St, City, State 12345
+      </p>
+      <p style="color:#999;font-size:12px;margin:0;${F}">
+        <a href="#" style="color:#ce2825;">Unsubscribe</a> &nbsp;|&nbsp;
+        <a href="#" style="color:#ce2825;">View in browser</a> &nbsp;|&nbsp;
+        <a href="#" style="color:#ce2825;">Privacy Policy</a>
       </p>
     </td></tr>
   </table>`,
