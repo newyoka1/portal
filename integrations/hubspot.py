@@ -210,6 +210,87 @@ def _process_campaign(campaign: dict, state: str, headers: dict, db: Session, cl
         return 1
 
 
+def push_draft(api_key: str, subject: str, from_name: str, from_email: str, html_body: str) -> dict:
+    """
+    Create a draft marketing email in HubSpot.
+    Returns {"ok": True, "email_id": "..."} or {"ok": False, "error": "..."}.
+    """
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+
+    # Try v3 Marketing Emails API
+    try:
+        resp = requests.post(V3_URL, headers=headers, json={
+            "name": subject[:200],
+            "subject": subject,
+            "fromName": from_name or "Politika",
+            "replyTo": from_email or "",
+            "htmlBody": html_body,
+            "state": "DRAFT",
+        }, timeout=15)
+
+        if resp.status_code == 403:
+            # Scope insufficient — try CRM objects API
+            return _push_draft_crm(headers, subject, from_name, from_email, html_body)
+
+        resp.raise_for_status()
+        data = resp.json()
+        return {"ok": True, "email_id": str(data.get("id", ""))}
+
+    except requests.RequestException as exc:
+        return {"ok": False, "error": f"HubSpot API error: {exc}"}
+
+
+def _push_draft_crm(headers: dict, subject: str, from_name: str, from_email: str, html_body: str) -> dict:
+    """Fallback: create draft via CRM objects API."""
+    try:
+        resp = requests.post(CRM_URL, headers=headers, json={
+            "properties": {
+                "hs_name": subject[:200],
+                "hs_subject": subject,
+                "hs_from_name": from_name or "Politika",
+                "hs_reply_to_email": from_email or "",
+                "hs_email_html": html_body,
+                "hs_email_status": "DRAFT",
+            }
+        }, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        return {"ok": True, "email_id": str(data.get("id", ""))}
+    except requests.RequestException as exc:
+        return {"ok": False, "error": f"HubSpot CRM API error: {exc}"}
+
+
+def check_push_access(api_key: str) -> bool:
+    """
+    Probe whether the HubSpot token can CREATE marketing emails.
+    Sends a deliberately empty POST — 403 means no write scope,
+    any other status (400, 422, etc.) means write scope is granted.
+    Tries v3 Marketing Emails API first, then CRM Objects API.
+    """
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    # Probe v3 Marketing Emails write (needs 'content' scope)
+    try:
+        resp = requests.post(V3_URL, headers=headers, json={}, timeout=8)
+        if resp.status_code != 403:
+            return True  # 400/422 = has scope but bad payload → can push
+    except requests.RequestException:
+        pass
+    # Probe CRM Objects write (needs 'crm.objects.marketing_emails.write')
+    try:
+        resp = requests.post(CRM_URL, headers=headers, json={"properties": {}}, timeout=8)
+        if resp.status_code != 403:
+            return True
+    except requests.RequestException:
+        pass
+    return False
+
+
 def _fetch_html(campaign_id: str, headers: dict) -> str:
     """
     Fetch the HTML body for a draft email.

@@ -99,13 +99,16 @@ def voter_pipeline_page(
 
 
 def _build_env() -> dict:
-    """Inject all portal DB settings into the subprocess environment.
+    """Inject all portal DB settings + per-client CRM keys into the subprocess environment.
 
     Uses os.environ as the base (so PATH, HOME etc. are inherited) then
-    overlays every non-empty portal_settings value on top. This means any
-    setting stored in the portal DB — Meta tokens, HubSpot keys, CM keys,
-    Mailchimp keys — is automatically available to all pipeline scripts
-    without needing to update this function when new settings are added.
+    overlays every non-empty portal_settings value on top.
+
+    Per-client CRM integrations (from client_integrations table) are mapped
+    to the environment variable convention the pipeline scripts expect:
+      hubspot          → HUBSPOT_TOKEN_{SLUG}
+      campaign_monitor → CM_API_KEY_{SLUG}
+      mailchimp        → MAILCHIMP_KEY_{SLUG}
     """
     import time
     if _time.time() - portal_config._cache_ts > portal_config._CACHE_TTL:
@@ -114,6 +117,32 @@ def _build_env() -> dict:
     for key, val in portal_config._cache.items():
         if val:
             env[key] = val
+
+    # Inject per-client CRM integration keys
+    from database import SessionLocal
+    from models import Client, ClientIntegration
+    _PLATFORM_PREFIX = {
+        "hubspot":          "HUBSPOT_TOKEN_",
+        "campaign_monitor": "CM_API_KEY_",
+        "mailchimp":        "MAILCHIMP_KEY_",
+    }
+    try:
+        db = SessionLocal()
+        rows = (
+            db.query(ClientIntegration, Client.slug)
+            .join(Client, Client.id == ClientIntegration.client_id)
+            .filter(ClientIntegration.enabled == True)
+            .all()
+        )
+        for intg, slug in rows:
+            prefix = _PLATFORM_PREFIX.get(intg.platform)
+            if prefix and intg.api_key:
+                env_key = prefix + slug.upper().replace("-", "_")
+                env[env_key] = intg.api_key
+        db.close()
+    except Exception:
+        pass  # Don't break env building if DB is unavailable
+
     return env
 
 

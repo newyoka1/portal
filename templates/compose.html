@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}Compose Email{% endblock %}
+
+{% block extra_head %}
+<link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
+<style>
+  #editor-container {
+    height: 400px;
+    background: #fff;
+    font-size: 14px;
+  }
+  .ql-toolbar.ql-snow { border-radius: 6px 6px 0 0; }
+  .ql-container.ql-snow { border-radius: 0 0 6px 6px; }
+  .compose-form .form-label { font-weight: 600; font-size: .875rem; }
+  .client-info {
+    display: none;
+    background: #f8f9fa;
+    border-radius: 6px;
+    padding: 12px 16px;
+    font-size: .85rem;
+    margin-top: 8px;
+  }
+  .client-info.visible { display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h5 class="fw-bold mb-0"><i class="bi bi-pencil-square me-2"></i>Compose Email</h5>
+</div>
+
+<form method="post" action="/compose" id="composeForm" class="compose-form">
+  <div class="row g-4">
+
+    <!-- Left: editor -->
+    <div class="col-lg-8">
+      <div class="card shadow-sm">
+        <div class="card-body">
+          <div class="mb-3">
+            <label class="form-label" for="subject">Subject</label>
+            <input type="text" name="subject" id="subject" class="form-control"
+                   placeholder="Email subject line" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Email Body</label>
+            <div id="editor-container"></div>
+            <input type="hidden" name="html_body" id="html_body">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: settings -->
+    <div class="col-lg-4">
+
+      <!-- Client selection (required) -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-header bg-white fw-semibold py-2">
+          <i class="bi bi-people me-1"></i>Client <span class="text-danger">*</span>
+        </div>
+        <div class="card-body">
+          <select name="client_id" id="clientSelect" class="form-select" required
+                  onchange="onClientChange(this)">
+            <option value="">Select client...</option>
+            {% for c in clients %}
+            <option value="{{ c.id }}"
+                    data-from-name="{{ c.from_name or c.name }}"
+                    data-from-email="{{ c.from_email or '' }}"
+                    data-approvers="{{ c.approvers|length }}">
+              {{ c.name }}
+            </option>
+            {% endfor %}
+          </select>
+          <div class="client-info" id="clientInfo">
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted">From</span>
+              <span id="infoFrom" class="fw-semibold"></span>
+            </div>
+            <div class="d-flex justify-content-between mb-1">
+              <span class="text-muted">Sender</span>
+              <span id="infoEmail" class="font-monospace" style="font-size:.8rem;"></span>
+            </div>
+            <div class="d-flex justify-content-between">
+              <span class="text-muted">Approvers</span>
+              <span id="infoApprovers" class="fw-semibold"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recipients -->
+      <div class="card shadow-sm mb-3">
+        <div class="card-header bg-white fw-semibold py-2">
+          <i class="bi bi-envelope me-1"></i>Recipients
+        </div>
+        <div class="card-body">
+          <input type="text" name="recipients" id="recipients" class="form-control"
+                 placeholder="recipient@example.com, ...">
+          <div class="form-text">
+            Comma-separated email addresses. Used when sending after approval.
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="card shadow-sm">
+        <div class="card-body d-grid gap-2">
+          <button type="submit" class="btn btn-primary" id="submitBtn">
+            <i class="bi bi-send-check me-1"></i>Submit for Approval
+          </button>
+          <div class="form-text text-center">
+            Creates the email and adds it to the approval queue.
+            Approvers will be notified once you send for approval from the detail page.
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+<script>
+const quill = new Quill('#editor-container', {
+  theme: 'snow',
+  placeholder: 'Write your email content here...',
+  modules: {
+    toolbar: [
+      [{ 'header': [1, 2, 3, false] }],
+      ['bold', 'italic', 'underline', 'strike'],
+      [{ 'color': [] }, { 'background': [] }],
+      [{ 'align': [] }],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+      ['blockquote'],
+      ['link', 'image'],
+      ['clean'],
+    ],
+  },
+});
+
+// Sync Quill HTML to hidden input on submit
+document.getElementById('composeForm').addEventListener('submit', function(e) {
+  const html = quill.root.innerHTML;
+  if (html === '<p><br></p>' || !html.trim()) {
+    e.preventDefault();
+    alert('Please enter email content.');
+    return;
+  }
+  document.getElementById('html_body').value = html;
+});
+
+// Client selection handler
+function onClientChange(select) {
+  const opt = select.options[select.selectedIndex];
+  const info = document.getElementById('clientInfo');
+  if (!opt.value) {
+    info.classList.remove('visible');
+    return;
+  }
+  document.getElementById('infoFrom').textContent = opt.dataset.fromName || '—';
+  document.getElementById('infoEmail').textContent = opt.dataset.fromEmail || 'Not set';
+  document.getElementById('infoApprovers').textContent = opt.dataset.approvers + ' approver(s)';
+  info.classList.add('visible');
+}
+</script>
+{% endblock %}

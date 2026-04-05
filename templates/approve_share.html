@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Email Approval — Politika</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      background: #f5f5f7;
+      color: #1d1d1f;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .topbar {
+      background: #fff;
+      border-bottom: 1px solid #e5e5e7;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .topbar-logo {
+      width: 28px; height: 28px;
+      background: #070007;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-size: 14px; font-weight: 600;
+    }
+    .topbar-title { font-size: 14px; font-weight: 600; color: #1d1d1f; }
+    .topbar-subtitle { font-size: 12px; color: #86868b; margin-left: auto; }
+
+    .page-layout {
+      display: flex;
+      gap: 20px;
+      max-width: 1280px;
+      margin: 24px auto;
+      padding: 0 20px;
+      align-items: flex-start;
+    }
+    .col-email { flex: 1; min-width: 0; }
+    .col-sidebar { width: 340px; flex-shrink: 0; position: sticky; top: 68px; }
+
+    .email-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+    .email-header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid #f0f0f2;
+    }
+    .email-subject {
+      font-size: 20px;
+      font-weight: 600;
+      color: #1d1d1f;
+      margin: 0 0 12px;
+      line-height: 1.3;
+    }
+    .sender-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .sender-avatar {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 600; font-size: 16px;
+      flex-shrink: 0;
+    }
+    .sender-info { flex: 1; min-width: 0; }
+    .sender-name { font-size: 14px; font-weight: 600; color: #1d1d1f; }
+    .sender-email { font-size: 12px; color: #86868b; }
+    .email-meta { text-align: right; flex-shrink: 0; }
+    .email-date { font-size: 12px; color: #86868b; }
+    .email-client-badge {
+      display: inline-block;
+      margin-top: 4px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      background: #f0f0f2;
+      font-size: 11px;
+      font-weight: 500;
+      color: #636366;
+    }
+    .email-body-wrap {
+      position: relative;
+      min-height: 300px;
+      background: #fff;
+    }
+    .email-body-wrap .loading-overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      z-index: 2;
+      transition: opacity .3s;
+    }
+    .email-body-wrap .loading-overlay.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+    .spinner {
+      width: 32px; height: 32px;
+      border: 3px solid #e5e5e7;
+      border-top-color: #86868b;
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .email-body-frame {
+      width: 100%;
+      border: none;
+      min-height: 300px;
+      display: block;
+      background: #fff;
+    }
+
+    .sidebar-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+      overflow: hidden;
+    }
+    .sidebar-card + .sidebar-card { margin-top: 16px; }
+    .sidebar-header {
+      padding: 14px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #1d1d1f;
+      border-bottom: 1px solid #f0f0f2;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .sidebar-body { padding: 18px; }
+
+    /* Approver picker */
+    .picker-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #636366;
+      margin-bottom: 8px;
+      display: block;
+    }
+    .approver-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      padding: 10px 14px;
+      border: 2px solid #e5e5e7;
+      border-radius: 10px;
+      background: #fafafa;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      transition: all .15s;
+      margin-bottom: 8px;
+    }
+    .approver-btn:hover { border-color: #007aff; background: #f0f7ff; }
+    .approver-btn.selected {
+      border-color: #007aff;
+      background: #eff6ff;
+      box-shadow: 0 0 0 3px rgba(0,122,255,.12);
+    }
+    .approver-btn.decided {
+      opacity: 0.5;
+      cursor: not-allowed;
+      border-color: #e5e5e7;
+    }
+    .approver-btn .avatar {
+      width: 32px; height: 32px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #34c759 0%, #30d158 100%);
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; font-weight: 600; font-size: 13px;
+      flex-shrink: 0;
+    }
+    .approver-btn .name { font-weight: 600; color: #1d1d1f; }
+    .approver-btn .status {
+      margin-left: auto;
+      font-size: 11px;
+      color: #86868b;
+    }
+
+    /* Decision form */
+    .decision-section { display: none; margin-top: 16px; }
+    .decision-section.visible { display: block; }
+    .comment-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: #636366;
+      margin-bottom: 6px;
+      display: block;
+    }
+    .comment-box {
+      width: 100%;
+      border: 1.5px solid #e5e5e7;
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: inherit;
+      font-size: 13px;
+      resize: vertical;
+      min-height: 80px;
+      transition: border-color .15s, box-shadow .15s;
+      background: #fafafa;
+    }
+    .comment-box:focus {
+      outline: none;
+      border-color: #007aff;
+      box-shadow: 0 0 0 3px rgba(0,122,255,.15);
+      background: #fff;
+    }
+    .btn-row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .btn-action {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform .1s, box-shadow .15s;
+    }
+    .btn-action:active { transform: scale(.98); }
+    .btn-action:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-approve { background: #34c759; color: #fff; box-shadow: 0 2px 8px rgba(52,199,89,.3); }
+    .btn-approve:hover:not(:disabled) { background: #2db84e; }
+    .btn-revision { background: #f59e0b; color: #fff; box-shadow: 0 2px 8px rgba(245,158,11,.3); }
+    .btn-revision:hover:not(:disabled) { background: #d97706; }
+    .btn-reject { background: #ff3b30; color: #fff; box-shadow: 0 2px 8px rgba(255,59,48,.3); }
+    .btn-reject:hover:not(:disabled) { background: #e6352b; }
+
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 12px;
+      border-bottom: 1px solid #f5f5f7;
+    }
+    .detail-row:last-child { border-bottom: none; }
+    .detail-label { color: #86868b; font-weight: 500; }
+    .detail-value { color: #1d1d1f; font-weight: 500; text-align: right; max-width: 60%; word-break: break-word; }
+
+    .page-footer {
+      text-align: center;
+      padding: 24px 16px 32px;
+      font-size: 12px;
+      color: #aeaeb2;
+    }
+
+    /* Banner */
+    .alert-banner {
+      max-width: 1280px;
+      margin: 16px auto 0;
+      padding: 0 20px;
+    }
+    .alert-inner {
+      border-radius: 10px;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      animation: slidein .3s ease-out;
+    }
+    .alert-success { background: linear-gradient(135deg, #d1fae5, #a7f3d0); border: 1px solid #34d399; }
+    .alert-revision { background: linear-gradient(135deg, #fef3c7, #fde68a); border: 1px solid #f59e0b; }
+    @keyframes slidein { from { opacity:0; transform:translateY(-10px); } to { opacity:1; transform:translateY(0); } }
+
+    @media (max-width: 860px) {
+      .page-layout { flex-direction: column; margin: 12px auto; }
+      .col-sidebar { width: 100%; position: static; }
+      .email-header { padding: 16px; }
+      .email-subject { font-size: 17px; }
+      .sender-row { flex-wrap: wrap; }
+      .email-meta { text-align: left; margin-top: 8px; }
+      .btn-row { flex-direction: row; }
+      .btn-action { flex: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-logo">P</div>
+  <span class="topbar-title">Politika</span>
+  <span class="topbar-subtitle">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="#86868b" style="vertical-align:-2px;margin-right:4px;">
+      <path d="M5.338 1.59a61 61 0 0 0-2.837.856.48.48 0 0 0-.328.39c-.554 4.157.726 7.19 2.253 9.188a10.7 10.7 0 0 0 2.287 2.233c.346.244.652.42.893.533q.18.085.293.118a1 1 0 0 0 .101.025 1 1 0 0 0 .1-.025q.114-.034.294-.118c.24-.113.547-.29.893-.533a10.7 10.7 0 0 0 2.287-2.233c1.527-1.997 2.807-5.031 2.253-9.188a.48.48 0 0 0-.328-.39c-.651-.213-1.75-.56-2.837-.856C9.552 1.29 8.531 1.067 8 1.067c-.53 0-1.552.223-2.662.524zM5.072.56C6.157.265 7.31 0 8 0s1.843.265 2.928.56c1.11.3 2.229.655 2.887.87a1.54 1.54 0 0 1 1.044 1.262c.596 4.477-.787 7.795-2.465 9.99a11.8 11.8 0 0 1-2.517 2.453 7 7 0 0 1-1.048.625c-.28.132-.581.24-.829.24s-.548-.108-.829-.24a7 7 0 0 1-1.048-.625 11.8 11.8 0 0 1-2.517-2.453C1.928 10.487.545 7.169 1.141 2.692A1.54 1.54 0 0 1 2.185 1.43 63 63 0 0 1 5.072.56"/>
+      <path d="M10.854 5.146a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7.5 7.793l2.646-2.647a.5.5 0 0 1 .708 0"/>
+    </svg>
+    Shared Approval Link
+  </span>
+</div>
+
+<div id="banner-area"></div>
+
+<div class="page-layout">
+  <!-- LEFT: email preview -->
+  <div class="col-email">
+    <div class="email-card">
+      <div class="email-header">
+        <h1 class="email-subject">{{ email.subject }}</h1>
+        <div class="sender-row">
+          <div class="sender-avatar">
+            {{ (email.from_name or email.from_address)[0] | upper }}
+          </div>
+          <div class="sender-info">
+            <div class="sender-name">{{ email.from_name or email.from_address }}</div>
+            <div class="sender-email">{{ email.from_address }}</div>
+          </div>
+          <div class="email-meta">
+            <div class="email-date">{{ email.received_at.strftime('%b %d, %Y at %I:%M %p').lstrip('0') }}</div>
+            {% if email.client %}
+              <span class="email-client-badge">{{ email.client.name }}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+      <div class="email-body-wrap">
+        <div class="loading-overlay" id="email-loading">
+          <div style="text-align:center">
+            <div class="spinner" style="margin:0 auto 12px;"></div>
+            <div style="font-size:13px;color:#86868b;">Loading email...</div>
+          </div>
+        </div>
+        <iframe
+          id="email-frame"
+          class="email-body-frame"
+          sandbox="allow-same-origin allow-popups"
+          src="/approve/share/{{ share_token }}/body"
+        ></iframe>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT: sidebar -->
+  <div class="col-sidebar">
+
+    <!-- Step 1: Select who you are -->
+    <div class="sidebar-card">
+      <div class="sidebar-header">
+        <span style="color:#86868b;">&#128100;</span>
+        I am...
+      </div>
+      <div class="sidebar-body" id="approver-picker">
+        <span class="picker-label">Select your name to review</span>
+        {% for a in all_approvals %}
+        <button type="button"
+                class="approver-btn {{ 'decided' if a.decision not in ('pending',) }}"
+                data-id="{{ a.id }}"
+                data-name="{{ a.display_name }}"
+                data-decision="{{ a.decision }}"
+                {% if a.decision not in ('pending',) %}disabled{% endif %}
+                onclick="selectApprover(this)">
+          <div class="avatar">{{ a.display_name[0] | upper }}</div>
+          <div>
+            <div class="name">{{ a.display_name }}</div>
+            <div style="font-size:11px;color:#86868b;">
+              {% if a.required %}Required{% else %}Optional{% endif %}
+            </div>
+          </div>
+          <span class="status">
+            {% if a.decision == 'approved' %}&#9989; Approved
+            {% elif a.decision == 'rejected' %}&#10060; Rejected
+            {% elif a.decision == 'revision_needed' %}&#9998; Revision
+            {% else %}&#9898; Pending
+            {% endif %}
+          </span>
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Step 2: Decision (shown after selecting approver) -->
+    <div class="sidebar-card decision-section" id="decision-card">
+      <div class="sidebar-header">
+        <span style="color:#86868b;">&#9998;</span>
+        <span>Your Decision</span>
+        <span id="decision-as" style="margin-left:auto;font-size:11px;color:#007aff;font-weight:400;"></span>
+      </div>
+      <div class="sidebar-body">
+        <label class="comment-label">Comment <span style="color:#aeaeb2;">(optional)</span></label>
+        <textarea id="decision-note" class="comment-box" placeholder="Leave feedback or a note..."></textarea>
+        <div class="btn-row">
+          <button class="btn-action btn-approve" onclick="submitDecision('approved')">
+            &#10003; Approve
+          </button>
+          <button class="btn-action btn-revision" onclick="submitDecision('revision_needed')">
+            &#9998; Needs Revision
+          </button>
+          <button class="btn-action btn-reject" onclick="submitDecision('rejected')">
+            &#10007; Reject
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Email details -->
+    <div class="sidebar-card">
+      <div class="sidebar-header">
+        <span style="color:#86868b;">&#9432;</span>
+        Details
+      </div>
+      <div class="sidebar-body" style="padding-top:12px;padding-bottom:12px;">
+        <div class="detail-row">
+          <span class="detail-label">From</span>
+          <span class="detail-value">{{ email.from_name or email.from_address }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="detail-label">Date</span>
+          <span class="detail-value">{{ email.received_at.strftime('%b %d, %Y') }}</span>
+        </div>
+        {% if email.client %}
+        <div class="detail-row">
+          <span class="detail-label">Client</span>
+          <span class="detail-value">{{ email.client.name }}</span>
+        </div>
+        {% endif %}
+        <div class="detail-row">
+          <span class="detail-label">Status</span>
+          <span class="detail-value" id="email-status" style="text-transform:capitalize;">{{ email.status }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Comments -->
+    <div class="sidebar-card">
+      <div class="sidebar-header">
+        <span style="color:#86868b;">&#128172;</span>
+        Comments
+        <span id="comment-count" style="color:#aeaeb2;font-weight:400;font-size:12px;margin-left:4px;">
+          {% if comments %}({{ comments|length }}){% endif %}
+        </span>
+      </div>
+      <div class="sidebar-body" style="padding-top:10px;padding-bottom:10px;" id="comments-list">
+        {% if comments %}
+          {% for c in comments %}
+          <div style="padding:8px 0;{% if not loop.last %}border-bottom:1px solid #f5f5f7;{% endif %}">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <span style="font-size:12px;font-weight:600;color:#1d1d1f;">
+                {{ c.commenter_name or (c.user.name if c.user else 'Unknown') }}
+              </span>
+              <span style="font-size:11px;color:#aeaeb2;">
+                {{ c.created_at.strftime('%b %d, %I:%M %p').lstrip('0') }}
+              </span>
+            </div>
+            <div style="font-size:13px;color:#333;line-height:1.4;">{{ c.body }}</div>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p style="font-size:13px;color:#aeaeb2;margin:4px 0;">No comments yet.</p>
+        {% endif %}
+
+        <!-- Add comment (only if an approver is selected) -->
+        <div id="comment-form-area" style="margin-top:12px;border-top:1px solid #f0f0f2;padding-top:12px;display:none;">
+          <textarea id="comment-body" class="comment-box" style="min-height:60px;" placeholder="Add a comment..."></textarea>
+          <button onclick="postComment()" style="
+            margin-top:8px;width:100%;padding:8px;border:none;border-radius:8px;
+            background:#007aff;color:#fff;font-size:13px;font-weight:600;
+            font-family:inherit;cursor:pointer;
+          ">Post Comment</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="page-footer">Powered by Politika Portal</div>
+
+<script>
+const SHARE_TOKEN = '{{ share_token }}';
+const CSRF_TOKEN  = '{{ csrf_token }}';
+let selectedApprovalId = null;
+let selectedName = '';
+
+// ── Iframe loader ─────────────────────────────────────────────
+(function() {
+  const frame = document.getElementById('email-frame');
+  if (!frame) return;
+  const overlay = document.getElementById('email-loading');
+  let revealed = false;
+
+  function reveal() {
+    if (revealed) return;
+    revealed = true;
+    if (overlay) overlay.classList.add('hidden');
+    resize();
+  }
+  function resize() {
+    try {
+      const h = frame.contentDocument.body.scrollHeight;
+      frame.style.height = Math.max(h + 32, 300) + 'px';
+    } catch(e) {}
+  }
+
+  const poll = setInterval(function() {
+    try {
+      const doc = frame.contentDocument;
+      if (doc && doc.body && doc.body.innerHTML.length > 50) {
+        clearInterval(poll);
+        reveal();
+        doc.querySelectorAll('img').forEach(function(img) {
+          if (!img.complete) {
+            img.addEventListener('load', resize);
+            img.addEventListener('error', resize);
+          }
+        });
+      }
+    } catch(e) {}
+  }, 100);
+  setTimeout(function() { clearInterval(poll); reveal(); }, 3000);
+})();
+
+// ── Approver selection ────────────────────────────────────────
+function selectApprover(btn) {
+  if (btn.disabled) return;
+  // Deselect all
+  document.querySelectorAll('.approver-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+
+  selectedApprovalId = parseInt(btn.dataset.id);
+  selectedName = btn.dataset.name;
+
+  // Show decision card
+  document.getElementById('decision-card').classList.add('visible');
+  document.getElementById('decision-as').textContent = 'as ' + selectedName;
+  document.getElementById('comment-form-area').style.display = 'block';
+}
+
+// ── Submit decision via AJAX ──────────────────────────────────
+function submitDecision(decision) {
+  if (!selectedApprovalId) { alert('Please select your name first.'); return; }
+
+  const btns = document.querySelectorAll('#decision-card .btn-action');
+  btns.forEach(b => { b.disabled = true; b.style.opacity = '0.6'; });
+
+  const body = new URLSearchParams({
+    approval_id: selectedApprovalId,
+    decision: decision,
+    note: document.getElementById('decision-note').value,
+    csrf_token: CSRF_TOKEN,
+  });
+
+  fetch('/approve/share/' + SHARE_TOKEN + '/decide', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body,
+    credentials: 'same-origin',
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      if (decision === 'revision_needed') {
+        showBanner('revision', 'Revision Requested', 'Your feedback has been recorded. You can approve or reject once the revision is made.');
+      } else {
+        const label = decision === 'approved' ? 'Approved' : 'Rejected';
+        showBanner('success', label, 'Your decision has been recorded. Thank you!');
+        document.getElementById('decision-card').classList.remove('visible');
+      }
+      document.getElementById('decision-note').value = '';
+      refreshStatus();
+    } else {
+      alert(data.error || 'Something went wrong.');
+    }
+    btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+  })
+  .catch(function() {
+    btns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+    alert('Something went wrong. Please try again.');
+  });
+}
+
+// ── Post comment ──────────────────────────────────────────────
+function postComment() {
+  if (!selectedApprovalId) { alert('Please select your name first.'); return; }
+  const text = document.getElementById('comment-body').value.trim();
+  if (!text) return;
+
+  const body = new URLSearchParams({
+    approval_id: selectedApprovalId,
+    body: text,
+    csrf_token: CSRF_TOKEN,
+  });
+
+  fetch('/approve/share/' + SHARE_TOKEN + '/comment', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body,
+    credentials: 'same-origin',
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      document.getElementById('comment-body').value = '';
+      refreshStatus();
+    }
+  });
+}
+
+// ── Banner ────────────────────────────────────────────────────
+function showBanner(type, title, message) {
+  const area = document.getElementById('banner-area');
+  area.innerHTML = '<div class="alert-banner"><div class="alert-inner alert-' + type + '">' +
+    '<span style="font-size:20px;">' + (type === 'success' ? '&#10004;' : '&#9998;') + '</span>' +
+    '<div style="flex:1;">' +
+    '<div style="font-size:14px;font-weight:600;">' + title + '</div>' +
+    '<div style="font-size:13px;">' + message + '</div>' +
+    '</div>' +
+    '<button onclick="this.closest(\'.alert-banner\').remove()" style="background:none;border:none;cursor:pointer;font-size:18px;padding:4px;">&times;</button>' +
+    '</div></div>';
+}
+
+// ── Real-time polling ─────────────────────────────────────────
+function refreshStatus() {
+  fetch('/approve/share/' + SHARE_TOKEN + '/status')
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data) return;
+
+      // Update status
+      const statusEl = document.getElementById('email-status');
+      if (statusEl) statusEl.textContent = data.status.replace('_', ' ');
+
+      // Update approver buttons
+      if (data.approvals) {
+        const picker = document.getElementById('approver-picker');
+        const label = picker.querySelector('.picker-label');
+        let html = '';
+        data.approvals.forEach(function(a) {
+          const decided = a.decision !== 'pending';
+          const icon = a.decision === 'approved' ? '&#9989; Approved' :
+                       a.decision === 'rejected' ? '&#10060; Rejected' :
+                       a.decision === 'revision_needed' ? '&#9998; Revision' : '&#9898; Pending';
+          const selected = (a.id === selectedApprovalId && !decided) ? ' selected' : '';
+          html += '<button type="button" class="approver-btn' + (decided ? ' decided' : '') + selected + '" ' +
+            'data-id="' + a.id + '" data-name="' + a.name + '" data-decision="' + a.decision + '" ' +
+            (decided ? 'disabled ' : '') +
+            'onclick="selectApprover(this)">' +
+            '<div class="avatar">' + a.name.charAt(0).toUpperCase() + '</div>' +
+            '<div><div class="name">' + a.name + '</div>' +
+            '<div style="font-size:11px;color:#86868b;">' + (a.required ? 'Required' : 'Optional') + '</div></div>' +
+            '<span class="status">' + icon + '</span></button>';
+        });
+        picker.innerHTML = '';
+        picker.appendChild(label);
+        picker.innerHTML = label.outerHTML + html;
+
+        // If the selected approver just decided, hide decision card
+        const selA = data.approvals.find(a => a.id === selectedApprovalId);
+        if (selA && selA.decision !== 'pending') {
+          document.getElementById('decision-card').classList.remove('visible');
+        }
+      }
+
+      // Update comments
+      if (data.comments) {
+        const commentsEl = document.getElementById('comments-list');
+        const formArea = document.getElementById('comment-form-area');
+        let html = '';
+        data.comments.forEach(function(c) {
+          html += '<div style="padding:8px 0;border-bottom:1px solid #f5f5f7;">' +
+            '<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">' +
+            '<span style="font-size:12px;font-weight:600;color:#1d1d1f;">' + c.author + '</span>' +
+            '<span style="font-size:11px;color:#aeaeb2;">' + c.created_at + '</span></div>' +
+            '<div style="font-size:13px;color:#333;line-height:1.4;">' + c.body + '</div></div>';
+        });
+        if (!html) html = '<p style="font-size:13px;color:#aeaeb2;margin:4px 0;">No comments yet.</p>';
+        commentsEl.innerHTML = html;
+        commentsEl.appendChild(formArea);
+        document.getElementById('comment-count').textContent = data.comments.length ? '(' + data.comments.length + ')' : '';
+      }
+    })
+    .catch(function() {});
+}
+
+setInterval(refreshStatus, 10000);
+</script>
+</body>
+</html>

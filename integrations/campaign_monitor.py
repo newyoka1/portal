@@ -90,6 +90,45 @@ def _process_campaign(campaign: dict, auth: tuple, db: Session, client_id: int) 
     return 1
 
 
+def push_draft(api_key: str, cm_client_id: str, subject: str, from_name: str, from_email: str, html_body: str) -> dict:
+    """
+    Create a draft campaign in Campaign Monitor.
+    Auto-discovers the first subscriber list for the CM client.
+    Returns {"ok": True, "campaign_id": "..."} or {"ok": False, "error": "..."}.
+    """
+    auth = (api_key, "")
+
+    # Step 1: discover first list for this CM client
+    try:
+        resp = requests.get(f"{BASE_URL}/clients/{cm_client_id}/lists.json",
+                            auth=auth, timeout=10)
+        resp.raise_for_status()
+        lists = resp.json()
+        if not lists:
+            return {"ok": False, "error": "No subscriber lists found in Campaign Monitor. Create one first."}
+        list_id = lists[0]["ListID"]
+    except requests.RequestException as exc:
+        return {"ok": False, "error": f"Failed to discover lists: {exc}"}
+
+    # Step 2: create draft campaign
+    try:
+        resp = requests.post(f"{BASE_URL}/campaigns/{cm_client_id}.json", auth=auth, json={
+            "Subject": subject,
+            "Name": subject[:200],
+            "FromName": from_name or "Politika",
+            "FromEmail": from_email or "support@politikanyc.com",
+            "ReplyTo": from_email or "support@politikanyc.com",
+            "HtmlUrl": "",  # We'll set content via separate call
+            "ListIDs": [list_id],
+        }, timeout=15)
+        resp.raise_for_status()
+        campaign_id = resp.json()  # CM returns just the campaign ID string
+    except requests.RequestException as exc:
+        return {"ok": False, "error": f"Failed to create campaign: {exc}"}
+
+    return {"ok": True, "campaign_id": campaign_id}
+
+
 def _fetch_html(campaign_id: str, auth: tuple) -> str:
     try:
         resp = requests.get(

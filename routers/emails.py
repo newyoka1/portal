@@ -25,6 +25,7 @@ _STATUS_LABELS = {
     "approved": "Approved",
     "rejected": "Rejected",
     "revision_needed": "Needs Revision",
+    "sent": "Sent",
 }
 templates.env.filters["status_label"] = lambda v: _STATUS_LABELS.get(v, v.replace("_", " ").title())
 
@@ -131,9 +132,25 @@ def email_detail(
     if not email:
         return RedirectResponse("/emails", status_code=302)
 
+    from models import ClientIntegration
+
     approvals = email.approvals
     comments  = email.comments
     clients   = db.query(Client).order_by(Client.name).all()
+
+    # Fetch active integrations for this client (for "Push to..." buttons)
+    integrations = []
+    if email.client_id and email.status == "approved":
+        all_intgs = db.query(ClientIntegration).filter_by(
+            client_id=email.client_id, enabled=True
+        ).all()
+        for intg in all_intgs:
+            if intg.platform == "hubspot":
+                from integrations.hubspot import check_push_access
+                if check_push_access(intg.api_key):
+                    integrations.append(intg)
+            else:
+                integrations.append(intg)
 
     flash = None
     if notified:
@@ -154,6 +171,7 @@ def email_detail(
         "approvals":    approvals,
         "comments":     comments,
         "clients":      clients,
+        "integrations": integrations,
         "current_user": current_user,
         "flash":        flash,
     })
@@ -288,6 +306,9 @@ def send_for_approval(
     # Generate a fresh token for each pending approval
     for appr in pending_approvals:
         appr.token = secrets.token_urlsafe(32)
+    # Generate a shared approval link token (one link for all approvers)
+    if not email.share_token:
+        email.share_token = secrets.token_urlsafe(32)
     db.flush()
 
     from portal_config import get_setting
@@ -329,6 +350,145 @@ def send_for_approval(
 
     return RedirectResponse(
         f"/emails/{email_id}?notified={len(approval_pairs)}&sms=0", status_code=302
+    )
+
+
+@router.post("/{email_id}/push/{platform}")
+def push_to_platform(
+    email_id: int,
+    platform: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    """Push an approved email as a draft to an integrated platform."""
+    from models import ClientIntegration
+    import json as _json
+
+    email = db.query(Email).options(joinedload(Email.client)).filter(Email.id == email_id).first()
+    if not email or email.status != "approved" or not email.client_id:
+        return RedirectResponse(f"/emails/{email_id}", status_code=302)
+
+    # Find the integration for this client + platform
+    intg = db.query(ClientIntegration).filter_by(
+        client_id=email.client_id, platform=platform, enabled=True
+    ).first()
+    if not intg:
+        return RedirectResponse(f"/emails/{email_id}?push_error=no_integration", status_code=302)
+
+    config  = _json.loads(intg.extra_config or "{}")
+    result  = {"ok": False, "error": "Unknown platform"}
+
+    html = email.html_body or email.clean_html or ""
+    subj = email.subject
+    fname = email.from_name or (email.client.from_name if email.client else "")
+    femail = email.from_address or (email.client.from_email if email.client else "")
+
+    if platform == "mailchimp":
+        from integrations.mailchimp import push_draft
+        result = push_draft(intg.api_key, subj, fname, femail, html)
+    elif platform == "hubspot":
+        from integrations.hubspot import push_draft
+        result = push_draft(intg.api_key, subj, fname, femail, html)
+    elif platform == "campaign_monitor":
+        from integrations.campaign_monitor import push_draft
+        cm_client_id = config.get("cm_client_id", "")
+        if not cm_client_id:
+            return RedirectResponse(f"/emails/{email_id}?push_error=no_cm_client_id", status_code=302)
+        result = push_draft(intg.api_key, cm_client_id, subj, fname, femail, html)
+
+    if result.get("ok"):
+        log_action(db, email_id=email_id, user_id=current_user.id,
+                   actor_name=current_user.name, action=f"pushed_{platform}",
+                   detail=f"Draft created in {platform}: {_json.dumps(result)}")
+        db.commit()
+        return RedirectResponse(
+            f"/emails/{email_id}?pushed={platform}", status_code=302
+        )
+    else:
+        log_action(db, email_id=email_id, user_id=current_user.id,
+                   actor_name=current_user.name, action=f"push_failed_{platform}",
+                   detail=result.get("error", "Unknown error"))
+        db.commit()
+        return RedirectResponse(
+            f"/emails/{email_id}?push_error={platform}", status_code=302
+        )
+
+
+@router.post("/{email_id}/send")
+def send_approved_email(
+    email_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager),
+):
+    """Send an approved composed email to recipients via Gmail."""
+    email = db.query(Email).options(joinedload(Email.client)).filter(Email.id == email_id).first()
+    if not email or email.status != "approved" or not email.delivered_to:
+        return RedirectResponse(f"/emails/{email_id}", status_code=302)
+
+    import base64
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.utils import formataddr
+    from portal_config import get_setting
+    from gmail_poller import _gmail_service, SCOPES
+
+    recipients = [r.strip() for r in email.delivered_to.split(",") if r.strip()]
+    if not recipients:
+        return RedirectResponse(f"/emails/{email_id}?send_error=no_recipients", status_code=302)
+
+    gmail_address = get_setting("GMAIL_ADDRESS", "support@politikanyc.com")
+    sender_email = email.from_address or gmail_address
+    sender_name  = email.from_name or ""
+    workspace_domain = gmail_address.split("@")[-1] if gmail_address else ""
+
+    # DWD impersonation only for workspace domain addresses
+    can_impersonate = (
+        sender_email != gmail_address
+        and workspace_domain
+        and sender_email.lower().endswith(f"@{workspace_domain}")
+    )
+
+    try:
+        if can_impersonate:
+            from gcp_credentials import build_credentials
+            from googleapiclient.discovery import build as build_svc
+            creds = build_credentials(SCOPES, sender_email)
+            service = build_svc("gmail", "v1", credentials=creds, cache_discovery=False)
+        else:
+            service = _gmail_service()
+    except Exception as exc:
+        log_action(db, email_id=email_id, user_id=current_user.id,
+                   actor_name=current_user.name, action="send_failed",
+                   detail=f"Gmail service error: {exc}")
+        db.commit()
+        return RedirectResponse(f"/emails/{email_id}?send_error=service", status_code=302)
+
+    sent_count = 0
+    for recipient in recipients:
+        msg = MIMEMultipart("alternative")
+        msg["From"]    = formataddr((sender_name, sender_email)) if sender_name else sender_email
+        msg["To"]      = recipient
+        msg["Subject"] = email.subject
+        msg.attach(MIMEText(email.html_body or email.clean_html or "", "html"))
+
+        raw = base64.urlsafe_b64encode(msg.as_bytes()).decode()
+        try:
+            service.users().messages().send(userId="me", body={"raw": raw}).execute()
+            sent_count += 1
+        except Exception as exc:
+            log_action(db, email_id=email_id, user_id=current_user.id,
+                       actor_name=current_user.name, action="send_failed",
+                       detail=f"Failed to send to {recipient}: {exc}")
+
+    if sent_count:
+        email.status = "sent"
+        log_action(db, email_id=email_id, user_id=current_user.id,
+                   actor_name=current_user.name, action="sent",
+                   detail=f"Sent to {sent_count}/{len(recipients)} recipient(s)")
+    db.commit()
+
+    return RedirectResponse(
+        f"/emails/{email_id}?sent={sent_count}&total={len(recipients)}", status_code=302
     )
 
 

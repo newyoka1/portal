@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Integrations — {{ client.name }}{% endblock %}
+{% block title %}CRM Integrations — {{ client.name }}{% endblock %}
 
 {% block content %}
 <div class="mb-3">
@@ -10,23 +10,12 @@
 
 <div class="d-flex justify-content-between align-items-center mb-4">
   <h5 class="fw-bold mb-0">
-    <i class="bi bi-plug me-2"></i>Email Integrations — {{ client.name }}
+    <i class="bi bi-plug me-2"></i>CRM Integrations — {{ client.name }}
   </h5>
   <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal">
     <i class="bi bi-plus-lg me-1"></i>Add Integration
   </button>
 </div>
-
-{% if request.query_params.get('synced') is not none %}
-{% set synced = request.query_params.get('synced') %}
-{% set platform = request.query_params.get('platform','') %}
-<div class="alert alert-{{ 'success' if synced|int > 0 else 'info' }} alert-dismissible fade show">
-  <i class="bi bi-arrow-repeat me-2"></i>
-  Synced <strong>{{ platform|replace('_',' ')|title }}</strong> —
-  {{ synced }} new email(s) added to the queue.
-  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
-{% endif %}
 
 <!-- Existing integrations -->
 {% if integrations %}
@@ -80,17 +69,11 @@
       </div>
       <div class="card-footer bg-white d-flex gap-2">
         <form method="post"
-              action="/clients/{{ client.id }}/integrations/{{ intg.id }}/sync"
-              class="flex-fill">
-          <button class="btn btn-outline-primary btn-sm w-100">
-            <i class="bi bi-arrow-repeat me-1"></i>Sync Now
-          </button>
-        </form>
-        <form method="post"
               action="/clients/{{ client.id }}/integrations/{{ intg.id }}/delete"
-              onsubmit="return confirm('Remove this integration?')">
-          <button class="btn btn-outline-danger btn-sm">
-            <i class="bi bi-trash"></i>
+              onsubmit="return confirm('Remove this integration?')"
+              class="flex-fill">
+          <button class="btn btn-outline-danger btn-sm w-100">
+            <i class="bi bi-trash me-1"></i>Remove
           </button>
         </form>
       </div>
@@ -101,7 +84,7 @@
 {% else %}
 <div class="text-center text-muted py-5">
   <i class="bi bi-plug fs-1 d-block mb-2"></i>
-  No integrations yet. Add one to start pulling campaigns.
+  No integrations yet. Add one to connect this client's CRM for voter pipeline sync.
 </div>
 {% endif %}
 

@@ -334,26 +334,94 @@
   </div>
 
 {% elif done %}
-  <!-- ── Thank-you screen ────────────────────────────────────── -->
-  <div class="centered-container">
-    <div class="done-card">
+  <!-- ── Decision recorded — show email + confirmation banner ── -->
+  <div style="max-width:1280px;margin:16px auto 0;padding:0 20px;">
+    <div style="
+      border-radius:10px;padding:14px 20px;display:flex;align-items:center;gap:10px;
       {% if approval.decision == 'approved' %}
-        <div class="done-icon approved">&#10004;</div>
-        <h3 class="done-title" style="color:#34c759;">Approved</h3>
-        <p class="done-subtitle">You approved <strong>{{ email.subject }}</strong></p>
+        background:linear-gradient(135deg,#d1fae5,#a7f3d0);border:1px solid #34d399;
       {% elif approval.decision == 'rejected' %}
-        <div class="done-icon rejected">&#10008;</div>
-        <h3 class="done-title" style="color:#ff3b30;">Rejected</h3>
-        <p class="done-subtitle">You rejected <strong>{{ email.subject }}</strong></p>
+        background:linear-gradient(135deg,#fee2e2,#fecaca);border:1px solid #f87171;
       {% else %}
-        <div class="done-icon neutral">&#8505;</div>
-        <h3 class="done-title">Already Responded</h3>
-        <p class="done-subtitle">Your decision for <strong>{{ email.subject }}</strong> has been recorded.</p>
+        background:linear-gradient(135deg,#e0e7ff,#c7d2fe);border:1px solid #818cf8;
       {% endif %}
-      {% if approval.note %}
-        <p class="done-note">"{{ approval.note }}"</p>
+    ">
+      <span style="font-size:20px;">
+        {% if approval.decision == 'approved' %}&#10004;{% elif approval.decision == 'rejected' %}&#10008;{% else %}&#8505;{% endif %}
+      </span>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;">
+          {% if approval.decision == 'approved' %}Approved{% elif approval.decision == 'rejected' %}Rejected{% else %}Response Recorded{% endif %}
+        </div>
+        <div style="font-size:13px;">Your decision for <strong>{{ email.subject }}</strong> has been recorded.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="page-layout">
+    <div class="col-email">
+      <div class="email-card">
+        <div class="email-header">
+          <h1 class="email-subject">{{ email.subject }}</h1>
+          <div class="sender-row">
+            <div class="sender-avatar">{{ (email.from_name or email.from_address)[0] | upper }}</div>
+            <div class="sender-info">
+              <div class="sender-name">{{ email.from_name or email.from_address }}</div>
+              <div class="sender-email">{{ email.from_address }}</div>
+            </div>
+            <div class="email-meta">
+              <div class="email-date">{{ email.received_at.strftime('%b %d, %Y at %I:%M %p').lstrip('0') }}</div>
+              {% if email.client %}
+                <span class="email-client-badge">{{ email.client.name }}</span>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="email-body-wrap">
+          <div class="loading-overlay" id="email-loading">
+            <div style="text-align:center">
+              <div class="spinner" style="margin:0 auto 12px;"></div>
+              <div style="font-size:13px;color:#86868b;">Loading email...</div>
+            </div>
+          </div>
+          <iframe id="email-frame" class="email-body-frame" sandbox="allow-same-origin allow-popups"
+                  src="/approve/{{ approval.token }}/body"></iframe>
+        </div>
+      </div>
+    </div>
+    <div class="col-sidebar">
+      <div class="sidebar-card">
+        <div class="sidebar-header"><span style="color:#86868b;">&#128101;</span> Approvers</div>
+        <div class="sidebar-body" style="padding-top:10px;padding-bottom:10px;">
+          {% for a in all_approvals %}
+          <div style="display:flex;align-items:center;gap:8px;padding:6px 0;{% if not loop.last %}border-bottom:1px solid #f5f5f7;{% endif %}">
+            <span style="font-size:16px;">
+              {% if a.decision == 'approved' %}&#9989;{% elif a.decision == 'rejected' %}&#10060;{% elif a.decision == 'revision_needed' %}&#9998;{% else %}&#9898;{% endif %}
+            </span>
+            <span style="font-size:13px;font-weight:500;flex:1;">{{ a.display_name }}</span>
+            <span style="font-size:11px;color:#86868b;">
+              {% if a.decision == 'pending' %}Pending{% elif a.decision == 'approved' %}Approved{% elif a.decision == 'revision_needed' %}Needs Revision{% else %}Rejected{% endif %}
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% if comments %}
+      <div class="sidebar-card">
+        <div class="sidebar-header"><span style="color:#86868b;">&#128172;</span> Comments ({{ comments|length }})</div>
+        <div class="sidebar-body" style="padding-top:10px;padding-bottom:10px;">
+          {% for c in comments %}
+          <div style="padding:8px 0;{% if not loop.last %}border-bottom:1px solid #f5f5f7;{% endif %}">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+              <span style="font-size:12px;font-weight:600;">{{ c.commenter_name or (c.user.name if c.user else 'Unknown') }}</span>
+              <span style="font-size:11px;color:#aeaeb2;">{{ c.created_at.strftime('%b %d, %I:%M %p').lstrip('0') }}</span>
+            </div>
+            <div style="font-size:13px;color:#333;line-height:1.4;">{{ c.body }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
       {% endif %}
-      <p class="done-close">You can close this window.</p>
     </div>
   </div>
 

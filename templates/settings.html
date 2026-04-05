@@ -15,69 +15,31 @@
 {% for cat_key, cat_label in categories %}
 
 {% if cat_key == 'voter' %}
-{# ── Voter: dynamic per-platform token sections + static settings ─────────── #}
-{% if voter_platforms %}
+{# ── Voter: automation settings only (CRM keys are now per-client integrations) ─── #}
+{% set settings = grouped.get(cat_key, []) %}
+{% if settings %}
 <div class="card shadow-sm mb-3">
   <div class="card-header bg-white py-2">
     <h6 class="fw-bold mb-0"><i class="bi bi-people me-1"></i>{{ cat_label }}</h6>
   </div>
   <div class="card-body">
-    {% for plat in voter_platforms %}
-    <div class="mb-4">
-      <div class="d-flex justify-content-between align-items-center mb-2">
-        <span class="fw-semibold text-secondary small text-uppercase" style="letter-spacing:.05em">
-          {{ plat.label }}
-        </span>
-        <button class="btn btn-outline-secondary btn-sm"
-                onclick="addTokenRow('{{ plat.prefix }}', '{{ plat.label }}', this)">
-          <i class="bi bi-plus-lg me-1"></i>Add Account
-        </button>
+    {% for s in settings %}
+    <div class="row mb-3 align-items-center">
+      <div class="col-md-4">
+        <label class="form-label fw-semibold mb-0" for="setting_{{ s.key }}">{{ s.label or s.key }}</label>
+        <div class="text-muted" style="font-size:.7rem">{{ s.key }}</div>
       </div>
-      <div id="rows_{{ plat.prefix | replace('_','') }}">
-        {% for s in plat.rows %}
-        <div class="row mb-2 align-items-center token-row">
-          <div class="col-md-3">
-            <div class="text-muted font-monospace" style="font-size:.7rem">{{ s.key }}</div>
-          </div>
-          <div class="col-md-9">
-            <div class="input-group">
-              <input type="password" class="form-control font-monospace"
-                     data-key="{{ s.key }}" value="{{ s.value or '' }}"
-                     placeholder="pat-na1-…">
-              <button class="btn btn-outline-secondary" type="button"
-                      onclick="toggleSecret(this)"><i class="bi bi-eye"></i></button>
-              <button class="btn btn-outline-danger" type="button"
-                      onclick="deleteToken('{{ s.key }}', this)"><i class="bi bi-trash"></i></button>
-            </div>
-          </div>
-        </div>
-        {% endfor %}
+      <div class="col-md-8">
+        <input type="text" class="form-control" id="setting_{{ s.key }}"
+               data-key="{{ s.key }}" value="{{ s.value or '' }}">
       </div>
-      {% if not loop.last %}<hr class="my-3">{% endif %}
     </div>
     {% endfor %}
-
-    {# ── Static voter settings (VOTER_NIGHTLY_SYNC, VOTER_SYNC_HOUR, etc.) ── #}
-    {% set voter_static = grouped.get('voter', []) | selectattr('key', 'in', ['VOTER_NIGHTLY_SYNC','VOTER_SYNC_HOUR']) | list %}
-    {% if voter_static %}
-    <hr class="my-3">
-    <span class="fw-semibold text-secondary small text-uppercase" style="letter-spacing:.05em">Automation</span>
-    <div class="mt-2">
-      {% for s in voter_static %}
-      <div class="row mb-2 align-items-center">
-        <div class="col-md-4">
-          <label class="form-label fw-semibold mb-0" for="setting_{{ s.key }}">{{ s.label or s.key }}</label>
-          <div class="text-muted" style="font-size:.7rem">{{ s.key }}</div>
-        </div>
-        <div class="col-md-8">
-          <input type="text" class="form-control" id="setting_{{ s.key }}"
-                 data-key="{{ s.key }}" value="{{ s.value or '' }}">
-        </div>
-      </div>
-      {% endfor %}
-      <div class="form-text text-muted">Set <code>VOTER_NIGHTLY_SYNC</code> to <code>true</code> and restart the server to enable automatic nightly CRM sync.</div>
+    <div class="form-text text-muted">
+      Set <code>VOTER_NIGHTLY_SYNC</code> to <code>true</code> and restart the server to enable automatic nightly CRM sync.
+      <br>CRM API keys (HubSpot, Campaign Monitor, Mailchimp) are now configured per-client under
+      <a href="/clients">Clients</a> &rarr; Integrations.
     </div>
-    {% endif %}
   </div>
 </div>
 {% endif %}
@@ -288,54 +250,6 @@ function toggleSecret(btn) {
   } else {
     input.type = 'password';
     btn.innerHTML = '<i class="bi bi-eye"></i>';
-  }
-}
-
-function addTokenRow(prefix, label, btn) {
-  const containerId = 'rows_' + prefix.replace(/_/g, '');
-  const container = document.getElementById(containerId);
-  // Find next available number
-  const existing = container.querySelectorAll('[data-key]');
-  let maxN = 0;
-  existing.forEach(el => {
-    const m = el.dataset.key.match(/(\d+)$/);
-    if (m) maxN = Math.max(maxN, parseInt(m[1]));
-  });
-  const newKey = prefix + (maxN + 1);
-
-  const row = document.createElement('div');
-  row.className = 'row mb-2 align-items-center token-row';
-  row.innerHTML = `
-    <div class="col-md-3">
-      <div class="text-muted font-monospace" style="font-size:.7rem">${newKey}</div>
-    </div>
-    <div class="col-md-9">
-      <div class="input-group">
-        <input type="password" class="form-control font-monospace"
-               data-key="${newKey}" placeholder="Paste token here…" autofocus>
-        <button class="btn btn-outline-secondary" type="button"
-                onclick="toggleSecret(this)"><i class="bi bi-eye"></i></button>
-        <button class="btn btn-outline-danger" type="button"
-                onclick="deleteToken('${newKey}', this)"><i class="bi bi-trash"></i></button>
-      </div>
-    </div>`;
-  container.appendChild(row);
-  row.querySelector('input').focus();
-}
-
-async function deleteToken(key, btn) {
-  if (!confirm(`Remove ${key}?`)) return;
-  const row = btn.closest('.token-row');
-  // If row was never saved (no value in DB), just remove from DOM
-  const input = row.querySelector('input');
-  if (!input.value) { row.remove(); return; }
-
-  const resp = await fetch(`/settings/${encodeURIComponent(key)}`, { method: 'DELETE' });
-  const result = await resp.json();
-  if (result.ok) {
-    row.remove();
-  } else {
-    alert('Delete failed: ' + (result.error || 'unknown'));
   }
 }
 

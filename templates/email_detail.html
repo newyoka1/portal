@@ -8,6 +8,35 @@
   </a>
 </div>
 
+{% if request.query_params.get('sent') %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-check-circle me-2"></i>
+  Email sent to <strong>{{ request.query_params.get('sent') }}/{{ request.query_params.get('total','') }}</strong> recipient(s).
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% if request.query_params.get('send_error') %}
+<div class="alert alert-danger alert-dismissible fade show">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  Failed to send email. Check the audit log for details.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% if request.query_params.get('pushed') %}
+<div class="alert alert-success alert-dismissible fade show">
+  <i class="bi bi-box-arrow-up-right me-2"></i>
+  Draft created in <strong>{{ request.query_params.get('pushed') | replace('_',' ') | title }}</strong>. Open the platform to review and send.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+{% if request.query_params.get('push_error') %}
+<div class="alert alert-danger alert-dismissible fade show">
+  <i class="bi bi-exclamation-triangle me-2"></i>
+  Failed to push to <strong>{{ request.query_params.get('push_error') | replace('_',' ') | title }}</strong>. Check the audit log for details.
+  <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+{% endif %}
+
 <div class="row g-4">
 
   <!-- ── Left: Email preview ──────────────────────────────────────── -->
@@ -212,6 +241,38 @@
     {% endif %}
     {% endif %}
 
+    <!-- Share Link (for group chats) -->
+    {% if email.share_token %}
+    <div class="card shadow-sm mb-4">
+      <div class="card-body py-3">
+        <div class="d-flex align-items-center gap-2">
+          <button class="btn btn-outline-secondary btn-sm flex-fill" onclick="copyShareLink()">
+            <i class="bi bi-link-45deg me-1"></i>Copy Share Link
+          </button>
+          <a href="/approve/share/{{ email.share_token }}" target="_blank"
+             class="btn btn-outline-secondary btn-sm" title="Open shared approval page">
+            <i class="bi bi-box-arrow-up-right"></i>
+          </a>
+        </div>
+        <div class="text-muted small mt-2 text-center" style="font-size:.75rem;">
+          One link for all approvers — paste in a group text or chat
+        </div>
+        <span id="copyStatus" class="small text-success d-none d-block text-center mt-1"></span>
+      </div>
+    </div>
+    <script>
+    function copyShareLink() {
+      const url = window.location.origin + '/approve/share/{{ email.share_token }}';
+      navigator.clipboard.writeText(url).then(function() {
+        const s = document.getElementById('copyStatus');
+        s.textContent = 'Copied!';
+        s.classList.remove('d-none');
+        setTimeout(() => s.classList.add('d-none'), 2000);
+      });
+    }
+    </script>
+    {% endif %}
+
     <!-- Approval panel -->
     <div class="card shadow-sm mb-4">
       <div class="card-header bg-white fw-semibold">
@@ -304,6 +365,40 @@
             <i class="bi bi-check-circle me-1"></i>
             All required approvers signed off!
           </div>
+          {% if email.status == 'approved' %}
+          <div class="mt-3">
+            {% if email.delivered_to %}
+            <form method="post" action="/emails/{{ email.id }}/send" class="mb-2"
+                  onsubmit="return confirm('Send this email to {{ email.delivered_to }}?')">
+              <button class="btn btn-success w-100 btn-sm">
+                <i class="bi bi-envelope-arrow-up me-1"></i>Send via Gmail
+              </button>
+              <div class="form-text text-center mt-1" style="font-size:.75rem;">
+                To: {{ email.delivered_to }}
+              </div>
+            </form>
+            {% endif %}
+            {% if integrations %}
+            <div class="text-muted small text-center mb-2" style="font-size:.7rem;">Push as draft to</div>
+            <div class="d-flex flex-column gap-1">
+              {% for intg in integrations %}
+              <form method="post" action="/emails/{{ email.id }}/push/{{ intg.platform }}"
+                    onsubmit="return confirm('Push this email as a draft to {{ intg.platform | replace('_',' ') | title }}?')">
+                <button class="btn btn-outline-secondary btn-sm w-100">
+                  {% if intg.platform == 'hubspot' %}
+                    <i class="bi bi-box-arrow-up-right me-1"></i>HubSpot
+                  {% elif intg.platform == 'mailchimp' %}
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Mailchimp
+                  {% elif intg.platform == 'campaign_monitor' %}
+                    <i class="bi bi-box-arrow-up-right me-1"></i>Campaign Monitor
+                  {% endif %}
+                </button>
+              </form>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
         {% endif %}
       </div>
     </div>

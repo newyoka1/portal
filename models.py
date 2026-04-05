@@ -147,6 +147,7 @@ class Email(Base):
     assigned_at          = Column(DateTime, nullable=True)
     sent_for_approval_at = Column(DateTime, nullable=True)
     deadline_at          = Column(DateTime, nullable=True)
+    share_token          = Column(String(100), unique=True, nullable=True, index=True)
 
     client        = relationship("Client",   back_populates="emails")
     approvals     = relationship("Approval", back_populates="email", cascade="all, delete-orphan")

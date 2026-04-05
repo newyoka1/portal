@@ -25,7 +25,7 @@ from audit import log_action
 from auth import get_current_user, purge_expired_sessions, require_admin, require_user
 from database import Base, SessionLocal, engine, get_db
 from gmail_poller import fetch_and_store_emails, get_poller_health
-from models import Approval, AuditLog, Comment, Email, PortalSetting, User   # noqa: F401
+from models import Approval, AuditLog, Client, ClientApprover, Comment, Email, PortalSetting, User   # noqa: F401
 from routers import auth, clients, comments, emails, fb_ad_approval, fb_receipts, integrations, settings, users, voter_chat, voter_pipeline
 from routers.emails import recalculate_status
 from webhook import fire_webhook
@@ -166,6 +166,8 @@ def _startup() -> BackgroundScheduler:
 
         # Delivered-to alias tracking
         _add_column_if_missing(conn, "emails",    "delivered_to",     "VARCHAR(200) DEFAULT ''")
+        # Shared approval link token
+        _add_column_if_missing(conn, "emails",    "share_token",      "VARCHAR(100) NULL")
 
         # Batch improvements — deadlines, reminders, roles
         _add_column_if_missing(conn, "emails",    "deadline_at",      "DATETIME NULL")
@@ -527,6 +529,80 @@ def approval_log(
 
 
 # ---------------------------------------------------------------------------
+# Compose email for approval
+# ---------------------------------------------------------------------------
+@app.get("/compose", response_class=HTMLResponse)
+def compose_page(request: Request, db: Session = Depends(get_db),
+                 current_user: User = Depends(require_user)):
+    clients = db.query(Client).order_by(Client.name).all()
+    return templates.TemplateResponse(request, "compose.html", {
+        "clients":      clients,
+        "current_user": current_user,
+    })
+
+
+@app.post("/compose", response_class=HTMLResponse)
+def compose_submit(
+    request: Request,
+    client_id: int   = Form(...),
+    subject: str     = Form(...),
+    recipients: str  = Form(""),
+    html_body: str   = Form(...),
+    db: Session      = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    """Create a composed email and add it to the approval queue."""
+    client = db.query(Client).filter(Client.id == client_id).first()
+    if not client:
+        return RedirectResponse("/compose", status_code=302)
+
+    from email_sanitizer import sanitize_email_html
+
+    email = Email(
+        client_id=client_id,
+        gmail_message_id=f"compose-{secrets.token_urlsafe(16)}",
+        subject=subject.strip(),
+        from_address=client.from_email or current_user.email or "portal@politikanyc.com",
+        from_name=client.from_name or client.name,
+        html_body=html_body,
+        clean_html=sanitize_email_html(html_body),
+        text_body="",
+        origin_system="Compose",
+        received_at=datetime.now(timezone.utc),
+        status="in_review",
+        assigned_at=datetime.now(timezone.utc),
+    )
+    # Store recipients in delivered_to field for later sending
+    email.delivered_to = recipients.strip()
+    db.add(email)
+    db.flush()
+
+    # Auto-create approval records for this client's approvers
+    approvers = db.query(ClientApprover).filter(ClientApprover.client_id == client_id).all()
+    for ca in approvers:
+        db.add(Approval(
+            email_id=email.id,
+            user_id=ca.user_id,
+            approver_email=ca.approver_email,
+            approver_name=ca.approver_name,
+            approver_phone=getattr(ca, "approver_phone", None),
+            required=ca.required,
+            decision="pending",
+            token=secrets.token_urlsafe(32),
+        ))
+
+    # Generate share token
+    email.share_token = secrets.token_urlsafe(32)
+
+    log_action(db, email_id=email.id, user_id=current_user.id,
+               actor_name=current_user.name, action="compose",
+               detail=f"Composed email for {client.name}")
+    db.commit()
+
+    return RedirectResponse(f"/emails/{email.id}", status_code=302)
+
+
+# ---------------------------------------------------------------------------
 # Public token-based approval (no login required)
 # ---------------------------------------------------------------------------
 @app.get("/approve/{token}/body", response_class=HTMLResponse)
@@ -637,11 +713,10 @@ def approve_submit(
             approval.decided_at = None
             # Token stays — link keeps working
         else:
-            # Final decision — invalidate the token
+            # Final decision — keep token alive so link stays viewable
             approval.decision   = decision
             approval.note       = comment_body
             approval.decided_at = datetime.now(timezone.utc)
-            approval.token      = None
             recalculate_status(approval.email_id, db)
 
         db.commit()
@@ -738,3 +813,166 @@ def _notify_comment_bg(approval, comment_body, db):
         ).start()
     except Exception as exc:
         logging.warning("Comment notification setup failed: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Shared approval page (single link for all approvers — shareable in group chat)
+# ---------------------------------------------------------------------------
+@app.get("/approve/share/{share_token}/body", response_class=HTMLResponse)
+def shared_approve_body(share_token: str, db: Session = Depends(get_db)):
+    """Serve clean email HTML body for iframe — share-token gated."""
+    email = db.query(Email).filter(Email.share_token == share_token).first()
+    if not email:
+        return HTMLResponse("Not found", status_code=404)
+    return HTMLResponse(email.clean_html or email.html_body or "")
+
+
+@app.get("/approve/share/{share_token}", response_class=HTMLResponse)
+def shared_approve_page(share_token: str, request: Request, db: Session = Depends(get_db)):
+    """Public approval page accessible by anyone with the share link."""
+    email = db.query(Email).filter(Email.share_token == share_token).first()
+    if not email:
+        return HTMLResponse("<h2>Link not found or expired.</h2>", status_code=404)
+    all_approvals = db.query(Approval).filter(Approval.email_id == email.id).all()
+    csrf_token = secrets.token_urlsafe(32)
+    response = templates.TemplateResponse(request, "approve_share.html", {
+        "email":         email,
+        "all_approvals": all_approvals,
+        "comments":      email.comments,
+        "csrf_token":    csrf_token,
+        "share_token":   share_token,
+        "current_user":  None,
+    })
+    response.set_cookie("_csrf", csrf_token, httponly=False, samesite="strict", max_age=3600)
+    return response
+
+
+@app.get("/approve/share/{share_token}/status")
+def shared_approve_status(share_token: str, db: Session = Depends(get_db)):
+    """Real-time polling: return approval statuses + comments as JSON."""
+    email = db.query(Email).filter(Email.share_token == share_token).first()
+    if not email:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    all_approvals = db.query(Approval).filter(Approval.email_id == email.id).all()
+    return JSONResponse({
+        "status": email.status,
+        "approvals": [
+            {"id": a.id, "name": a.display_name, "decision": a.decision, "required": a.required}
+            for a in all_approvals
+        ],
+        "comments": [
+            {"author": c.commenter_name or (c.user.name if c.user else "Unknown"),
+             "body": c.body,
+             "created_at": c.created_at.strftime("%b %d, %I:%M %p")}
+            for c in email.comments
+        ],
+    })
+
+
+@app.post("/approve/share/{share_token}/decide", response_class=JSONResponse)
+def shared_approve_decide(
+    share_token: str,
+    request: Request,
+    approval_id: int = Form(...),
+    decision: str    = Form(...),
+    note: str        = Form(""),
+    csrf_token: str  = Form(""),
+    db: Session      = Depends(get_db),
+):
+    """Submit a decision from the shared approval page."""
+    csrf_cookie = request.cookies.get("_csrf", "")
+    if not csrf_cookie or csrf_cookie != csrf_token:
+        return JSONResponse({"ok": False, "error": "Invalid request — please reload."}, status_code=403)
+
+    email = db.query(Email).filter(Email.share_token == share_token).first()
+    if not email:
+        return JSONResponse({"ok": False, "error": "Link expired"}, status_code=404)
+
+    approval = db.query(Approval).filter(
+        Approval.id == approval_id,
+        Approval.email_id == email.id,
+    ).first()
+    if not approval or approval.decision not in ("pending", "revision_needed"):
+        return JSONResponse({"ok": False, "error": "Already decided or not found"}, status_code=400)
+
+    if decision not in ("approved", "rejected", "revision_needed"):
+        return JSONResponse({"ok": False, "error": "Invalid decision"}, status_code=400)
+
+    is_revision = decision == "revision_needed"
+    comment_body = note.strip()
+    label = {"approved": "Approved", "rejected": "Rejected", "revision_needed": "Needs Revision"}[decision]
+
+    if comment_body or is_revision:
+        db.add(Comment(
+            email_id=email.id,
+            user_id=approval.user_id,
+            commenter_name=approval.display_name if not approval.user_id else None,
+            body=f"[{label}] {comment_body}" if comment_body else f"[{label}] Revision requested",
+        ))
+
+    log_action(db, email_id=email.id, user_id=approval.user_id,
+               actor_name=approval.display_name, action=decision, detail=comment_body)
+
+    if is_revision:
+        approval.decision = "revision_needed"
+        recalculate_status(email.id, db)
+        approval.decision = "pending"
+        approval.note = ""
+        approval.decided_at = None
+    else:
+        approval.decision   = decision
+        approval.note       = comment_body
+        approval.decided_at = datetime.now(timezone.utc)
+        recalculate_status(email.id, db)
+
+    db.commit()
+
+    fire_webhook({
+        "event": "approval_decision",
+        "email_id": email.id,
+        "email_subject": email.subject,
+        "approver": approval.display_name,
+        "decision": decision,
+        "note": comment_body,
+        "final_status": email.status,
+    })
+
+    return JSONResponse({"ok": True, "decision": decision})
+
+
+@app.post("/approve/share/{share_token}/comment", response_class=JSONResponse)
+def shared_approve_comment(
+    share_token: str,
+    request: Request,
+    approval_id: int = Form(...),
+    body: str        = Form(...),
+    csrf_token: str  = Form(""),
+    db: Session      = Depends(get_db),
+):
+    """Add a comment from the shared approval page."""
+    csrf_cookie = request.cookies.get("_csrf", "") if request else ""
+    if not csrf_cookie or csrf_cookie != csrf_token:
+        return JSONResponse({"ok": False, "error": "Invalid request"}, status_code=403)
+
+    email = db.query(Email).filter(Email.share_token == share_token).first()
+    if not email:
+        return JSONResponse({"ok": False, "error": "Not found"}, status_code=404)
+
+    approval = db.query(Approval).filter(
+        Approval.id == approval_id, Approval.email_id == email.id
+    ).first()
+
+    if body.strip():
+        commenter = approval.display_name if approval else "Unknown"
+        db.add(Comment(
+            email_id=email.id,
+            user_id=approval.user_id if approval else None,
+            commenter_name=commenter if not (approval and approval.user_id) else None,
+            body=body.strip(),
+        ))
+        log_action(db, email_id=email.id,
+                   user_id=approval.user_id if approval else None,
+                   actor_name=commenter, action="comment", detail=body.strip()[:200])
+        db.commit()
+
+    return JSONResponse({"ok": True})

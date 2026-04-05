@@ -1,7 +1,11 @@
-"""Per-client email platform integration routes (admin only)."""
+"""Per-client CRM integration routes (admin only).
+
+Each client can have HubSpot, Mailchimp, and/or Campaign Monitor API keys.
+These keys are used by the Voter Pipeline CRM sync (nightly or manual) to
+pull contacts/subscribers into the unified CRM database.
+"""
 import json
 import logging
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
@@ -11,7 +15,6 @@ from sqlalchemy.orm import Session
 from auth import require_admin
 from database import get_db
 from models import Client, ClientIntegration, User
-from integrations import hubspot, mailchimp, campaign_monitor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/clients/{client_id}/integrations")
@@ -105,45 +108,3 @@ def delete_integration(
     return RedirectResponse(f"/clients/{client_id}/integrations", status_code=302)
 
 
-@router.post("/{integration_id}/sync")
-def sync_integration(
-    client_id: int,
-    integration_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
-):
-    integration = db.query(ClientIntegration).filter(
-        ClientIntegration.id == integration_id,
-        ClientIntegration.client_id == client_id,
-    ).first()
-
-    if not integration or not integration.enabled:
-        return RedirectResponse(f"/clients/{client_id}/integrations", status_code=302)
-
-    config  = json.loads(integration.extra_config or "{}")
-    count   = 0
-
-    try:
-        if integration.platform == "hubspot":
-            count = hubspot.fetch(integration.api_key, db, client_id)
-
-        elif integration.platform == "mailchimp":
-            count = mailchimp.fetch(integration.api_key, db, client_id)
-
-        elif integration.platform == "campaign_monitor":
-            cm_client_id = config.get("cm_client_id", "")
-            count = campaign_monitor.fetch(integration.api_key, cm_client_id, db, client_id)
-
-        db.commit()
-        integration.last_synced_at = datetime.now(timezone.utc)
-        db.commit()
-        logger.info("Synced %s for client %d: %d new email(s)", integration.platform, client_id, count)
-
-    except Exception as exc:
-        db.rollback()
-        logger.exception("Sync failed for integration %d: %s", integration_id, exc)
-
-    return RedirectResponse(
-        f"/clients/{client_id}/integrations?synced={count}&platform={integration.platform}",
-        status_code=302,
-    )

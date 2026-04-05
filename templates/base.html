@@ -51,6 +51,9 @@
     <a href="/emails" class="nav-link {% if request.url.path.startswith('/emails') or request.url.path.startswith('/approve') %}active{% endif %}">
       <i class="bi bi-inbox me-2"></i>Email Queue
     </a>
+    <a href="/compose" class="nav-link {% if request.url.path == '/compose' %}active{% endif %}">
+      <i class="bi bi-pencil-square me-2"></i>Compose
+    </a>
     <a href="/log" class="nav-link {% if request.url.path == '/log' %}active{% endif %}">
       <i class="bi bi-journal-check me-2"></i>Approval Log
     </a>

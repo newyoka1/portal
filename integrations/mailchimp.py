@@ -103,6 +103,59 @@ def _process_campaign(campaign: dict, base: str, auth: tuple, db: Session, clien
     return 1
 
 
+def push_draft(api_key: str, subject: str, from_name: str, from_email: str, html_body: str) -> dict:
+    """
+    Create a draft campaign in Mailchimp with the given content.
+    Auto-discovers the first audience (list) to attach it to.
+    Returns {"ok": True, "campaign_id": "...", "web_id": N} or {"ok": False, "error": "..."}.
+    """
+    dc   = _data_center(api_key)
+    base = f"https://{dc}.api.mailchimp.com/3.0"
+    auth = ("anystring", api_key)
+
+    # Step 1: discover first audience (list)
+    try:
+        resp = requests.get(f"{base}/lists", auth=auth,
+                            params={"count": 1, "fields": "lists.id,lists.name"}, timeout=10)
+        resp.raise_for_status()
+        lists = resp.json().get("lists", [])
+        if not lists:
+            return {"ok": False, "error": "No audience/list found in Mailchimp. Create one first."}
+        list_id = lists[0]["id"]
+    except requests.RequestException as exc:
+        return {"ok": False, "error": f"Failed to discover audiences: {exc}"}
+
+    # Step 2: create campaign
+    try:
+        resp = requests.post(f"{base}/campaigns", auth=auth, json={
+            "type": "regular",
+            "recipients": {"list_id": list_id},
+            "settings": {
+                "subject_line": subject,
+                "from_name": from_name or "Politika",
+                "reply_to": from_email or "support@politikanyc.com",
+                "title": subject[:100],
+            },
+        }, timeout=15)
+        resp.raise_for_status()
+        campaign = resp.json()
+        campaign_id = campaign["id"]
+        web_id = campaign.get("web_id", "")
+    except requests.RequestException as exc:
+        return {"ok": False, "error": f"Failed to create campaign: {exc}"}
+
+    # Step 3: set HTML content
+    try:
+        resp = requests.put(f"{base}/campaigns/{campaign_id}/content", auth=auth, json={
+            "html": html_body,
+        }, timeout=15)
+        resp.raise_for_status()
+    except requests.RequestException as exc:
+        return {"ok": False, "error": f"Campaign created but HTML upload failed: {exc}"}
+
+    return {"ok": True, "campaign_id": campaign_id, "web_id": web_id, "data_center": dc}
+
+
 def _fetch_html(campaign_id: str, base: str, auth: tuple) -> str:
     try:
         resp = requests.get(

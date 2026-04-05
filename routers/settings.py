@@ -22,13 +22,8 @@ CATEGORIES = [
     ("ai",             "AI / Claude"),
 ]
 
-# Dynamic per-platform token rows (created/deleted on demand)
-VOTER_PLATFORMS = [
-    {"prefix": "HUBSPOT_TOKEN_", "label": "HubSpot",          "is_secret": True},
-    {"prefix": "CM_API_KEY_",    "label": "Campaign Monitor",  "is_secret": True},
-    {"prefix": "MAILCHIMP_KEY_", "label": "Mailchimp",         "is_secret": True},
-]
-_DYNAMIC_PREFIXES = tuple(p["prefix"] for p in VOTER_PLATFORMS)
+# Dynamic per-platform token rows — FB ad accounts only (CRM keys moved to client integrations)
+_DYNAMIC_PREFIXES = ("FB_ACCESS_TOKEN_", "FB_AD_ACCOUNT_ID_")
 
 
 @router.get("", response_class=HTMLResponse)
@@ -40,25 +35,15 @@ def settings_page(
     rows = db.query(PortalSetting).order_by(PortalSetting.category, PortalSetting.key).all()
     grouped = {}
     for r in rows:
+        # Skip old global CRM keys (now stored as client integrations)
+        if any(r.key.startswith(p) for p in ("HUBSPOT_TOKEN_", "CM_API_KEY_", "MAILCHIMP_KEY_")):
+            continue
         grouped.setdefault(r.category or "general", []).append(r)
-
-    # Build per-platform token groups for the voter section
-    voter_platforms = []
-    for plat in VOTER_PLATFORMS:
-        prefix = plat["prefix"]
-        voter_platforms.append({
-            **plat,
-            "rows": sorted(
-                [r for r in rows if r.key.startswith(prefix)],
-                key=lambda r: r.key,
-            ),
-        })
 
     return templates.TemplateResponse(request, "settings.html", {
         "current_user":    current_user,
         "categories":      CATEGORIES,
         "grouped":         grouped,
-        "voter_platforms": voter_platforms,
         "page_title":      "Settings",
     })
 
@@ -79,18 +64,16 @@ async def save_settings(
                 row.value = value
                 updated += 1
             else:
-                # Insert new row for dynamic voter-platform keys
-                for plat in VOTER_PLATFORMS:
-                    if key.startswith(plat["prefix"]) and value:
-                        db.add(PortalSetting(
-                            key=key,
-                            value=value,
-                            label=plat["label"],
-                            category="voter",
-                            is_secret=plat["is_secret"],
-                        ))
-                        updated += 1
-                        break
+                # Insert new row for dynamic FB ad account keys
+                if key.startswith(("FB_ACCESS_TOKEN_", "FB_AD_ACCOUNT_ID_")) and value:
+                    db.add(PortalSetting(
+                        key=key,
+                        value=value,
+                        label="Facebook",
+                        category="meta",
+                        is_secret=key.startswith("FB_ACCESS_TOKEN_"),
+                    ))
+                    updated += 1
         db.commit()
 
         import portal_config
@@ -134,7 +117,7 @@ def delete_setting(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    """Delete a dynamic voter-platform token row."""
+    """Delete a dynamic setting row (FB ad accounts)."""
     if not any(key.startswith(p) for p in _DYNAMIC_PREFIXES):
         return JSONResponse({"ok": False, "error": "Not deletable"}, status_code=400)
     row = db.query(PortalSetting).filter(PortalSetting.key == key).first()

@@ -256,6 +256,9 @@ def _auto_send_for_approval(email_obj, client, db: Session) -> None:
         ))
     db.flush()
 
+    # Shared approval link
+    email_obj.share_token = secrets.token_urlsafe(32)
+
     # Set deadline
     deadline_hours = int(get_setting("APPROVAL_DEADLINE_HOURS", "48") or "48")
     email_obj.deadline_at = datetime.now(timezone.utc) + timedelta(hours=deadline_hours)
