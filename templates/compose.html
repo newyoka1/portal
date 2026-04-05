@@ -2,168 +2,481 @@
 {% block title %}Compose Email{% endblock %}
 
 {% block extra_head %}
-<link href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" rel="stylesheet">
+<!-- GrapeJS core + newsletter preset -->
+<link rel="stylesheet" href="https://unpkg.com/grapesjs@0.21.13/dist/css/grapes.min.css">
+<link rel="stylesheet" href="https://unpkg.com/grapesjs-preset-newsletter@1.0.2/dist/grapesjs-preset-newsletter.css">
 <style>
-  #editor-container {
-    height: 400px;
-    background: #fff;
-    font-size: 14px;
-  }
-  .ql-toolbar.ql-snow { border-radius: 6px 6px 0 0; }
-  .ql-container.ql-snow { border-radius: 0 0 6px 6px; }
-  .compose-form .form-label { font-weight: 600; font-size: .875rem; }
-  .client-info {
-    display: none;
-    background: #f8f9fa;
-    border-radius: 6px;
-    padding: 12px 16px;
-    font-size: .85rem;
-    margin-top: 8px;
-  }
-  .client-info.visible { display: block; }
+  /* ── Full-bleed layout for the builder ───────────────────── */
+  .main-content:has(#gjs-wrapper) main.container-fluid { padding:0 !important; max-width:100% !important; }
+
+  /* ── Compact top bar ─────────────────────────────────────── */
+  .compose-bar { background:#fff; border-bottom:1px solid #dee2e6; padding:10px 16px; }
+  .compose-bar .form-control, .compose-bar .form-select { font-size:.85rem; height:36px; }
+  .compose-bar label { font-weight:600; font-size:.75rem; color:#6c757d; margin-bottom:2px; }
+  .compose-summary { font-size:.8rem; color:#6c757d; padding:6px 16px; background:#f8f9fa;
+                      border-bottom:1px solid #dee2e6; display:none; }
+  .compose-summary.show { display:flex; }
+
+  /* ── GrapeJS container ───────────────────────────────────── */
+  #gjs-wrapper { height: calc(100vh - 56px - 56px); width:100%; position:relative; }
+
+  /* ── GrapeJS theme overrides (Politika brand) ────────────── */
+  .gjs-one-bg          { background-color: #2b2b2f !important; }
+  .gjs-two-color       { color: #ddd !important; }
+  .gjs-three-bg        { background-color: #3b3b3f !important; }
+  .gjs-four-color,
+  .gjs-four-color-h:hover { color: #ce2825 !important; }
+  .gjs-pn-btn.gjs-pn-active { color: #ce2825 !important; }
+
+  /* Block thumbnails */
+  .gjs-block { min-height: auto; padding: 8px; }
+  .gjs-block__media svg { height:32px; }
+  .gjs-block-label { font-size:.7rem; }
+
+  /* Style manager tweaks */
+  .gjs-sm-sector-title { font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+
+  /* Canvas padding */
+  .gjs-frame-wrapper { background: #e9ecef !important; }
+  .gjs-cv-canvas { background: #e9ecef !important; }
+
+  /* Template picker modal */
+  .tmpl-card { cursor:pointer; transition:transform .15s, box-shadow .15s; border:2px solid transparent; }
+  .tmpl-card:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(0,0,0,.12); border-color:#ce2825; }
+  .tmpl-card img { height:140px; object-fit:cover; background:#f0f3f7; }
+  .tmpl-card .card-body { padding:10px 12px; }
+  .tmpl-card .card-title { font-size:.9rem; font-weight:700; margin-bottom:2px; }
+  .tmpl-card .card-text  { font-size:.75rem; color:#6c757d; }
+
+  /* Device toggle bar */
+  .device-bar { position:absolute; top:8px; right:8px; z-index:5; display:flex; gap:4px; }
+  .device-bar .btn { padding:4px 10px; font-size:.8rem; background:rgba(255,255,255,.9); border:1px solid #ccc; }
+  .device-bar .btn.active { background:#ce2825; color:#fff; border-color:#ce2825; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <h5 class="fw-bold mb-0"><i class="bi bi-pencil-square me-2"></i>Compose Email</h5>
-</div>
+<form method="post" action="/compose" id="composeForm">
+  <input type="hidden" name="html_body" id="html_body">
 
-<form method="post" action="/compose" id="composeForm" class="compose-form">
-  <div class="row g-4">
-
-    <!-- Left: editor -->
-    <div class="col-lg-8">
-      <div class="card shadow-sm">
-        <div class="card-body">
-          <div class="mb-3">
-            <label class="form-label" for="subject">Subject</label>
-            <input type="text" name="subject" id="subject" class="form-control"
-                   placeholder="Email subject line" required>
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Email Body</label>
-            <div id="editor-container"></div>
-            <input type="hidden" name="html_body" id="html_body">
-          </div>
-        </div>
+  <!-- ── Compact header bar ──────────────────────────────────── -->
+  <div class="compose-bar" id="composeBar">
+    <div class="row g-2 align-items-end">
+      <div class="col-auto" style="min-width:180px">
+        <label for="clientSelect">Client <span class="text-danger">*</span></label>
+        <select name="client_id" id="clientSelect" class="form-select" required onchange="onClientChange()">
+          <option value="">Select client...</option>
+          {% for c in clients %}
+          <option value="{{ c.id }}"
+                  data-from-name="{{ c.from_name or c.name }}"
+                  data-from-email="{{ c.from_email or '' }}"
+                  data-approvers="{{ c.approvers|length }}">
+            {{ c.name }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col">
+        <label for="subject">Subject</label>
+        <input type="text" name="subject" id="subject" class="form-control"
+               placeholder="Email subject line" required>
+      </div>
+      <div class="col-auto" style="min-width:200px">
+        <label for="recipients">Recipients</label>
+        <input type="text" name="recipients" id="recipients" class="form-control"
+               placeholder="email@example.com, ...">
+      </div>
+      <div class="col-auto d-flex gap-2 align-items-end">
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="showTemplates()"
+                title="Choose a template" style="height:36px;">
+          <i class="bi bi-grid-3x2-gap me-1"></i>Templates
+        </button>
+        <button type="submit" class="btn btn-primary btn-sm" id="submitBtn" style="height:36px;">
+          <i class="bi bi-send-check me-1"></i>Submit for Approval
+        </button>
+        <button type="button" class="btn btn-outline-secondary btn-sm" onclick="toggleBar()"
+                title="Collapse toolbar" style="height:36px;" id="barToggle">
+          <i class="bi bi-chevron-up"></i>
+        </button>
       </div>
     </div>
+  </div>
 
-    <!-- Right: settings -->
-    <div class="col-lg-4">
+  <!-- Collapsed summary -->
+  <div class="compose-summary" id="composeSummary">
+    <div class="d-flex align-items-center gap-3 flex-grow-1">
+      <span id="summaryClient" class="fw-semibold"></span>
+      <span class="text-muted">|</span>
+      <span id="summarySubject" class="text-truncate" style="max-width:400px"></span>
+    </div>
+    <button type="button" class="btn btn-sm btn-link text-muted p-0" onclick="toggleBar()">
+      <i class="bi bi-chevron-down"></i> Expand
+    </button>
+  </div>
 
-      <!-- Client selection (required) -->
-      <div class="card shadow-sm mb-3">
-        <div class="card-header bg-white fw-semibold py-2">
-          <i class="bi bi-people me-1"></i>Client <span class="text-danger">*</span>
-        </div>
-        <div class="card-body">
-          <select name="client_id" id="clientSelect" class="form-select" required
-                  onchange="onClientChange(this)">
-            <option value="">Select client...</option>
-            {% for c in clients %}
-            <option value="{{ c.id }}"
-                    data-from-name="{{ c.from_name or c.name }}"
-                    data-from-email="{{ c.from_email or '' }}"
-                    data-approvers="{{ c.approvers|length }}">
-              {{ c.name }}
-            </option>
-            {% endfor %}
-          </select>
-          <div class="client-info" id="clientInfo">
-            <div class="d-flex justify-content-between mb-1">
-              <span class="text-muted">From</span>
-              <span id="infoFrom" class="fw-semibold"></span>
-            </div>
-            <div class="d-flex justify-content-between mb-1">
-              <span class="text-muted">Sender</span>
-              <span id="infoEmail" class="font-monospace" style="font-size:.8rem;"></span>
-            </div>
-            <div class="d-flex justify-content-between">
-              <span class="text-muted">Approvers</span>
-              <span id="infoApprovers" class="fw-semibold"></span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Recipients -->
-      <div class="card shadow-sm mb-3">
-        <div class="card-header bg-white fw-semibold py-2">
-          <i class="bi bi-envelope me-1"></i>Recipients
-        </div>
-        <div class="card-body">
-          <input type="text" name="recipients" id="recipients" class="form-control"
-                 placeholder="recipient@example.com, ...">
-          <div class="form-text">
-            Comma-separated email addresses. Used when sending after approval.
-          </div>
-        </div>
-      </div>
-
-      <!-- Actions -->
-      <div class="card shadow-sm">
-        <div class="card-body d-grid gap-2">
-          <button type="submit" class="btn btn-primary" id="submitBtn">
-            <i class="bi bi-send-check me-1"></i>Submit for Approval
-          </button>
-          <div class="form-text text-center">
-            Creates the email and adds it to the approval queue.
-            Approvers will be notified once you send for approval from the detail page.
-          </div>
-        </div>
-      </div>
-
+  <!-- ── GrapeJS editor ─────────────────────────────────────── -->
+  <div id="gjs-wrapper">
+    <div id="gjs"></div>
+    <div class="device-bar">
+      <button type="button" class="btn btn-sm active" id="btnDesktop" onclick="setDevice('Desktop')">
+        <i class="bi bi-display"></i>
+      </button>
+      <button type="button" class="btn btn-sm" id="btnTablet" onclick="setDevice('Tablet')">
+        <i class="bi bi-tablet"></i>
+      </button>
+      <button type="button" class="btn btn-sm" id="btnMobile" onclick="setDevice('Mobile')">
+        <i class="bi bi-phone"></i>
+      </button>
     </div>
   </div>
 </form>
+
+<!-- ── Template picker modal ─────────────────────────────────── -->
+<div class="modal fade" id="templateModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold">Choose a Starting Template</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="card tmpl-card" onclick="loadTemplate('blank')">
+              <div class="d-flex align-items-center justify-content-center bg-light" style="height:140px;">
+                <i class="bi bi-file-earmark-plus" style="font-size:3rem;color:#adb5bd;"></i>
+              </div>
+              <div class="card-body">
+                <div class="card-title">Blank</div>
+                <div class="card-text">Start from scratch with an empty canvas.</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card tmpl-card" onclick="loadTemplate('newsletter')">
+              <div class="d-flex align-items-center justify-content-center bg-light" style="height:140px;">
+                <i class="bi bi-newspaper" style="font-size:3rem;color:#ce2825;"></i>
+              </div>
+              <div class="card-body">
+                <div class="card-title">Newsletter</div>
+                <div class="card-text">Header, two-column layout, and footer.</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="card tmpl-card" onclick="loadTemplate('announcement')">
+              <div class="d-flex align-items-center justify-content-center bg-light" style="height:140px;">
+                <i class="bi bi-megaphone" style="font-size:3rem;color:#0d6efd;"></i>
+              </div>
+              <div class="card-body">
+                <div class="card-title">Announcement</div>
+                <div class="card-text">Centered hero, CTA button, and footer.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="text-center mt-3">
+          <button type="button" class="btn btn-link text-muted btn-sm" data-bs-dismiss="modal">
+            Skip — start with a blank canvas
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js"></script>
+<script src="https://unpkg.com/grapesjs@0.21.13/dist/grapes.min.js"></script>
+<script src="https://unpkg.com/grapesjs-preset-newsletter@1.0.2/dist/grapesjs-preset-newsletter.js"></script>
 <script>
-const quill = new Quill('#editor-container', {
-  theme: 'snow',
-  placeholder: 'Write your email content here...',
-  modules: {
-    toolbar: [
-      [{ 'header': [1, 2, 3, false] }],
-      ['bold', 'italic', 'underline', 'strike'],
-      [{ 'color': [] }, { 'background': [] }],
-      [{ 'align': [] }],
-      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-      ['blockquote'],
-      ['link', 'image'],
-      ['clean'],
+// ═══════════════════════════════════════════════════════════════
+// Template HTML definitions (table-based, 600px, email-safe)
+// ═══════════════════════════════════════════════════════════════
+const TEMPLATES = {
+  blank: `
+    <table style="width:100%;max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;">
+      <tr><td style="padding:20px;">
+        <p style="font-size:16px;color:#333;">Start typing your email content here...</p>
+      </td></tr>
+    </table>`,
+
+  newsletter: `
+    <table style="width:100%;max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;border-collapse:collapse;">
+      <tr>
+        <td style="background-color:#ce2825;padding:30px 20px;text-align:center;">
+          <h1 style="color:#ffffff;margin:0;font-size:28px;font-weight:bold;">Newsletter Title</h1>
+          <p style="color:#f8d7da;margin:8px 0 0;font-size:14px;">Monthly Update — April 2026</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:30px 20px;">
+          <h2 style="color:#333;font-size:22px;margin:0 0 12px;">Featured Story</h2>
+          <p style="color:#555;font-size:15px;line-height:1.6;margin:0 0 20px;">
+            Write your main story here. This section is perfect for your lead content, announcements, or featured article.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:0 20px 30px;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr>
+              <td style="width:48%;vertical-align:top;padding-right:2%;">
+                <table style="width:100%;background:#f8f9fa;border-radius:6px;">
+                  <tr><td style="padding:20px;">
+                    <h3 style="color:#333;font-size:17px;margin:0 0 8px;">Column One</h3>
+                    <p style="color:#666;font-size:14px;line-height:1.5;margin:0;">
+                      Add supporting content, a secondary story, or highlight a key metric.
+                    </p>
+                  </td></tr>
+                </table>
+              </td>
+              <td style="width:48%;vertical-align:top;padding-left:2%;">
+                <table style="width:100%;background:#f8f9fa;border-radius:6px;">
+                  <tr><td style="padding:20px;">
+                    <h3 style="color:#333;font-size:17px;margin:0 0 8px;">Column Two</h3>
+                    <p style="color:#666;font-size:14px;line-height:1.5;margin:0;">
+                      Another block of content. Use this for a second topic, event, or call to action.
+                    </p>
+                  </td></tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:20px;border-top:1px solid #eee;text-align:center;">
+          <p style="color:#999;font-size:12px;margin:0;">
+            You received this email because you are subscribed.<br>
+            <a href="#" style="color:#ce2825;">Unsubscribe</a> | <a href="#" style="color:#ce2825;">View in browser</a>
+          </p>
+        </td>
+      </tr>
+    </table>`,
+
+  announcement: `
+    <table style="width:100%;max-width:600px;margin:0 auto;font-family:Arial,Helvetica,sans-serif;border-collapse:collapse;">
+      <tr>
+        <td style="padding:20px;text-align:center;">
+          <p style="color:#999;font-size:12px;margin:0;">YOUR ORGANIZATION</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:50px 30px;text-align:center;border-radius:8px;">
+          <h1 style="color:#fff;font-size:32px;margin:0 0 12px;font-weight:bold;">Big Announcement</h1>
+          <p style="color:rgba(255,255,255,.85);font-size:16px;line-height:1.5;margin:0 0 25px;">
+            Share your exciting news here. Keep it concise and impactful — this is the hero section that grabs attention.
+          </p>
+          <a href="#" style="display:inline-block;background:#fff;color:#764ba2;padding:14px 36px;
+                            border-radius:6px;text-decoration:none;font-weight:bold;font-size:15px;">
+            Learn More
+          </a>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:30px 20px;">
+          <p style="color:#555;font-size:15px;line-height:1.6;text-align:center;margin:0;">
+            Add supporting details here. Explain what this announcement means, what action readers should take, or provide additional context.
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:20px;border-top:1px solid #eee;text-align:center;">
+          <p style="color:#999;font-size:12px;margin:0;">
+            Questions? Reply to this email or contact us.<br>
+            <a href="#" style="color:#764ba2;">Unsubscribe</a>
+          </p>
+        </td>
+      </tr>
+    </table>`
+};
+
+// ═══════════════════════════════════════════════════════════════
+// GrapeJS Editor Initialization
+// ═══════════════════════════════════════════════════════════════
+const editor = grapesjs.init({
+  container: '#gjs',
+  fromElement: false,
+  height: '100%',
+  width: 'auto',
+  plugins: ['grapesjs-preset-newsletter'],
+  pluginsOpts: {
+    'grapesjs-preset-newsletter': {
+      modalTitleImport: 'Import HTML',
+      importPlaceholder: '<table class="main-body">...</table>',
+      cellStyle: {
+        'font-size': '14px',
+        'font-family': 'Arial, Helvetica, sans-serif',
+        'color': '#333333',
+      },
+    },
+  },
+  storageManager: false,
+  assetManager: {
+    upload: false,
+    uploadFile: false,
+    assets: [],
+    noAssets: 'Paste an image URL using the "Add image" button above.',
+  },
+  deviceManager: {
+    devices: [
+      { name: 'Desktop', width: '' },
+      { name: 'Tablet', width: '580px', widthMedia: '768px' },
+      { name: 'Mobile', width: '375px', widthMedia: '480px' },
+    ],
+  },
+  canvas: {
+    styles: [
+      'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap',
     ],
   },
 });
 
-// Sync Quill HTML to hidden input on submit
-document.getElementById('composeForm').addEventListener('submit', function(e) {
-  const html = quill.root.innerHTML;
-  if (html === '<p><br></p>' || !html.trim()) {
-    e.preventDefault();
-    alert('Please enter email content.');
-    return;
-  }
-  document.getElementById('html_body').value = html;
+// ── Add extra blocks ──────────────────────────────────────────
+const bm = editor.BlockManager;
+
+// Ensure a spacer block exists
+if (!bm.get('spacer')) {
+  bm.add('spacer', {
+    label: 'Spacer',
+    category: 'Basic',
+    content: '<div style="height:30px;"></div>',
+    attributes: { class: 'gjs-fonts gjs-f-b1' },
+  });
+}
+
+// Social links block
+bm.add('social-links', {
+  label: 'Social Links',
+  category: 'Basic',
+  content: `<table style="margin:0 auto;"><tr>
+    <td style="padding:0 8px;"><a href="#" style="color:#ce2825;text-decoration:none;font-size:14px;">Facebook</a></td>
+    <td style="padding:0 8px;"><a href="#" style="color:#ce2825;text-decoration:none;font-size:14px;">Twitter</a></td>
+    <td style="padding:0 8px;"><a href="#" style="color:#ce2825;text-decoration:none;font-size:14px;">Instagram</a></td>
+  </tr></table>`,
 });
 
+// Hero section block
+bm.add('hero-section', {
+  label: 'Hero Section',
+  category: 'Sections',
+  content: `<table style="width:100%;background-color:#ce2825;border-collapse:collapse;">
+    <tr><td style="padding:40px 20px;text-align:center;">
+      <h1 style="color:#ffffff;font-size:28px;margin:0 0 10px;font-weight:bold;">Hero Headline</h1>
+      <p style="color:rgba(255,255,255,.85);font-size:16px;margin:0 0 20px;">Subheadline text goes here</p>
+      <a href="#" style="display:inline-block;background:#ffffff;color:#ce2825;padding:12px 30px;
+                        border-radius:4px;text-decoration:none;font-weight:bold;">Call to Action</a>
+    </td></tr>
+  </table>`,
+});
+
+// Footer block
+bm.add('footer-section', {
+  label: 'Footer',
+  category: 'Sections',
+  content: `<table style="width:100%;border-top:1px solid #eeeeee;border-collapse:collapse;">
+    <tr><td style="padding:20px;text-align:center;">
+      <p style="color:#999999;font-size:12px;margin:0;">
+        You received this email because you are subscribed.<br>
+        <a href="#" style="color:#ce2825;">Unsubscribe</a> | <a href="#" style="color:#ce2825;">View in browser</a>
+      </p>
+    </td></tr>
+  </table>`,
+});
+
+
+// ═══════════════════════════════════════════════════════════════
+// Device switching
+// ═══════════════════════════════════════════════════════════════
+function setDevice(name) {
+  editor.setDevice(name);
+  document.querySelectorAll('.device-bar .btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn' + name).classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Template loading
+// ═══════════════════════════════════════════════════════════════
+let templateModal;
+function showTemplates() {
+  if (!templateModal) templateModal = new bootstrap.Modal(document.getElementById('templateModal'));
+  templateModal.show();
+}
+
+function loadTemplate(name) {
+  const html = TEMPLATES[name] || TEMPLATES.blank;
+  editor.setComponents(html);
+  if (templateModal) templateModal.hide();
+}
+
+// Show template picker on first load
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(showTemplates, 500);
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Compact bar toggle
+// ═══════════════════════════════════════════════════════════════
+let barCollapsed = false;
+function toggleBar() {
+  barCollapsed = !barCollapsed;
+  const bar = document.getElementById('composeBar');
+  const summary = document.getElementById('composeSummary');
+  const wrapper = document.getElementById('gjs-wrapper');
+
+  if (barCollapsed) {
+    bar.style.display = 'none';
+    summary.classList.add('show');
+    wrapper.style.height = 'calc(100vh - 56px - 30px)';
+    updateSummary();
+  } else {
+    bar.style.display = '';
+    summary.classList.remove('show');
+    wrapper.style.height = 'calc(100vh - 56px - 56px)';
+  }
+  // Trigger GrapeJS canvas resize
+  setTimeout(() => editor.refresh(), 100);
+}
+
+function updateSummary() {
+  const sel = document.getElementById('clientSelect');
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('summaryClient').textContent = opt && opt.value ? opt.textContent.trim() : 'No client';
+  document.getElementById('summarySubject').textContent = document.getElementById('subject').value || 'No subject';
+}
+
+// ═══════════════════════════════════════════════════════════════
 // Client selection handler
-function onClientChange(select) {
-  const opt = select.options[select.selectedIndex];
-  const info = document.getElementById('clientInfo');
-  if (!opt.value) {
-    info.classList.remove('visible');
+// ═══════════════════════════════════════════════════════════════
+function onClientChange() {
+  updateSummary();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Form submission — extract inlined HTML from GrapeJS
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('composeForm').addEventListener('submit', function(e) {
+  e.preventDefault();
+
+  // Try the newsletter preset's inline command first
+  let html;
+  try {
+    html = editor.runCommand('gjs-get-inlined-html');
+  } catch(err) {
+    // Fallback: manually combine HTML + CSS
+    const css = editor.getCss();
+    const body = editor.getHtml();
+    html = '<style>' + css + '</style>' + body;
+  }
+
+  if (!html || html.trim().length < 20) {
+    alert('Please add some content to your email before submitting.');
     return;
   }
-  document.getElementById('infoFrom').textContent = opt.dataset.fromName || '—';
-  document.getElementById('infoEmail').textContent = opt.dataset.fromEmail || 'Not set';
-  document.getElementById('infoApprovers').textContent = opt.dataset.approvers + ' approver(s)';
-  info.classList.add('visible');
-}
+
+  document.getElementById('html_body').value = html;
+  this.submit();
+});
 </script>
 {% endblock %}
