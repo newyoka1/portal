@@ -40,7 +40,7 @@
 
   /* ── Left panel (BeeFree style) ──────────────────────────── */
   .left-panel {
-    width:300px; flex-shrink:0; background:#fff;
+    width:320px; flex-shrink:0; background:#fff;
     border-right:1px solid #e2e5ea; display:flex; flex-direction:column;
     overflow:hidden;
   }
@@ -66,75 +66,79 @@
   .lp-section.active { display:flex; flex-direction:column; }
 
   /* ── Content blocks (BeeFree grid) ───────────────────────── */
-  #blocks-container {
-    display:grid !important; grid-template-columns:1fr 1fr 1fr;
-    gap:0; padding:6px;
-  }
-  /* Override GrapeJS default block styles */
-  #blocks-container .gjs-block {
-    display:flex !important; flex-direction:column; align-items:center; justify-content:center;
-    padding:16px 8px 12px !important; margin:0 !important;
-    min-height:88px; width:auto !important;
-    border:1px solid transparent !important; border-radius:8px !important;
-    background:#fff !important; cursor:grab !important;
-    transition:all .15s !important; position:relative;
-  }
-  #blocks-container .gjs-block:hover {
-    background:#f6f7fb !important; border-color:#e2e5ea !important;
-    box-shadow:0 2px 8px rgba(0,0,0,.06) !important;
-  }
-  #blocks-container .gjs-block:active { cursor:grabbing !important; }
+  #blocks-container { padding:0 !important; }
 
-  /* Drag handle dots */
-  #blocks-container .gjs-block::before {
-    content:'⠿'; position:absolute; top:4px; left:50%; transform:translateX(-50%);
-    font-size:10px; color:#ccc; line-height:1;
-  }
-  #blocks-container .gjs-block:hover::before { color:#999; }
-
-  /* Block icons */
-  #blocks-container .gjs-block__media {
-    margin-bottom:6px !important;
-  }
-  #blocks-container .gjs-block__media i {
-    font-size:1.4rem !important; color:#5a5f78 !important;
-  }
-  #blocks-container .gjs-block:hover .gjs-block__media i {
-    color:#ce2825 !important;
-  }
-
-  /* Block labels */
-  #blocks-container .gjs-block-label {
-    font-size:.68rem !important; font-weight:600 !important;
-    color:#6b7084 !important; text-transform:capitalize !important;
-    line-height:1.2 !important;
-  }
-
-  /* Hide GrapeJS block category headers */
+  /* Category wrapper — let it flow naturally */
   #blocks-container .gjs-block-category {
-    display:contents !important;
+    border:none !important; margin:0 !important; padding:0 !important;
   }
+
+  /* Category title bar */
   #blocks-container .gjs-block-category .gjs-title {
-    grid-column: 1 / -1; padding:10px 8px 4px !important;
+    padding:10px 14px 6px !important;
     font-size:.65rem !important; font-weight:700 !important;
     color:#a0a4b8 !important; text-transform:uppercase !important;
     letter-spacing:.08em !important; background:transparent !important;
     border:none !important; border-top:1px solid #eee !important;
-    margin-top:4px;
   }
   #blocks-container .gjs-block-category:first-child .gjs-title {
-    border-top:none !important; margin-top:0;
+    border-top:none !important;
+  }
+
+  /* The actual blocks container INSIDE each category = our 3-col grid */
+  #blocks-container .gjs-blocks-c {
+    display:grid !important; grid-template-columns:1fr 1fr 1fr;
+    gap:2px !important; padding:2px 8px 8px !important;
+  }
+
+  /* Individual block cards */
+  #blocks-container .gjs-block {
+    display:flex !important; flex-direction:column; align-items:center; justify-content:center;
+    padding:12px 4px 8px !important; margin:0 !important;
+    min-height:72px; width:auto !important;
+    border:1px solid #f0f1f5 !important; border-radius:8px !important;
+    background:#fff !important; cursor:grab !important;
+    transition:all .12s !important; position:relative;
+    box-shadow:none !important;
+  }
+  #blocks-container .gjs-block:hover {
+    background:#f6f7fb !important; border-color:#d8dae5 !important;
+    box-shadow:0 2px 8px rgba(0,0,0,.06) !important;
+  }
+  #blocks-container .gjs-block:active { cursor:grabbing !important; transform:scale(.96); }
+
+  /* Drag handle dots at top of each block */
+  #blocks-container .gjs-block::before {
+    content:'⠿'; position:absolute; top:2px; left:50%; transform:translateX(-50%);
+    font-size:8px; color:#d0d2dc; line-height:1; letter-spacing:1px;
+  }
+  #blocks-container .gjs-block:hover::before { color:#999; }
+
+  /* Block icons */
+  #blocks-container .gjs-block__media { margin-bottom:4px !important; }
+  #blocks-container .gjs-block__media i { font-size:1.3rem !important; color:#5a5f78 !important; }
+  #blocks-container .gjs-block:hover .gjs-block__media i { color:#ce2825 !important; }
+  /* Fix any SVG media too */
+  #blocks-container .gjs-block__media svg { width:28px !important; height:28px !important; }
+
+  /* Block labels */
+  #blocks-container .gjs-block-label {
+    font-size:.64rem !important; font-weight:600 !important;
+    color:#6b7084 !important; text-transform:capitalize !important;
+    line-height:1.1 !important; white-space:nowrap !important;
   }
 
   /* ── Rows panel ──────────────────────────────────────────── */
-  #rows-container {
+  #rows-container .gjs-block-category { border:none !important; }
+  #rows-container .gjs-block-category .gjs-title { display:none !important; }
+  #rows-container .gjs-blocks-c {
     display:grid !important; grid-template-columns:1fr 1fr;
-    gap:0; padding:6px;
+    gap:6px !important; padding:6px 12px 12px !important;
   }
   #rows-container .gjs-block {
     display:flex !important; flex-direction:column; align-items:center; justify-content:center;
-    padding:14px 10px 10px !important; margin:0 !important;
-    min-height:72px; width:auto !important;
+    padding:12px 8px 8px !important; margin:0 !important;
+    min-height:64px; width:auto !important;
     border:2px solid #e8eaef !important; border-radius:10px !important;
     background:#fff !important; cursor:grab !important; transition:all .15s !important;
     position:relative;
@@ -142,16 +146,16 @@
   #rows-container .gjs-block:hover {
     border-color:#ce2825 !important; background:#fef7f7 !important;
   }
+  #rows-container .gjs-block:active { cursor:grabbing !important; }
   #rows-container .gjs-block::before {
-    content:'⠿'; position:absolute; top:3px; left:50%; transform:translateX(-50%);
-    font-size:9px; color:#ccc; line-height:1;
+    content:'⠿'; position:absolute; top:2px; left:50%; transform:translateX(-50%);
+    font-size:8px; color:#d0d2dc; line-height:1;
   }
-  #rows-container .gjs-block__media { margin-bottom:4px !important; }
+  #rows-container .gjs-block__media { margin-bottom:3px !important; }
+  #rows-container .gjs-block__media svg { width:36px !important; height:24px !important; }
   #rows-container .gjs-block-label {
-    font-size:.65rem !important; font-weight:600 !important; color:#6b7084 !important;
+    font-size:.62rem !important; font-weight:600 !important; color:#6b7084 !important;
   }
-  #rows-container .gjs-block-category { display:contents !important; }
-  #rows-container .gjs-block-category .gjs-title { display:none !important; }
 
   /* ── Design tab (style + traits) ─────────────────────────── */
   .design-panel { padding:0; }
@@ -697,28 +701,24 @@ ROW_DEFS.forEach(r => {
 // After editor loads, move Row blocks into the Rows tab
 // ═══════════════════════════════════════════════════════════════
 editor.on('load', function() {
-  // The blockManager.appendTo puts ALL blocks into #blocks-container.
-  // We need to move the "Rows" category into #rows-container.
+  // blockManager.appendTo puts ALL blocks into #blocks-container.
+  // Move the entire "Rows" category element into #rows-container.
   setTimeout(function() {
     const blocksEl = document.getElementById('blocks-container');
     const rowsEl = document.getElementById('rows-container');
 
-    // Find the Rows category wrapper and move it
     const categories = blocksEl.querySelectorAll('.gjs-block-category');
     categories.forEach(cat => {
       const title = cat.querySelector('.gjs-title');
       if (title && title.textContent.trim() === 'Rows') {
-        // Move all blocks from this category into rows container
-        const blocks = cat.querySelectorAll('.gjs-block');
-        blocks.forEach(b => rowsEl.appendChild(b));
-        // Remove the now-empty category from blocks panel
-        cat.remove();
+        // Move the whole category (preserves GrapeJS drag handlers)
+        rowsEl.appendChild(cat);
       }
     });
 
     // Show template picker
     setTimeout(showTemplates, 200);
-  }, 100);
+  }, 150);
 });
 
 
