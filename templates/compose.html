@@ -159,8 +159,50 @@
 
   /* ── Design tab (style + traits) ─────────────────────────── */
   .design-panel { padding:0; }
+
+  /* Global email settings */
+  .design-globals {
+    border-bottom:1px solid #eee; padding:0; background:#fafbfc;
+  }
+  .dg-title {
+    font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em;
+    color:#8b8fa3; padding:12px 14px 6px;
+  }
+  .dg-row { padding:4px 14px 12px; }
+  .dg-row label {
+    font-size:.75rem; font-weight:600; color:#555; margin-bottom:4px; display:block;
+  }
+  .dg-input-group { display:flex; align-items:center; gap:8px; }
+  .dg-input-group input[type="range"] {
+    flex:1; height:4px; accent-color:#ce2825; cursor:pointer;
+  }
+  .dg-width-val { display:flex; align-items:center; gap:2px; flex-shrink:0; }
+  .dg-num-input {
+    width:52px; border:1px solid #e2e5ea; border-radius:6px; padding:3px 4px;
+    font-size:.78rem; text-align:center; font-weight:600; color:#333;
+  }
+  .dg-num-input:focus { outline:none; border-color:#ce2825; }
+  .dg-width-val span { font-size:.72rem; color:#8b8fa3; }
+  .dg-presets { display:flex; gap:4px; margin-top:6px; }
+  .dg-preset {
+    flex:1; padding:3px 0; font-size:.68rem; font-weight:600; color:#6b7084;
+    background:#fff; border:1px solid #e2e5ea; border-radius:6px; cursor:pointer;
+    transition:all .12s;
+  }
+  .dg-preset:hover { border-color:#ce2825; color:#ce2825; }
+  .dg-preset.active { background:#ce2825; color:#fff; border-color:#ce2825; }
+  .dg-color-input {
+    width:32px; height:28px; border:1px solid #e2e5ea; border-radius:6px;
+    padding:2px; cursor:pointer; background:#fff;
+  }
+  .dg-hex-input {
+    width:76px; border:1px solid #e2e5ea; border-radius:6px; padding:4px 8px;
+    font-size:.78rem; font-family:monospace; color:#333;
+  }
+  .dg-hex-input:focus { outline:none; border-color:#ce2825; }
+
   .design-empty {
-    text-align:center; padding:40px 20px; color:#a0a4b8;
+    text-align:center; padding:30px 20px; color:#a0a4b8;
   }
   .design-empty i { font-size:2.2rem; margin-bottom:10px; display:block; }
   .design-empty p { font-size:.85rem; margin:0; }
@@ -289,9 +331,43 @@
             <div id="rows-container"></div>
           </div>
 
-          <!-- Design tab — style manager + traits -->
+          <!-- Design tab — global settings + style manager + traits -->
           <div class="lp-section" id="tab-design">
             <div class="design-panel">
+
+              <!-- Global email settings (always visible) -->
+              <div class="design-globals">
+                <div class="dg-title">Email Settings</div>
+                <div class="dg-row">
+                  <label>Content Width</label>
+                  <div class="dg-input-group">
+                    <input type="range" id="contentWidthRange" min="400" max="800" step="10" value="600"
+                           oninput="setContentWidth(this.value)">
+                    <div class="dg-width-val">
+                      <input type="number" id="contentWidthNum" min="400" max="800" step="10" value="600"
+                             oninput="setContentWidth(this.value)" class="dg-num-input">
+                      <span>px</span>
+                    </div>
+                  </div>
+                  <div class="dg-presets">
+                    <button type="button" onclick="setContentWidth(480)" class="dg-preset">480</button>
+                    <button type="button" onclick="setContentWidth(540)" class="dg-preset">540</button>
+                    <button type="button" onclick="setContentWidth(600)" class="dg-preset active">600</button>
+                    <button type="button" onclick="setContentWidth(640)" class="dg-preset">640</button>
+                    <button type="button" onclick="setContentWidth(700)" class="dg-preset">700</button>
+                  </div>
+                </div>
+                <div class="dg-row">
+                  <label>Background Color</label>
+                  <div class="dg-input-group">
+                    <input type="color" id="emailBgColor" value="#ffffff"
+                           oninput="setEmailBackground(this.value)" class="dg-color-input">
+                    <input type="text" id="emailBgHex" value="#ffffff" maxlength="7"
+                           oninput="setEmailBackground(this.value)" class="dg-hex-input">
+                  </div>
+                </div>
+              </div>
+
               <div class="design-empty" id="design-empty">
                 <i class="bi bi-cursor"></i>
                 <p>Select an element on the canvas to edit its style.</p>
@@ -765,6 +841,66 @@ function showTemplates() {
 function loadTemplate(name) {
   editor.setComponents(TEMPLATES[name] || TEMPLATES.blank);
   if (templateModal) templateModal.hide();
+  // Apply current content width to the loaded template
+  setTimeout(() => setContentWidth(currentContentWidth), 200);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// Content width & background controls
+// ═══════════════════════════════════════════════════════════════
+let currentContentWidth = 600;
+
+function setContentWidth(val) {
+  val = Math.max(400, Math.min(800, parseInt(val) || 600));
+  currentContentWidth = val;
+
+  // Sync the UI controls
+  document.getElementById('contentWidthRange').value = val;
+  document.getElementById('contentWidthNum').value = val;
+
+  // Update preset buttons
+  document.querySelectorAll('.dg-preset').forEach(b => {
+    b.classList.toggle('active', parseInt(b.textContent) === val);
+  });
+
+  // Update all top-level tables in the canvas
+  const frame = editor.Canvas.getFrameEl();
+  if (frame && frame.contentDocument) {
+    const tables = frame.contentDocument.querySelectorAll('body > table, [data-gjs-type="wrapper"] > table');
+    tables.forEach(t => { t.style.maxWidth = val + 'px'; });
+  }
+
+  // Also update via GrapeJS component model
+  const wrapper = editor.getWrapper();
+  if (wrapper) {
+    wrapper.find('table').forEach(comp => {
+      const parent = comp.parent();
+      // Only top-level tables (direct children of body/wrapper)
+      if (parent && (parent.is('wrapper') || parent.get('tagName') === 'body')) {
+        comp.addStyle({ 'max-width': val + 'px' });
+      }
+    });
+  }
+}
+
+function setEmailBackground(color) {
+  if (!color || !color.match(/^#[0-9a-fA-F]{3,6}$/)) return;
+
+  document.getElementById('emailBgColor').value = color;
+  document.getElementById('emailBgHex').value = color;
+
+  // Set the canvas body background
+  const frame = editor.Canvas.getFrameEl();
+  if (frame && frame.contentDocument && frame.contentDocument.body) {
+    frame.contentDocument.body.style.backgroundColor = color;
+  }
+
+  // Also set on the wrapper component
+  const wrapper = editor.getWrapper();
+  if (wrapper) {
+    wrapper.addStyle({ 'background-color': color });
+  }
 }
 
 
@@ -782,8 +918,10 @@ document.getElementById('composeForm').addEventListener('submit', function(e) {
     return;
   }
 
-  // Combine CSS + HTML (backend sanitizer will inline styles)
-  const finalHtml = (css ? '<style>' + css + '</style>' : '') + bodyHtml;
+  // Inject content width into a wrapper + combine CSS + HTML
+  const widthCss = `body table { max-width:${currentContentWidth}px !important; margin:0 auto !important; }`;
+  const allCss = (css || '') + widthCss;
+  const finalHtml = '<style>' + allCss + '</style>' + bodyHtml;
   document.getElementById('html_body').value = finalHtml;
   this.submit();
 });
